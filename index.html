@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>読書 — Reading Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="theme-dark-jp">
+    <!-- Floating Kanji Background -->
+    <div class="kanji-bg" id="kanjiBg"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header-wrapper">
+            <div class="header">
+                <div class="header-left">
+                    <h1><span class="kanji-title">読書</span>Reading Tracker</h1>
+                    <p>Track your reading streaks & build consistency</p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <button id="settings-btn" class="theme-select" title="Settings" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);padding:8px 12px;border-radius:4px;cursor:pointer;font-size:16px;" onclick="openSettingsModal()">⚙</button>
+                    <button class="theme-select" onclick="window.electronAPI.quitApp()" style="cursor:pointer;" title="Close application">Quit</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="kanji-bg-icon">続</div>
+                <div class="value" id="currentStreak">0</div>
+                <div class="label">DAY STREAK</div>
+            </div>
+            <div class="stat-card">
+                <div class="kanji-bg-icon">日</div>
+                <div class="value" id="totalDays">0</div>
+                <div class="label">TOTAL DAYS</div>
+            </div>
+            <div class="stat-card">
+                <div class="kanji-bg-icon">時</div>
+                <div class="value" id="totalHours">0</div>
+                <div class="label">TOTAL HOURS</div>
+            </div>
+            <div class="stat-card">
+                <div class="kanji-bg-icon">最</div>
+                <div class="value" id="bestStreak">0</div>
+                <div class="label">BEST STREAK</div>
+            </div>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Left Panel - Input -->
+            <div class="panel compact">
+                <div class="card-title">Log Session</div>
+                <div class="compact-form-wrapper">
+                    <div class="form-group">
+                        <label class="form-label">DATE</label>
+                        <div class="custom-date-picker" id="datePicker">
+                            <div class="date-picker-display" id="datePickerDisplay" onclick="toggleDatePicker()">
+                                <span id="datePickerValue"></span>
+                                <svg class="date-picker-icon" viewBox="0 0 24 24" width="16" height="16">
+                                    <path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.89-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z" />
+                                </svg>
+                            </div>
+                            <div class="date-picker-dropdown" id="datePickerDropdown">
+                                <div class="dp-header">
+                                    <button class="dp-nav-btn" onclick="dpPrevMonth()">
+                                        <svg viewBox="0 0 24 24" width="16" height="16">
+                                            <path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                                        </svg>
+                                    </button>
+                                    <span class="dp-month-year" id="dpMonthYear"></span>
+                                    <button class="dp-nav-btn" onclick="dpNextMonth()">
+                                        <svg viewBox="0 0 24 24" width="16" height="16">
+                                            <path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="dp-weekdays">
+                                    <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                                </div>
+                                <div class="dp-days" id="dpDays"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">TITLE / WORK</label>
+                        <input type="text" id="sessionTitle" class="form-input" placeholder="e.g., 1Q84, Poetry Collection...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">LANGUAGE</label>
+                        <select id="sessionLanguage" class="form-select">
+                            <option value="Japanese">Japanese</option>
+                            <option value="English">English</option>
+                            <option value="Portuguese">Portuguese</option>
+                            <option value="Spanish">Spanish</option>
+                            <option value="Korean">Korean</option>
+                            <option value="Chinese">Chinese</option>
+                            <option value="German">German</option>
+                            <option value="French">French</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">CHARACTERS READ</label>
+                        <input type="number" id="sessionCharacters" class="form-input" placeholder="0" min="0" style="-moz-appearance: textfield; -webkit-appearance: none; appearance: none;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">DURATION</label>
+                        <div class="duration-input">
+                            <input type="number" id="sessionDuration" class="form-input" placeholder="0" min="0" step="1">
+                            <select id="durationUnit" class="unit-toggle" onchange="updateDurationUnit()">
+                                <option value="minutes">Minutes</option>
+                                <option value="hours">Hours</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-primary" onclick="logReading()">LOG SESSION</button>
+                </div>
+                <button id="kindle-sync-btn" type="button" class="btn-bulk-import" onclick="openKindleSyncModal()">Kindle Sync</button>
+                <div id="bulkImportResults"></div>
+                <button type="button" class="btn-bulk-import" onclick="openBulkImportModal()">BULK IMPORT</button>
+            </div>
+
+            <!-- Right Panel - Streak Map -->
+            <div class="panel streak-panel">
+                <div class="streak-controls">
+                    <div class="card-title" style="margin-bottom: 0;">ACTIVITY MAP</div>
+                    <div class="month-nav">
+                        <button onclick="changeMonth(-1)">‹</button>
+                        <span class="month-badge" id="currentMonth"></span>
+                        <span class="year-badge" id="currentYear"></span>
+                        <button onclick="changeMonth(1)">›</button>
+                    </div>
+                </div>
+                <div class="streak-grid" id="streakGrid"></div>
+                <div class="legend">
+                    <span>LESS</span>
+                    <div class="legend-cell" style="background: rgba(255,255,255,0.02);"></div>
+                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.15;"></div>
+                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.3;"></div>
+                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.45;"></div>
+                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.6;"></div>
+                    <div class="legend-cell" style="background: var(--accent-primary);"></div>
+                    <span>MORE</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Entries -->
+        <div class="panel entries-section">
+            <div class="entries-header">
+                <h2 class="card-title" style="margin-bottom: 0; margin-top: 0;">RECENT ENTRIES</h2>
+                <span class="entry-count" id="entryCount">0 entries</span>
+            </div>
+            <div id="entryList"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Session Details Modal -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal session-modal" id="session-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modalTitle">Sessions - 2024-01-01</h3>
+                <button class="modal-close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body session-modal-body" id="modalBody">
+                <div class="empty-state">No sessions recorded for this date.</div>
+            </div>
+            <div class="modal-footer session-modal-footer" id="modalFooter">
+                <span id="modalFooterSummaryDiv"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kindle Sync Modal -->
+    <div class="modal-overlay" id="syncModalOverlay" onclick="closeKindleSyncModal(event)">
+        <div class="modal sync-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Kindle Sync</h3>
+                <button class="modal-close-btn" onclick="closeKindleSyncModal()">&times;</button>
+            </div>
+            <div class="modal-body sync-modal-body" id="syncModalBody">
+                <div class="sync-waiting" id="syncModalWaiting">
+                    <p>Click "Start Sync" to begin syncing reading sessions from your Kindle.</p>
+                </div>
+                <div id="syncModalStatus" class="sync-modal-status hidden"></div>
+            </div>
+            <div class="modal-footer sync-modal-footer" id="syncModalFooter">
+                <div id="syncModalActions" class="sync-modal-actions">
+                    <button id="syncModalStartBtn" onclick="startKindleSync()" class="btn-action" style="padding: 10px 24px; background: var(--accent-primary); color: white; border: none; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; cursor: pointer;">Start Sync</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Import Modal -->
+    <div class="modal-overlay" id="importModalOverlay">
+        <div class="modal import-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Bulk Import</h3>
+                <button class="modal-close-btn" onclick="closeBulkImportModal()">&times;</button>
+            </div>
+            <div class="modal-body import-modal-body" id="importModalBody">
+                <div class="import-format-help">
+                    <h4>CSV Format</h4>
+                    <code>date,title,language,characters,duration,unit</code>
+                    <div class="note">unit: minutes (default) or hours. Example: 2024-01-15,1Q84 Japanese 500 30 minutes</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModalOverlay" onclick="closeSettingsModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="modal-close-btn" onclick="closeSettingsModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="settingsModalBody">
+                <form id="settings-form">
+                    <!-- General Settings Section -->
+                    <fieldset class="settings-section">
+                        <legend>General</legend>
+                        <div class="form-group">
+                            <label class="form-label" for="themeSelect">Theme</label>
+                            <select id="themeSelect" class="form-select" onchange="changeTheme(this.value)">
+                                <option value="theme-dark-jp">Dark Japanese</option>
+                                <option value="theme-classic">Classic Red & White</option>
+                                <option value="theme-rising-sun">Rising Sun</option>
+                                <option value="theme-wave">Great Wave (波)</option>
+                            </select>
+                        </div>
+                    </fieldset>
+
+                    <!-- Kindle Sync Section -->
+                    <fieldset class="settings-section">
+                        <legend>Kindle Sync</legend>
+                        <div class="form-group">
+                            <label class="form-label" for="kindle-host">Host</label>
+                            <input type="text" id="kindle-host" class="form-input" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="kindle-user">User</label>
+                            <input type="text" id="kindle-user" class="form-input" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="kindle-password">Password</label>
+                            <div class="password-input-wrapper">
+                                <input type="password" id="kindle-password" class="form-input" />
+                                <button type="button" class="password-toggle" onclick="togglePasswordVisibility()" title="Toggle password visibility">
+                                    <svg id="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="timezoneSelect">Timezone (UTC offset for Kindle sync)</label>
+                            <select id="timezoneSelect" class="form-select">
+                                <option value="UTC">UTC+0</option>
+                                <option value="+1">UTC+1</option>
+                                <option value="+2">UTC+2</option>
+                                <option value="+3">UTC+3</option>
+                                <option value="+3:30">UTC+3:30</option>
+                                <option value="+5:30">UTC+5:30</option>
+                                <option value="+8">UTC+8</option>
+                                <option value="+9">UTC+9</option>
+                                <option value="+9:30">UTC+9:30</option>
+                                <option value="-1">UTC-1</option>
+                                <option value="-2">UTC-2</option>
+                                <option value="-3" selected>UTC-3</option>
+                                <option value="-3:30">UTC-3:30</option>
+                                <option value="-4">UTC-4</option>
+                                <option value="-5">UTC-5</option>
+                                <option value="-6">UTC-6</option>
+                                <option value="-7">UTC-7</option>
+                                <option value="-8">UTC-8</option>
+                                <option value="-9">UTC-9</option>
+                                <option value="-9:30">UTC-9:30</option>
+                                <option value="-10">UTC-10</option>
+                                <option value="-11">UTC-11</option>
+                                <option value="-12">UTC-12</option>
+                            </select>
+                        </div>
+                    </fieldset>
+                </form>
+            </div>
+            <div class="modal-footer" id="settingsModalFooter">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="testKindleConnection()">Test Connection</button>
+                    <button type="button" class="btn-secondary" onclick="backupDatabase()">Backup</button>
+                    <button type="button" class="btn-secondary" onclick="restoreDatabase()">Restore</button>
+                    <button type="submit" class="btn-action" form="settings-form">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+
+</html>

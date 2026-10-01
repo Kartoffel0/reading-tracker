@@ -1,0 +1,81 @@
+{
+  "name": "reading-tracker",
+  "version": "1.0.0",
+  "description": "Japanese reading tracker",
+  "main": "main.js",
+  "author": "Reading Tracker",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win --dir",
+    "build:nsis": "electron-builder --win nsis",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.0.0"
+  },
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.readingtracker.app",
+    "productName": "Reading Tracker",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app.js",
+      "index.html",
+      "styles.css",
+      "README.md",
+      "package.json",
+      "node_modules/**/*",
+      "python-bundle/python/Lib",
+      "python-bundle/python/Lib/site-packages",
+      "python-bundle/python/sync_kindle.py",
+      "python-bundle/python/kfx_text_extractor"
+    ],
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "extraFiles": [
+      {
+        "from": "python-bundle/python/Lib",
+        "to": "resources/python/Lib",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "python-bundle/python/sync_kindle.py",
+        "to": "resources/python/sync_kindle.py"
+      },
+      {
+        "from": "python-bundle/python/kfx_text_extractor",
+        "to": "resources/python/kfx_text_extractor"
+      }
+    ],
+    "win": {
+      "icon": "icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": "x64"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

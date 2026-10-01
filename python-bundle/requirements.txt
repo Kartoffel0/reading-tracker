@@ -1,0 +1,8 @@
+# Kindle Sync Subsystem — Python Bundle Requirements
+# Update these with: pip download -r python-bundle/requirements.txt -d ./tmp-wheels && copy wheels to python-bundle/python/Lib/site-packages/
+
+# Core dependencies (kfx_text_extractor + sync)
+PyYAML>=6.0
+paramiko>=3.0.0
+lxml>=4.9.0
+Pillow>=10.0.0
