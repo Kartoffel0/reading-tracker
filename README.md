@@ -1,7 +1,11 @@
 # 読書 — Reading Tracker
 
-[![screenshot-1](https://via.placeholder.com/800x450/e0e0e0/333333?text=App+Screenshot+1)](https://via.placeholder.com/800x450/e0e0e0/333333?text=App+Screenshot+1)
-[![screenshot-2](https://via.placeholder.com/800x450/e0e0e0/333333?text=App+Screenshot+2)](https://via.placeholder.com/800x450/e0e0e0/333333?text=App+Screenshot+2)
+<table>
+  <tr>
+    <td><img src="img/Reading_Tracker_1.png" width="100%"></td>
+    <td><img src="img/Reading_Tracker_2.png" width="100%"></td>
+  </tr>
+</table>
 
 A minimal Electron desktop app for tracking reading sessions with SQLite storage.
 
@@ -48,6 +52,7 @@ Kindle sidecar parsing and sync scripts are heavily inspired by [kindle-reading-
 #### if using Kindle Sync
 
 Install Python 3.8+ for your platform: https://www.python.org/downloads/
+
 install the dependencies:
 
 ```bash
