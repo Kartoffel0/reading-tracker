@@ -2,3 +2,4 @@ node_modules/
 dist/
 */__pycache__/
 */*/__pycache__/
+python-bundle/python/Lib/
