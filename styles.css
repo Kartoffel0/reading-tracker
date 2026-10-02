@@ -107,6 +107,56 @@ html.theme-wave {
     --toast-border: var(--accent-primary);
 }
 
+/* Sakura Dark (桜) */
+body.theme-sakura-dark,
+html.theme-sakura-dark {
+    --bg-primary: #170b12;
+    --bg-secondary: #1c0e17;
+    --bg-card: rgba(26, 13, 21, 0.85);
+    --bg-card-hover: rgba(34, 17, 28, 0.92);
+    --border-color: rgba(240, 133, 168, 0.08);
+    --border-hover: rgba(244, 154, 188, 0.18);
+    --text-primary: #fbeef2;
+    --text-secondary: #c996a8;
+    --text-muted: #7a5f6e;
+    --accent-primary: #f085a8;
+    --accent-primary-glow: rgba(240, 133, 168, 0.3);
+    --accent-secondary: #f4b8c8;
+    --accent-secondary-glow: rgba(244, 184, 200, 0.2);
+    --accent-tertiary: #d4a843;
+    --accent-tertiary-glow: rgba(212, 168, 67, 0.2);
+    --kanji-color: rgba(240, 133, 168, 0.06);
+    --grid-color: rgba(240, 133, 168, 0.02);
+    --glow-color: rgba(244, 154, 188, 0.07);
+    --glow-pos: top -30% right -20%;
+    --toast-border: var(--accent-primary);
+}
+
+/* Sakura Light (桜) */
+body.theme-sakura-light,
+html.theme-sakura-light {
+    --bg-primary: #fffafc;
+    --bg-secondary: #fdf3f6;
+    --bg-card: rgba(255, 252, 253, 0.95);
+    --bg-card-hover: rgba(255, 255, 255, 1);
+    --border-color: rgba(194, 71, 110, 0.12);
+    --border-hover: rgba(194, 71, 110, 0.25);
+    --text-primary: #2a1620;
+    --text-secondary: #6e4a58;
+    --text-muted: #a08090;
+    --accent-primary: #c2476e;
+    --accent-primary-glow: rgba(194, 71, 110, 0.15);
+    --accent-secondary: #9d2f55;
+    --accent-secondary-glow: rgba(157, 47, 85, 0.1);
+    --accent-tertiary: #7a2440;
+    --accent-tertiary-glow: rgba(122, 36, 64, 0.1);
+    --kanji-color: rgba(194, 71, 110, 0.04);
+    --grid-color: rgba(194, 71, 110, 0.03);
+    --glow-color: rgba(244, 154, 188, 0.06);
+    --glow-pos: top -20% left -10%;
+    --toast-border: var(--accent-primary);
+}
+
 /* ===== BASE STYLES ===== */
 body {
     font-family: 'Inter', 'Noto Sans JP', sans-serif;
@@ -1245,6 +1295,59 @@ body.theme-classic .month-nav button:hover {
     border-color: #f5c1c1;
 }
 
+/* Sakura Light theme calendar */
+body.theme-sakura-light .day-cell {
+    background: #f7f0f3;
+    border: 1px solid #eadbe2;
+}
+
+body.theme-sakura-light .day-cell:hover {
+    border-color: #d9c2cc;
+}
+
+body.theme-sakura-light .day-cell.level-1 {
+    background: #fbe4ea;
+    border-color: #f6ccd8;
+}
+
+body.theme-sakura-light .day-cell.level-2 {
+    background: #f6c2d2;
+    border-color: #f0a9bf;
+}
+
+body.theme-sakura-light .day-cell.level-3 {
+    background: #e88ba6;
+    border-color: #de7694;
+}
+
+body.theme-sakura-light .day-cell.level-4 {
+    background: #d95f82;
+    border-color: #cf4d72;
+}
+
+body.theme-sakura-light .day-cell.level-5 {
+    background: #c2476e;
+    border-color: #a93a5c;
+}
+
+body.theme-sakura-light .day-cell.empty {
+    background: transparent;
+}
+
+body.theme-sakura-light .legend-cell {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+body.theme-sakura-light .month-nav button {
+    background: #faf4f7;
+    border-color: #eadbe2;
+}
+
+body.theme-sakura-light .month-nav button:hover {
+    background: #fbe4ea;
+    border-color: #f6ccd8;
+}
+
 .day-cell {
     aspect-ratio: 1;
     border-radius: 6px;
@@ -1770,7 +1873,7 @@ body.theme-classic .month-nav button:hover {
 
 /* Session card (inside session modal) */
 .session-card {
-    background: transparent;
+    background: color-mix(in srgb, var(--accent-primary) 5%, var(--bg-card));
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 18px;

@@ -4,12 +4,16 @@ const THEMES = [
   'theme-classic',
   'theme-rising-sun',
   'theme-wave',
+  'theme-sakura-dark',
+  'theme-sakura-light',
 ];
 const THEME_NAMES = {
   'theme-dark-jp': 'Dark Japanese',
   'theme-classic': 'Classic Red & White',
   'theme-rising-sun': 'Rising Sun',
   'theme-wave': 'Great Wave (波)',
+  'theme-sakura-dark': 'Sakura Dark (桜)',
+  'theme-sakura-light': 'Sakura Light (桜)',
 };
 
 function setTheme(themeName) {
