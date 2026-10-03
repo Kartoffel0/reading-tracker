@@ -771,29 +771,39 @@ async function renderGoalCard(data) {
     goalUnitLabel = 'minute goal';
   }
 
-  // The arc is a semicircle whose endpoints sit at the bottom of the viewBox,
-  // so everything drawn above that line is inside the arc. The read/goal lines
-  // are split in two so they stay narrow enough to fit between the arc legs.
-  const radius = 90;
-  const arcLength = Math.PI * radius;
+  // The gauge is a circular arc (not an ellipse) spanning the full width of the
+  // card. A true circle keeps the curve even and the ends angled outward instead
+  // of plunging straight down, which is what makes it read as a gauge.
+  // The apex is placed at the very top of the viewBox (sagitta == chordY - 5,
+  // the 5 being half the 10px stroke) so the arc fills its box instead of
+  // leaving an empty band above it.
+  const VB_W = 400;
+  const halfChord = 190; // horizontal distance from the center to each endpoint
+  const chordY = 140; // the endpoints sit on this line, at the bottom of the viewBox
+  const sagitta = 135; // how far the arc rises above the chord
+  // Radius of the circle that produces that chord and sagitta.
+  const radius = (halfChord * halfChord + sagitta * sagitta) / (2 * sagitta);
+  // Actual arc length of that circular segment.
+  const arcLength = 2 * radius * Math.asin(halfChord / radius);
   const dash = (progress / 100) * arcLength;
+  const arcPath = `M ${VB_W / 2 - halfChord} ${chordY} A ${radius} ${radius} 0 0 1 ${VB_W / 2 + halfChord} ${chordY}`;
 
   if (gauge) {
     // The arc is only drawn when there is progress, so a 0% gauge shows no
     // stray round cap at the start of the track.
     const arc =
       progress > 0
-        ? `<path class="goal-arc" d="M 10 110 A ${radius} ${radius} 0 0 1 190 110" fill="none" stroke-linecap="round" stroke-dasharray="${dash} ${arcLength}"/>`
+        ? `<path class="goal-arc" d="${arcPath}" fill="none" stroke-linecap="round" stroke-dasharray="${dash} ${arcLength}"/>`
         : '';
 
     gauge.innerHTML = `
-      <svg class="goal-gauge-svg" viewBox="0 0 200 120">
-        <path class="goal-track" d="M 10 110 A ${radius} ${radius} 0 0 1 190 110" fill="none" stroke-linecap="round"/>
+      <svg class="goal-gauge-svg" viewBox="0 0 ${VB_W} ${chordY + 5}">
+        <path class="goal-track" d="${arcPath}" fill="none" stroke-linecap="round"/>
         ${arc}
-        <text class="goal-today" x="100" y="42">Today</text>
-        <text class="goal-big" x="100" y="70">${readDisplay}</text>
-        <text class="goal-sub" x="100" y="90">${Math.round(readValue).toLocaleString()} ${readUnit}</text>
-        <text class="goal-goal" x="100" y="104">/ ${goalDisplay} ${goalUnitLabel}</text>
+        <text class="goal-today" x="200" y="70">Today</text>
+        <text class="goal-big" x="200" y="100">${readDisplay}</text>
+        <text class="goal-sub" x="200" y="118">${Math.round(readValue).toLocaleString()} ${readUnit}</text>
+        <text class="goal-goal" x="200" y="130">/ ${goalDisplay} ${goalUnitLabel}</text>
       </svg>
     `;
   }
