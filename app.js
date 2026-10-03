@@ -778,10 +778,10 @@ async function renderRecentlyRead(data) {
 // Reading time state
 let rtActivePeriod = 'week';
 const RT_TABS = [
-  { key: 'week', label: 'Week', word: 'week' },
-  { key: 'month', label: 'Month', word: 'month' },
-  { key: 'year', label: 'Year', word: 'year' },
-  { key: 'all', label: 'All', word: 'all time' },
+  { key: 'week', label: 'W', word: 'week' },
+  { key: 'month', label: 'M', word: 'month' },
+  { key: 'year', label: 'Y', word: 'year' },
+  { key: 'all', label: 'A', word: 'all time' },
 ];
 
 function rtFormatDuration(minutes) {
@@ -823,8 +823,8 @@ function rtShortDate(d) {
 
 async function renderReadingTime(data) {
   const body = document.getElementById('readingTimeBody');
-  const rail = document.getElementById('readingTimeRail');
-  if (!body || !rail) return;
+  const tabs = document.getElementById('readingTimeTabs');
+  if (!body || !tabs) return;
 
   const now = new Date();
   const todayKey = getDateKey(now);
@@ -997,26 +997,27 @@ async function renderReadingTime(data) {
     </div>
   `;
 
-  rail.querySelectorAll('.rt-rail-tab').forEach((el) => el.remove());
+  tabs.querySelectorAll('.rt-tab').forEach((el) => el.remove());
   for (const t of RT_TABS) {
     const tab = document.createElement('div');
-    tab.className = 'rt-rail-tab' + (t.key === rtActivePeriod ? ' active' : '');
+    tab.className = 'rt-tab' + (t.key === rtActivePeriod ? ' active' : '');
+    tab.dataset.key = t.key;
     tab.textContent = t.label;
-    rail.appendChild(tab);
+    tabs.appendChild(tab);
   }
-  const indicator = document.getElementById('rtRailIndicator');
-  const activeTab = rail.querySelector('.rt-rail-tab.active');
+  const indicator = document.getElementById('rtTabIndicator');
+  const activeTab = tabs.querySelector('.rt-tab.active');
   if (indicator && activeTab) {
-    const railRect = rail.getBoundingClientRect();
+    const tabsRect = tabs.getBoundingClientRect();
     const tabRect = activeTab.getBoundingClientRect();
-    indicator.style.top = `${tabRect.top - railRect.top + tabRect.height / 2 - 5}px`;
+    indicator.style.left = `${tabRect.left - tabsRect.left + tabRect.width / 2 - 5}px`;
   }
 }
 
-// Rail interactions: click a tab to switch, or drag/scroll the rail to cycle
+// Card interactions: click a tab to switch, or scroll/drag the card to cycle
 (function () {
-  const rail = document.getElementById('readingTimeRail');
-  if (!rail) return;
+  const card = document.getElementById('readingTimeCard');
+  if (!card) return;
 
   function cycle(delta) {
     const idx = RT_TABS.findIndex((t) => t.key === rtActivePeriod);
@@ -1026,25 +1027,25 @@ async function renderReadingTime(data) {
     getData().then(renderReadingTime);
   }
 
-  rail.addEventListener('click', (e) => {
-    const tab = e.target.closest('.rt-rail-tab');
+  card.addEventListener('click', (e) => {
+    const tab = e.target.closest('.rt-tab');
     if (!tab) return;
-    const target = RT_TABS.find((t) => t.label === tab.textContent);
+    const target = RT_TABS.find((t) => t.key === tab.dataset.key);
     if (target && target.key !== rtActivePeriod) {
       rtActivePeriod = target.key;
       getData().then(renderReadingTime);
     }
   });
 
-  rail.addEventListener('wheel', (e) => {
+  card.addEventListener('wheel', (e) => {
     cycle(e.deltaY > 0 ? 1 : -1);
   });
 
   let dragStartY = null;
-  rail.addEventListener('pointerdown', (e) => {
+  card.addEventListener('pointerdown', (e) => {
     dragStartY = e.clientY;
   });
-  rail.addEventListener('pointermove', (e) => {
+  card.addEventListener('pointermove', (e) => {
     if (dragStartY === null) return;
     const dy = e.clientY - dragStartY;
     if (Math.abs(dy) >= 40) {
@@ -1052,7 +1053,7 @@ async function renderReadingTime(data) {
       dragStartY = e.clientY;
     }
   });
-  rail.addEventListener('pointerup', () => {
+  card.addEventListener('pointerup', () => {
     dragStartY = null;
   });
 })();

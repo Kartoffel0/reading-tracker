@@ -2586,13 +2586,22 @@ body.theme-wave .wave-bg {
     flex-direction: column;
 }
 
-.reading-time-rail {
-    width: 88px;
+.rt-header {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    gap: 8px;
-    padding: 10px;
+    gap: 12px;
+}
+
+.rt-header .card-title {
+    margin: 0;
+}
+
+.rt-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
     background: rgba(128, 128, 128, 0.04);
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -2600,30 +2609,31 @@ body.theme-wave .wave-bg {
     cursor: pointer;
 }
 
-.rt-rail-tab {
+.rt-tab {
     font-size: 0.65rem;
     font-weight: 600;
     color: var(--text-muted);
-    padding: 6px 8px;
+    padding: 4px 8px;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
-.rt-rail-tab.active {
+.rt-tab.active {
     color: var(--text-primary);
     background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-card));
 }
 
-.rt-rail-indicator {
+.rt-tab-indicator {
     position: absolute;
-    left: -7px;
+    top: -7px;
+    left: 0;
     width: 0;
     height: 0;
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
-    border-left: 7px solid var(--accent-primary);
-    transition: top 0.35s ease;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 7px solid var(--accent-primary);
+    transition: left 0.35s ease;
     pointer-events: none;
 }
 
