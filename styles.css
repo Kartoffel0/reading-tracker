@@ -2434,7 +2434,8 @@ body.theme-wave .wave-bg {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 8px 28px;
+    /* Four columns, so the horizontal gap is kept small enough to fit them. */
+    gap: 8px 20px;
     min-width: 0;
 }
 

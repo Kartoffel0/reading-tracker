@@ -728,7 +728,36 @@ function computeGoalStats(data) {
     today.setDate(today.getDate() - 1);
   }
 
-  return { current, daysMet, bestValue, bestDate };
+  // Longest run of consecutive met days: walk the met dates in order and count
+  // how many days in a row each one follows the previous. The day arithmetic is
+  // done in UTC so it is never shifted by the local timezone.
+  const nextDayKey = (key) => {
+    const day = new Date(
+      Date.UTC(
+        Number(key.slice(0, 4)),
+        Number(key.slice(5, 7)) - 1, // Date.UTC takes a 0-based month
+        Number(key.slice(8, 10)),
+      ),
+    );
+    day.setUTCDate(day.getUTCDate() + 1);
+    return day.toISOString().slice(0, 10);
+  };
+
+  const metDates = [...met].sort();
+  let longest = 0;
+  let runLength = 0;
+  let previousKey = null;
+
+  for (const dateKey of metDates) {
+    runLength =
+      previousKey !== null && nextDayKey(previousKey) === dateKey
+        ? runLength + 1
+        : 1;
+    previousKey = dateKey;
+    if (runLength > longest) longest = runLength;
+  }
+
+  return { current, longest, daysMet, bestValue, bestDate };
 }
 
 function formatGoalValue(value, goalUnit) {
@@ -800,7 +829,7 @@ async function renderGoalCard(data) {
       <svg class="goal-gauge-svg" viewBox="0 0 ${VB_W} ${chordY + 5}">
         <path class="goal-track" d="${arcPath}" fill="none" stroke-linecap="round"/>
         ${arc}
-        <text class="goal-today" x="200" y="70">Today</text>
+        <text class="goal-today" x="200" y="66">Today</text>
         <text class="goal-big" x="200" y="100">${readDisplay}</text>
         <text class="goal-sub" x="200" y="118">${Math.round(readValue).toLocaleString()} ${readUnit}</text>
         <text class="goal-goal" x="200" y="130">/ ${goalDisplay} ${goalUnitLabel}</text>
@@ -810,11 +839,13 @@ async function renderGoalCard(data) {
 
   const stats = computeGoalStats(data);
   const streakEl = document.getElementById('goalStreak');
+  const longestEl = document.getElementById('goalLongestStreak');
   const daysEl = document.getElementById('goalDaysMet');
   const bestEl = document.getElementById('goalBestDay');
   const bestLabelEl = document.getElementById('goalBestDayLabel');
 
   if (streakEl) streakEl.textContent = stats.current;
+  if (longestEl) longestEl.textContent = stats.longest;
   if (daysEl) daysEl.textContent = stats.daysMet;
   if (bestEl) {
     bestEl.textContent = formatGoalValue(stats.bestValue, goalUnit);
