@@ -771,7 +771,10 @@ async function renderGoalCard(data) {
     goalUnitLabel = 'minute goal';
   }
 
-  const radius = 80;
+  // The arc is a semicircle whose endpoints sit at the bottom of the viewBox,
+  // so everything drawn above that line is inside the arc. The read/goal lines
+  // are split in two so they stay narrow enough to fit between the arc legs.
+  const radius = 90;
   const arcLength = Math.PI * radius;
   const dash = (progress / 100) * arcLength;
 
@@ -780,16 +783,17 @@ async function renderGoalCard(data) {
     // stray round cap at the start of the track.
     const arc =
       progress > 0
-        ? `<path class="goal-arc" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round" stroke-dasharray="${dash} ${arcLength}"/>`
+        ? `<path class="goal-arc" d="M 10 110 A ${radius} ${radius} 0 0 1 190 110" fill="none" stroke-linecap="round" stroke-dasharray="${dash} ${arcLength}"/>`
         : '';
 
     gauge.innerHTML = `
-      <svg class="goal-gauge-svg" viewBox="0 0 200 130">
-        <path class="goal-track" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round"/>
+      <svg class="goal-gauge-svg" viewBox="0 0 200 120">
+        <path class="goal-track" d="M 10 110 A ${radius} ${radius} 0 0 1 190 110" fill="none" stroke-linecap="round"/>
         ${arc}
-        <text class="goal-today" x="100" y="44">Today</text>
-        <text class="goal-big" x="100" y="72">${readDisplay}</text>
-        <text class="goal-sub" x="100" y="122">${Math.round(readValue).toLocaleString()} ${readUnit} / ${goalDisplay} ${goalUnitLabel}</text>
+        <text class="goal-today" x="100" y="42">Today</text>
+        <text class="goal-big" x="100" y="70">${readDisplay}</text>
+        <text class="goal-sub" x="100" y="90">${Math.round(readValue).toLocaleString()} ${readUnit}</text>
+        <text class="goal-goal" x="100" y="104">/ ${goalDisplay} ${goalUnitLabel}</text>
       </svg>
     `;
   }
@@ -816,9 +820,29 @@ async function renderGoalCard(data) {
   renderGoalCalendar(data);
 }
 
-// GitHub-style contribution calendar: 7 rows (Mon-Sun) x 53 week-columns,
-// scrollable horizontally, always scrolled to the current week.
-const GC_WEEKS = 53;
+// GitHub-style contribution calendar: 7 rows (Mon-Sun) x one column per week,
+// starting on the Monday of the week that holds the first recorded session and
+// growing by one column every day. It opens scrolled to the current week.
+const GC_CELL = 12;
+const GC_GAP = 3;
+const GC_STEP = GC_CELL + GC_GAP;
+
+// Width of the grid content (including the 8px side padding). Used to scroll
+// to the far end without relying on scrollWidth, which is still 0 while the
+// grid is being laid out.
+function calendarContentWidth(weeks) {
+  return 16 + weeks * GC_CELL + (weeks - 1) * GC_GAP;
+}
+
+// Earliest date that actually has a session recorded.
+function firstRecordedDate(data) {
+  let first = null;
+  for (const [dateKey, sessions] of Object.entries(data)) {
+    if (!Array.isArray(sessions) || sessions.length === 0) continue;
+    if (first === null || dateKey < first) first = dateKey;
+  }
+  return first;
+}
 
 function renderGoalCalendar(data) {
   const cal = document.getElementById('goalCalendar');
@@ -835,15 +859,23 @@ function renderGoalCalendar(data) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  // First column = Monday of the week 52 weeks before the current one.
-  const start = new Date(today);
-  start.setDate(
-    start.getDate() - ((start.getDay() + 6) % 7) - (GC_WEEKS - 1) * 7,
-  );
+  const firstKey = firstRecordedDate(data);
+  // 'T00:00:00' (no Z) is parsed as local time, so weekday alignment is safe.
+  const start = firstKey ? new Date(firstKey + 'T00:00:00') : new Date(today);
 
-  cal.style.setProperty('--gc-weeks', String(GC_WEEKS));
+  // First column = Monday of the week that contains the first recorded day.
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
 
-  for (let week = 0; week < GC_WEEKS; week++) {
+  // One column per week from that Monday up to the current week, so the grid
+  // gains a column every day. With no data it is just the current week.
+  // Rounding the day difference removes any DST drift before dividing by 7.
+  const dayDiff = Math.round((today.getTime() - start.getTime()) / 86400000);
+  const weeks = Math.max(1, Math.floor(dayDiff / 7) + 1);
+
+  cal.style.setProperty('--gc-weeks', String(weeks));
+  cal.dataset.weeks = String(weeks);
+
+  for (let week = 0; week < weeks; week++) {
     for (let i = 0; i < 7; i++) {
       const day = new Date(start);
       day.setDate(start.getDate() + week * 7 + i);
@@ -884,32 +916,82 @@ function renderGoalCalendar(data) {
       }
       cell.appendChild(tooltip);
 
+      // A centered tooltip is clipped by the scroll box for cells at either
+      // edge of the viewport, so flip it to whichever side has room.
+      cell.addEventListener('mouseenter', () =>
+        alignTooltip(cal, cell, tooltip),
+      );
+
       cal.appendChild(cell);
     }
   }
 
-  // Always land on the current week; history is reachable by scrolling.
-  // Computed from the column count instead of scrollWidth, which is still 0
-  // while the grid is being laid out.
-  cal.scrollLeft = (GC_WEEKS - 1) * (12 + 3);
+  // Always land on the current week; history is reachable by scrolling left.
+  // Any value past the end is clamped by the browser, and scrollWidth is still
+  // 0 while the grid is being laid out, so compute the width instead.
+  cal.scrollLeft = calendarContentWidth(weeks);
   attachGoalCalendarWheel();
+}
+
+// Keeps a tooltip inside the scroll viewport when its cell sits at an edge.
+// The clip boundary is the scroll box's padding box, i.e. 8px inside its
+// border box, matching the 8px side padding on .goal-calendar.
+const GC_SIDE_PADDING = 8;
+const GC_HOVER_SCALE = 1.15;
+
+function alignTooltip(cal, cell, tooltip) {
+  tooltip.classList.remove('tip-left', 'tip-right');
+
+  const calRect = cal.getBoundingClientRect();
+  const clipLeft = calRect.left + GC_SIDE_PADDING;
+  const clipRight = calRect.right - GC_SIDE_PADDING;
+
+  // The tooltip is display:none until hover, so force it visible just long
+  // enough to measure its layout width. offsetWidth is unaffected by the hover
+  // transform, so scale it up to match what is actually painted.
+  tooltip.style.display = 'block';
+  const halfWidth = (tooltip.offsetWidth * GC_HOVER_SCALE) / 2;
+  tooltip.style.display = '';
+
+  // Scaling is centered on the element, so the cell's center is the same
+  // whether or not the hover transform has finished.
+  const cellRect = cell.getBoundingClientRect();
+  const center = cellRect.left + cellRect.width / 2;
+
+  const leftOverflow = clipLeft - (center - halfWidth);
+  const rightOverflow = center + halfWidth - clipRight;
+
+  if (leftOverflow > 0 && rightOverflow <= 0) {
+    tooltip.classList.add('tip-left');
+  } else if (rightOverflow > 0 && leftOverflow <= 0) {
+    tooltip.classList.add('tip-right');
+  } else if (leftOverflow > 0 && rightOverflow > 0) {
+    // Wider than the viewport itself: align to whichever side has more room.
+    tooltip.classList.add(
+      center - clipLeft >= clipRight - center ? 'tip-left' : 'tip-right',
+    );
+  }
 }
 
 // Arrow buttons in the legend move the calendar by a page of weeks.
 function scrollGoalCalendar(direction) {
   const cal = document.getElementById('goalCalendar');
   if (!cal) return;
-  const page = Math.min(10, GC_WEEKS) * (12 + 3);
+  const weeks = Number(cal.dataset.weeks) || 1;
+  const page = Math.min(10, weeks) * GC_STEP;
   cal.scrollLeft += direction * page;
 }
 
-// A normal vertical mouse wheel over the calendar scrolls it sideways,
-// since the grid only scrolls horizontally.
+// A normal vertical mouse wheel anywhere over the goal card scrolls the
+// calendar sideways, since the grid only scrolls horizontally. It is wired to
+// the card rather than the grid because the grid itself ignores pointer
+// events.
 function attachGoalCalendarWheel() {
   const cal = document.getElementById('goalCalendar');
-  if (!cal || cal.dataset.wired) return;
-  cal.dataset.wired = '1';
-  cal.addEventListener(
+  const card = document.querySelector('.goal-card');
+  if (!cal || !card || card.dataset.wired) return;
+  card.dataset.wired = '1';
+  card.addEventListener(
     'wheel',
     (e) => {
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
@@ -1261,9 +1343,17 @@ async function renderReadingTime(data) {
     }
   });
 
-  card.addEventListener('wheel', (e) => {
-    cycle(e.deltaY > 0 ? 1 : -1);
-  });
+  // The whole card is a valid scroll target, not just the chart, so the wheel
+  // is captured here and the page scroll is suppressed.
+  card.addEventListener(
+    'wheel',
+    (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      cycle(e.deltaY > 0 ? 1 : -1);
+    },
+    { passive: false },
+  );
 
   let dragStartY = null;
   card.addEventListener('pointerdown', (e) => {

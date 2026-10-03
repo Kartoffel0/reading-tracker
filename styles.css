@@ -2428,6 +2428,12 @@ body.theme-wave .wave-bg {
     fill: var(--text-muted);
 }
 
+/* Second half of the read/goal line, kept short so it fits inside the arc */
+.goal-goal {
+    font-size: 11px;
+    fill: var(--text-muted);
+}
+
 /* Mini stat cards (top-right) */
 .goal-stats {
     display: grid;
@@ -2510,11 +2516,19 @@ body.theme-wave .wave-bg {
     /* Fill column by column so each week is a vertical column, GitHub style */
     grid-auto-flow: column;
     gap: 3px;
+    /* overflow-x: auto also makes overflow-y behave as auto, so the scroll box
+       clips anything outside its box. The top padding grows that box upwards to
+       give the tooltips room (a tooltip is ~43px tall and the hover scale
+       makes it ~50px), and the equal negative margin keeps the cells exactly
+       where they already are. pointer-events: none stops the empty padding
+       band from stealing hover/clicks from the cards above; the cells restore
+       it for themselves. */
+    padding: 52px 8px 0;
+    margin-top: -52px;
     overflow-x: auto;
+    pointer-events: none;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    /* Room above the cells so the tooltips are not clipped by the scroll box. */
-    padding: 0px 8px;
 }
 
 .goal-calendar::-webkit-scrollbar {
@@ -2530,11 +2544,17 @@ body.theme-wave .wave-bg {
     border: 1px solid transparent;
     position: relative;
     cursor: pointer;
+    /* Re-enable pointer events, disabled on .goal-calendar for the padding band. */
+    pointer-events: auto;
     transition: all 0.2s ease;
 }
 
 .gc-cell:hover {
     transform: scale(1.15);
+    /* The hover transform makes the cell a stacking context, so its tooltip
+       would be painted in DOM order and end up under later cells. Raising the
+       hovered cell above its neighbours keeps the tooltip on top. */
+    z-index: 20;
 }
 
 /* Reading, but below the goal: same fill, just a colored border */
@@ -2570,6 +2590,19 @@ body.theme-wave .wave-bg {
     white-space: nowrap;
     pointer-events: none;
     z-index: 9;
+}
+
+/* Cells at either edge of the scroll viewport would have their centered
+   tooltip clipped, so app.js aligns them to the side that has room. */
+.gc-cell .tooltip.tip-left {
+    left: 0;
+    transform: none;
+}
+
+.gc-cell .tooltip.tip-right {
+    left: auto;
+    right: 0;
+    transform: none;
 }
 
 .gc-cell:hover .tooltip {
