@@ -673,31 +673,44 @@ async function renderGoalCard(data) {
   const goalValue = currentGoal.value;
 
   let progress = 0;
+  let readValue = 0;
   let readDisplay = '';
   let goalDisplay = '';
+  let readUnit = '';
+  let goalUnitLabel = '';
 
   if (goalUnit === 'characters') {
-    const read = sessions.reduce((sum, s) => sum + (s.characters || 0), 0);
-    progress = goalValue > 0 ? Math.min(100, (read / goalValue) * 100) : 0;
-    readDisplay = read.toLocaleString();
+    readValue = sessions.reduce((sum, s) => sum + (s.characters || 0), 0);
+    progress = goalValue > 0 ? Math.min(100, (readValue / goalValue) * 100) : 0;
+    readDisplay = readValue.toLocaleString();
     goalDisplay = goalValue.toLocaleString();
+    readUnit = 'characters';
+    goalUnitLabel = 'character goal';
   } else {
-    const readMinutes = sessions.reduce((sum, s) => sum + sessionMinutes(s), 0);
-    progress =
-      goalValue > 0 ? Math.min(100, (readMinutes / goalValue) * 100) : 0;
-    readDisplay = `${Math.round(readMinutes)}m`;
-    goalDisplay = `${goalValue}m`;
+    readValue = sessions.reduce((sum, s) => sum + sessionMinutes(s), 0);
+    progress = goalValue > 0 ? Math.min(100, (readValue / goalValue) * 100) : 0;
+    readDisplay = `${Math.round(readValue)}`;
+    goalDisplay = `${goalValue}`;
+    readUnit = 'minutes';
+    goalUnitLabel = 'minute goal';
   }
 
-  const fill = document.getElementById('goalBarFill');
-  fill.style.width = `${progress}%`;
-  fill.classList.toggle('met', progress >= 100);
+  const radius = 80;
+  const arcLength = Math.PI * radius;
+  const dash = (progress / 100) * arcLength;
 
-  const readout = document.getElementById('goalReadout');
-  readout.innerHTML = `
-    <span class="goal-read">${readDisplay}</span>
-    <span class="goal-of">/ ${goalDisplay}</span>
-    <span class="goal-unit">${goalUnit === 'characters' ? 'chars' : 'min'} / day</span>
+  card.innerHTML = `
+    <div class="goal-gauge">
+      <svg class="goal-gauge-svg" viewBox="0 0 200 112" width="220" height="123">
+        <path class="goal-track" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round"/>
+        <path class="goal-arc" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round" stroke-dasharray="${dash} ${arcLength}"/>
+      </svg>
+      <div class="goal-gauge-labels">
+        <div class="goal-today">Today</div>
+        <div class="goal-big">${readDisplay}</div>
+        <div class="goal-sub">${Math.round(readValue).toLocaleString()} ${readUnit}<br>/ ${goalDisplay} ${goalUnitLabel}</div>
+      </div>
+    </div>
   `;
 }
 
@@ -1057,6 +1070,9 @@ async function updateAll() {
   updateStats(data);
   await renderStreakMap();
   await renderEntries();
+  await renderGoalCard(data);
+  await renderRecentlyRead(data);
+  await renderReadingTime(data);
 }
 
 // Update duration unit labels dynamically
@@ -1384,6 +1400,9 @@ async function openSettingsModal() {
   document.getElementById('kindle-password').value = settings.password || '';
   document.getElementById('themeSelect').value = settings.theme || 'theme-wave';
   document.getElementById('timezoneSelect').value = settings.timezone || '-3';
+  document.getElementById('goalUnitSelect').value =
+    settings.goalUnit === 'characters' ? 'characters' : 'minutes';
+  document.getElementById('goalValue').value = settings.goalValue || 60;
   document.getElementById('settingsModalOverlay')?.classList.add('active');
 }
 

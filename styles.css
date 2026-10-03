@@ -2396,56 +2396,63 @@ body.theme-wave .wave-bg {
     flex-direction: column;
 }
 
-.goal-progress {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+#goalCard {
     margin-top: 8px;
 }
 
-.goal-bar-track {
-    height: 14px;
-    background: rgba(128, 128, 128, 0.12);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    overflow: hidden;
+.goal-gauge {
+    position: relative;
+    width: 220px;
+    margin: 0 auto;
 }
 
-.goal-bar-fill {
-    height: 100%;
-    background: var(--accent-primary);
-    border-radius: 8px;
-    transition: width 0.4s ease;
+.goal-gauge-svg {
+    display: block;
 }
 
-.goal-bar-fill.met {
-    background: var(--accent-secondary);
-    box-shadow: 0 0 10px var(--accent-primary-glow);
+.goal-track {
+    stroke: rgba(128, 128, 128, 0.25);
+    stroke-width: 10;
 }
 
-.goal-readout {
+.goal-arc {
+    stroke: var(--accent-primary);
+    stroke-width: 10;
+    transition: stroke-dasharray 0.5s ease;
+}
+
+.goal-gauge-labels {
+    position: absolute;
+    top: 18px;
+    left: 0;
+    right: 0;
     display: flex;
-    align-items: baseline;
-    gap: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    pointer-events: none;
 }
 
-.goal-read {
-    color: var(--text-primary);
+.goal-today {
+    font-size: 0.7rem;
     font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
 }
 
-.goal-of {
-    color: var(--text-muted);
+.goal-big {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
 }
 
-.goal-unit {
+.goal-sub {
+    font-size: 0.7rem;
     color: var(--text-muted);
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    line-height: 1.5;
+    margin-top: 6px;
 }
 
 /* ===== RECENTLY READ CARD ===== */
