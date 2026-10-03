@@ -299,6 +299,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   await updateAll();
 });
 
+// Re-compute the square cell size whenever the window is resized.
+window.addEventListener('resize', () => {
+  const grid = document.getElementById('streakGrid');
+  if (grid) sizeStreakGrid(grid);
+});
+
 // Close date picker when clicking outside
 document.addEventListener('click', (e) => {
   const datePicker = document.getElementById('datePicker');
@@ -477,6 +483,38 @@ function getHoursLevel(hours) {
   return 5;
 }
 
+// Keeps the activity-map cells square with an identical gap on every side:
+// computes the largest square that fits the card, then widens the gap evenly
+// using whatever space is left over on both axes.
+function sizeStreakGrid(grid) {
+  const rows = parseInt(grid.dataset.rows || '5', 10);
+  const labelRowHeight = 18;
+  const minGap = 4;
+  const maxGap = 8;
+
+  const panel = grid.closest('.streak-panel');
+  const availWidth = grid.clientWidth || (panel ? panel.clientWidth - 40 : 240);
+  const availHeight =
+    grid.clientHeight || (panel ? panel.clientHeight - 90 : 200);
+
+  const cellSize = Math.max(
+    12,
+    Math.min(
+      (availWidth - minGap * 6) / 7,
+      (availHeight - labelRowHeight - minGap * rows) / rows,
+    ),
+  );
+
+  // Extra room on each axis if we grow the gap by the same amount everywhere.
+  const slackX = (availWidth - cellSize * 7 - minGap * 6) / 6;
+  const slackY =
+    (availHeight - labelRowHeight - cellSize * rows - minGap * rows) / rows;
+  const gap = Math.min(maxGap, minGap + Math.max(0, Math.min(slackX, slackY)));
+
+  grid.style.setProperty('--cell-size', `${cellSize}px`);
+  grid.style.setProperty('--gap', `${gap}px`);
+}
+
 async function renderStreakMap() {
   const grid = document.getElementById('streakGrid');
   const monthNames = [
@@ -542,6 +580,12 @@ async function renderStreakMap() {
       outOfMonth: true,
     });
   }
+
+  // Square cells that always fit inside the card: derive the largest square
+  // that fits the available space, then let the leftover become the spacing.
+  const rows = Math.ceil(gridCells.length / 7);
+  grid.dataset.rows = rows;
+  sizeStreakGrid(grid);
 
   // Calculate max hours across the visible grid for relative levels
   const dayTotals = {};
@@ -1054,6 +1098,49 @@ async function renderReadingTime(data) {
   card.addEventListener('pointerup', () => {
     dragStartY = null;
   });
+})();
+
+// Activity map: scroll or drag the card to move between months,
+// mirroring the reading time card's interactions.
+(function () {
+  const card = document.querySelector('.streak-panel');
+  if (!card) return;
+
+  let dragged = false;
+
+  card.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    changeMonth(e.deltaY > 0 ? 1 : -1);
+  });
+
+  let dragStartY = null;
+  card.addEventListener('pointerdown', (e) => {
+    dragStartY = e.clientY;
+  });
+  card.addEventListener('pointermove', (e) => {
+    if (dragStartY === null) return;
+    const dy = e.clientY - dragStartY;
+    if (Math.abs(dy) >= 40) {
+      dragged = true;
+      changeMonth(dy > 0 ? 1 : -1);
+      dragStartY = e.clientY;
+    }
+  });
+  card.addEventListener('pointerup', () => {
+    dragStartY = null;
+  });
+
+  // A drag should not also open a day's session modal.
+  card.addEventListener(
+    'click',
+    (e) => {
+      if (dragged) {
+        e.stopPropagation();
+        dragged = false;
+      }
+    },
+    true,
+  );
 })();
 
 async function openDaySessions(dateKey) {

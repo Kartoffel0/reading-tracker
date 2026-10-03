@@ -1227,10 +1227,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .streak-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    /* Cell size and spacing are computed in JS so cells stay square, with an
+       identical gap on every side, without the grid growing past the card. */
+    grid-template-columns: repeat(7, var(--cell-size, 1fr));
     grid-template-rows: 18px;
-    grid-auto-rows: minmax(26px, 1fr);
-    gap: 5px;
+    grid-auto-rows: var(--cell-size, 1fr);
+    gap: var(--gap, 4px);
+    justify-content: center;
+    align-content: center;
     flex: 1;
     min-height: 0;
 }
