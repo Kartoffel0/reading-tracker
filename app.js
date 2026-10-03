@@ -513,23 +513,40 @@ async function renderStreakMap() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Calculate max hours in the month for relative levels
-  const monthDates = [];
-  for (let day = 1; day <= daysInMonth; day++) {
-    monthDates.push(new Date(currentYear, currentMonth, day));
-  }
-
+  // Build every grid slot: leading days from the previous month, this month's
+  // days, and trailing days from the next month, so the grid is always a full
+  // rectangle and both edges are rendered the same way.
   const prevMonth = new Date(currentYear, currentMonth, 0);
-  const prevMonthDaysInGrid = startDayOfWeek;
   const prevMonthLastDay = prevMonth.getDate();
-  for (let i = 0; i < prevMonthDaysInGrid; i++) {
-    const day = prevMonthLastDay - prevMonthDaysInGrid + 1 + i;
-    monthDates.push(new Date(currentYear, currentMonth - 1, day));
+  const gridCells = [];
+
+  for (let i = 0; i < startDayOfWeek; i++) {
+    const day = prevMonthLastDay - startDayOfWeek + 1 + i;
+    gridCells.push({
+      date: new Date(currentYear, currentMonth - 1, day),
+      outOfMonth: true,
+    });
   }
 
+  for (let day = 1; day <= daysInMonth; day++) {
+    gridCells.push({
+      date: new Date(currentYear, currentMonth, day),
+      outOfMonth: false,
+    });
+  }
+
+  const trailingDays = (7 - ((startDayOfWeek + daysInMonth) % 7)) % 7;
+  for (let day = 1; day <= trailingDays; day++) {
+    gridCells.push({
+      date: new Date(currentYear, currentMonth + 1, day),
+      outOfMonth: true,
+    });
+  }
+
+  // Calculate max hours across the visible grid for relative levels
   const dayTotals = {};
   let maxHours = 0;
-  for (const date of monthDates) {
+  for (const { date } of gridCells) {
     const dateKey = getDateKey(date);
     const totalHours = await calculateDayTotal(dateKey);
     dayTotals[dateKey] = totalHours;
@@ -546,53 +563,17 @@ async function renderStreakMap() {
     return 5;
   }
 
-  // Show last 30 days of activity + current month
-  for (let i = 0; i < prevMonthDaysInGrid; i++) {
-    const day = prevMonthLastDay - prevMonthDaysInGrid + 1 + i;
-    const date = new Date(currentYear, currentMonth - 1, day);
+  const todayStr = today.toDateString();
+
+  for (const { date, outOfMonth } of gridCells) {
     const dateKey = getDateKey(date);
-    const cell = document.createElement('div');
     const totalHours = dayTotals[dateKey];
     const level = getRelativeLevel(totalHours);
-    cell.className = `day-cell level-${level} prev-month`;
-
-    const todayStr = today.toDateString();
-    const dateStr = date.toDateString();
-
-    if (dateStr === todayStr) {
-      cell.classList.add('today');
-    } else if (date > today) {
-      cell.classList.add('future');
-    } else {
-      cell.style.cursor = 'pointer';
-      cell.addEventListener('click', () => {
-        openDaySessions(dateKey);
-      });
-    }
-
-    const tooltip = document.createElement('div');
-    tooltip.className = 'tooltip';
-    if (totalHours > 0) {
-      const sessions = data[dateKey];
-      const sessionCount = sessions ? sessions.length : 0;
-      tooltip.innerHTML = `${dateKey}<br>${totalHours.toFixed(1)}h · ${sessionCount} session${sessionCount !== 1 ? 's' : ''}`;
-    } else {
-      tooltip.innerHTML = `${dateKey}<br>No reading`;
-    }
-    cell.appendChild(tooltip);
-
-    grid.appendChild(cell);
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(currentYear, currentMonth, day);
-    const dateKey = getDateKey(date);
     const cell = document.createElement('div');
-    const totalHours = dayTotals[dateKey];
-    const level = getRelativeLevel(totalHours);
-    cell.className = `day-cell level-${level}`;
+    cell.className = outOfMonth
+      ? `day-cell level-${level} out-of-month`
+      : `day-cell level-${level}`;
 
-    const todayStr = today.toDateString();
     const dateStr = date.toDateString();
 
     if (dateStr === todayStr) {

@@ -1465,26 +1465,27 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 .day-cell.future {
-    opacity: 0.4;
     cursor: not-allowed;
     pointer-events: none;
 }
 
-.day-cell.prev-month {
+/* Days that belong to the neighbouring month (leading or trailing) are
+   rendered as real cells, just dimmed, so both edges of the grid match. */
+.day-cell.out-of-month {
     opacity: 0.55;
 }
 
-.day-cell.prev-month.level-0 {
+.day-cell.out-of-month.level-0 {
     background: rgba(128, 128, 128, 0.05);
     border-color: rgba(128, 128, 128, 0.15);
 }
 
-.day-cell.prev-month.level-0:hover {
+.day-cell.out-of-month.level-0:hover {
     background: rgba(128, 128, 128, 0.12);
     border-color: rgba(128, 128, 128, 0.4);
 }
 
-.day-cell.prev-month:not(.level-0):hover {
+.day-cell.out-of-month:not(.level-0):hover {
     opacity: 0.8;
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-primary));
