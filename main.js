@@ -27,6 +27,7 @@ function loadSettings() {
     kindle: { host: '192.168.15.244', user: 'root', password: '', sshKey: '' },
     theme: 'theme-wave',
     timezone: '-3',
+    goal: { unit: 'minutes', value: 60 },
   };
 }
 
@@ -46,6 +47,8 @@ ipcMain.handle('get-settings', () => {
     sshKey: settings.kindle?.sshKey || '',
     theme: settings.theme || 'theme-wave',
     timezone: settings.timezone || '-3',
+    goalUnit: settings.goal?.unit || 'minutes',
+    goalValue: settings.goal?.value || 60,
   };
 });
 
@@ -60,6 +63,17 @@ ipcMain.handle('save-settings', async (event, data) => {
     };
     settings.theme = data.theme || 'theme-wave';
     settings.timezone = data.timezone || '-3';
+    if (data.goalUnit || data.goalValue !== undefined) {
+      settings.goal = {
+        unit: data.goalUnit || 'minutes',
+        value:
+          data.goalValue !== undefined &&
+          data.goalValue !== '' &&
+          Number(data.goalValue) > 0
+            ? Number(data.goalValue)
+            : 60,
+      };
+    }
     saveSettings(settings);
     return { success: true };
   } catch (error) {

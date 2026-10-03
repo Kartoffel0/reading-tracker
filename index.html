@@ -126,27 +126,54 @@
                 <button type="button" class="btn-bulk-import" onclick="openBulkImportModal()">BULK IMPORT</button>
             </div>
 
-            <!-- Right Panel - Streak Map -->
-            <div class="panel streak-panel">
-                <div class="streak-controls">
-                    <div class="card-title" style="margin-bottom: 0;">ACTIVITY MAP</div>
-                    <div class="month-nav">
-                        <button onclick="changeMonth(-1)">‹</button>
-                        <span class="month-badge" id="currentMonth"></span>
-                        <span class="year-badge" id="currentYear"></span>
-                        <button onclick="changeMonth(1)">›</button>
+            <!-- Right Panel - Dashboard Grid (4 sections) -->
+            <div class="dashboard-grid">
+                <!-- Card 1: Mini activity map (streak calendar) -->
+                <div class="panel streak-panel mini">
+                    <div class="streak-controls">
+                        <div class="card-title" style="margin-bottom: 0;">ACTIVITY MAP</div>
+                        <div class="month-nav">
+                            <button onclick="changeMonth(-1)">‹</button>
+                            <span class="month-badge" id="currentMonth"></span>
+                            <span class="year-badge" id="currentYear"></span>
+                            <button onclick="changeMonth(1)">›</button>
+                        </div>
+                    </div>
+                    <div class="streak-grid mini" id="streakGrid"></div>
+                    <div class="legend mini">
+                        <span>LESS</span>
+                        <div class="legend-cell" style="background: rgba(255,255,255,0.02);"></div>
+                        <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.15;"></div>
+                        <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.3;"></div>
+                        <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.45;"></div>
+                        <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.6;"></div>
+                        <div class="legend-cell" style="background: var(--accent-primary);"></div>
+                        <span>MORE</span>
                     </div>
                 </div>
-                <div class="streak-grid" id="streakGrid"></div>
-                <div class="legend">
-                    <span>LESS</span>
-                    <div class="legend-cell" style="background: rgba(255,255,255,0.02);"></div>
-                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.15;"></div>
-                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.3;"></div>
-                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.45;"></div>
-                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.6;"></div>
-                    <div class="legend-cell" style="background: var(--accent-primary);"></div>
-                    <span>MORE</span>
+
+                <!-- Card 2: Daily goal -->
+                <div class="panel goal-card">
+                    <div class="card-title">DAILY GOAL</div>
+                    <div class="goal-progress">
+                        <div class="goal-bar-track">
+                            <div class="goal-bar-fill" id="goalBarFill"></div>
+                        </div>
+                        <div class="goal-readout" id="goalReadout"></div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Recently read -->
+                <div class="panel recently-read-card">
+                    <div class="card-title">RECENTLY READ</div>
+                    <div id="recentlyReadList"></div>
+                </div>
+
+                <!-- Card 4: Reading time -->
+                <div class="panel reading-time-card">
+                    <div class="card-title">READING TIME</div>
+                    <div class="reading-time-chart" id="readingTimeChart"></div>
+                    <div class="reading-time-stats" id="readingTimeStats"></div>
                 </div>
             </div>
         </div>
@@ -240,6 +267,22 @@
                                 <option value="theme-sakura-dark">Sakura Dark (桜)</option>
                                 <option value="theme-sakura-light">Sakura Light (桜)</option>
                             </select>
+                        </div>
+                    </fieldset>
+
+                    <!-- Daily Goal Section -->
+                    <fieldset class="settings-section">
+                        <legend>Daily Goal</legend>
+                        <div class="form-group">
+                            <label class="form-label" for="goalUnitSelect">Goal Unit</label>
+                            <select id="goalUnitSelect" class="form-select">
+                                <option value="minutes">Minutes per day</option>
+                                <option value="characters">Characters per day</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="goalValue">Goal Value</label>
+                            <input type="number" id="goalValue" class="form-input" placeholder="60" min="1" />
                         </div>
                     </fieldset>
 

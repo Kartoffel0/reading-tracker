@@ -26,6 +26,9 @@ function changeTheme(themeName) {
   setTheme(themeName);
 }
 
+// Daily goal state (persisted via settings)
+let currentGoal = { unit: 'minutes', value: 60 };
+
 // Load saved theme from settings
 (async () => {
   const settings = await window.electronAPI.getSettings();
@@ -34,6 +37,10 @@ function changeTheme(themeName) {
     setTheme(savedTheme);
     document.getElementById('themeSelect').value = savedTheme;
   }
+  currentGoal = {
+    unit: settings.goalUnit === 'characters' ? 'characters' : 'minutes',
+    value: Number(settings.goalValue) > 0 ? Number(settings.goalValue) : 60,
+  };
 })();
 
 // Floating Kanji Background
@@ -455,6 +462,9 @@ function fetchAllData() {
     updateStats(data);
     renderStreakMap();
     renderEntries();
+    renderGoalCard(data);
+    renderRecentlyRead(data);
+    renderReadingTime(data);
   });
 }
 
@@ -626,6 +636,193 @@ function changeMonth(delta) {
     currentYear--;
   }
   renderStreakMap();
+}
+
+// ===== Dashboard Cards =====
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"');
+}
+
+function sessionMinutes(s) {
+  return s.unit === 'minutes' ? s.duration : s.duration * 60;
+}
+
+function formatHours(hours) {
+  return hours >= 100 ? hours.toFixed(0) : hours.toFixed(1);
+}
+
+function formatSpeed(charsPerHour) {
+  return charsPerHour >= 10000
+    ? `${(charsPerHour / 1000).toFixed(1)}k`
+    : Math.round(charsPerHour).toLocaleString();
+}
+
+async function renderGoalCard(data) {
+  const card = document.getElementById('goalCard');
+  if (!card) return;
+
+  const todayKey = getDateKey(new Date());
+  const sessions = data[todayKey] || [];
+
+  const goalUnit = currentGoal.unit;
+  const goalValue = currentGoal.value;
+
+  let progress = 0;
+  let readDisplay = '';
+  let goalDisplay = '';
+
+  if (goalUnit === 'characters') {
+    const read = sessions.reduce((sum, s) => sum + (s.characters || 0), 0);
+    progress = goalValue > 0 ? Math.min(100, (read / goalValue) * 100) : 0;
+    readDisplay = read.toLocaleString();
+    goalDisplay = goalValue.toLocaleString();
+  } else {
+    const readMinutes = sessions.reduce((sum, s) => sum + sessionMinutes(s), 0);
+    progress =
+      goalValue > 0 ? Math.min(100, (readMinutes / goalValue) * 100) : 0;
+    readDisplay = `${Math.round(readMinutes)}m`;
+    goalDisplay = `${goalValue}m`;
+  }
+
+  const fill = document.getElementById('goalBarFill');
+  fill.style.width = `${progress}%`;
+  fill.classList.toggle('met', progress >= 100);
+
+  const readout = document.getElementById('goalReadout');
+  readout.innerHTML = `
+    <span class="goal-read">${readDisplay}</span>
+    <span class="goal-of">/ ${goalDisplay}</span>
+    <span class="goal-unit">${goalUnit === 'characters' ? 'chars' : 'min'} / day</span>
+  `;
+}
+
+async function renderRecentlyRead(data) {
+  const list = document.getElementById('recentlyReadList');
+  if (!list) return;
+
+  const byTitle = {};
+  for (const [dateKey, sessions] of Object.entries(data)) {
+    if (!Array.isArray(sessions)) continue;
+    for (const s of sessions) {
+      const title = s.title || 'Untitled';
+      if (!byTitle[title]) {
+        byTitle[title] = { lastDate: '', totalChars: 0, totalMinutes: 0 };
+      }
+      const entry = byTitle[title];
+      if (dateKey > entry.lastDate) entry.lastDate = dateKey;
+      entry.totalChars += s.characters || 0;
+      entry.totalMinutes += sessionMinutes(s);
+    }
+  }
+
+  const books = Object.entries(byTitle).sort((a, b) =>
+    b[1].lastDate.localeCompare(a[1].lastDate),
+  );
+
+  if (books.length === 0) {
+    list.innerHTML =
+      '<div class="empty-state"><p>No books tracked yet. Start reading!</p></div>';
+    return;
+  }
+
+  list.innerHTML = books
+    .slice(0, 5)
+    .map(([title, entry]) => {
+      const hours = entry.totalMinutes / 60;
+      const speed = hours > 0 ? entry.totalChars / hours : 0;
+      const initial = escapeHtml((title.trim() || '?')[0]);
+      return `
+        <div class="recent-book">
+          <div class="recent-cover-placeholder">${initial}</div>
+          <div class="recent-info">
+            <span class="recent-title">${escapeHtml(title)}</span>
+            <span class="recent-chars">${entry.totalChars.toLocaleString()} chars</span>
+            <span class="recent-speed">${formatSpeed(speed)} ch/h</span>
+            <span class="recent-time">${formatHours(hours)}h</span>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+}
+
+async function renderReadingTime(data) {
+  const chart = document.getElementById('readingTimeChart');
+  const stats = document.getElementById('readingTimeStats');
+  if (!chart || !stats) return;
+
+  const now = new Date();
+  const todayKey = getDateKey(now);
+
+  const weekStart = new Date(now);
+  weekStart.setDate(weekStart.getDate() - 6);
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+
+  const periods = [
+    { key: 'week', label: 'WEEK', start: weekStart, end: now },
+    { key: 'month', label: 'MONTH', start: monthStart, end: now },
+    { key: 'year', label: 'YEAR', start: yearStart, end: now },
+    { key: 'all', label: 'ALL', start: null, end: null },
+  ];
+
+  for (const p of periods) {
+    p.minutes = 0;
+    p.chars = 0;
+  }
+
+  for (const [dateKey, sessions] of Object.entries(data)) {
+    if (!Array.isArray(sessions)) continue;
+    for (const s of sessions) {
+      const mins = sessionMinutes(s);
+      const chars = s.characters || 0;
+      for (const p of periods) {
+        if (
+          p.start === null ||
+          (dateKey >= getDateKey(p.start) && dateKey <= todayKey)
+        ) {
+          p.minutes += mins;
+          p.chars += chars;
+        }
+      }
+    }
+  }
+
+  const maxMinutes = Math.max(...periods.map((p) => p.minutes), 1);
+
+  chart.innerHTML = periods
+    .map((p) => {
+      const hours = p.minutes / 60;
+      const heightPct = Math.max(2, (p.minutes / maxMinutes) * 100);
+      return `
+        <div class="rt-bar-group">
+          <div class="rt-bar" style="height: ${heightPct}%"></div>
+          <div class="rt-bar-label">${p.label}</div>
+        </div>
+      `;
+    })
+    .join('');
+
+  stats.innerHTML = periods
+    .map((p) => {
+      const hours = p.minutes / 60;
+      const speed = hours > 0 ? p.chars / hours : 0;
+      return `
+        <div class="rt-stat-row">
+          <span class="rt-stat-period">${p.label}</span>
+          <span class="rt-stat-chars">${p.chars.toLocaleString()}</span>
+          <span class="rt-stat-speed">${formatSpeed(speed)} ch/h</span>
+          <span class="rt-stat-time">${formatHours(hours)}h</span>
+        </div>
+      `;
+    })
+    .join('');
 }
 
 async function openDaySessions(dateKey) {
@@ -1221,11 +1418,18 @@ document
       password: document.getElementById('kindle-password').value,
       theme: document.getElementById('themeSelect').value,
       timezone: document.getElementById('timezoneSelect').value,
+      goalUnit: document.getElementById('goalUnitSelect').value,
+      goalValue: document.getElementById('goalValue').value,
     };
     const result = await window.electronAPI.saveSettings(data);
     if (result.success) {
+      currentGoal = {
+        unit: data.goalUnit === 'characters' ? 'characters' : 'minutes',
+        value: Number(data.goalValue) > 0 ? Number(data.goalValue) : 60,
+      };
       closeSettingsModal();
       showToast('Settings saved!');
+      renderGoalCard(await getData());
     } else {
       alert('Failed to save settings: ' + result.error);
     }
