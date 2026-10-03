@@ -701,7 +701,7 @@ async function renderGoalCard(data) {
 
   card.innerHTML = `
     <div class="goal-gauge">
-      <svg class="goal-gauge-svg" viewBox="0 0 200 112" width="220" height="123">
+      <svg class="goal-gauge-svg" viewBox="0 0 200 112">
         <path class="goal-track" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round"/>
         <path class="goal-arc" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round" stroke-dasharray="${dash} ${arcLength}"/>
       </svg>
@@ -753,7 +753,7 @@ async function renderRecentlyRead(data) {
         <div class="recent-book">
           <div class="recent-cover-placeholder">${initial}</div>
           <div class="recent-info">
-            <span class="recent-title">${escapeHtml(title)}</span>
+            <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
             <span class="recent-chars">${entry.totalChars.toLocaleString()} chars</span>
             <span class="recent-speed">${formatSpeed(speed)} ch/h</span>
             <span class="recent-time">${formatHours(hours)}h</span>
@@ -762,81 +762,300 @@ async function renderRecentlyRead(data) {
       `;
     })
     .join('');
+
+  // Titles too long for one line scroll horizontally back-and-forth (marquee)
+  for (const title of list.querySelectorAll('.recent-title')) {
+    const inner = title.querySelector('.recent-title-text');
+    if (!inner) continue;
+    const overflow = inner.offsetWidth - title.offsetWidth;
+    if (overflow > 0) {
+      inner.classList.add('marquee');
+      inner.style.setProperty('--marquee-shift', `${Math.ceil(overflow)}px`);
+    }
+  }
+}
+
+// Reading time state
+let rtActivePeriod = 'week';
+const RT_TABS = [
+  { key: 'week', label: 'Week', word: 'week' },
+  { key: 'month', label: 'Month', word: 'month' },
+  { key: 'year', label: 'Year', word: 'year' },
+  { key: 'all', label: 'All', word: 'all time' },
+];
+
+function rtFormatDuration(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function rtFormatAxis(minutes) {
+  return minutes >= 60
+    ? `${Math.round(minutes / 60)}h`
+    : `${Math.round(minutes)}m`;
+}
+
+function rtNiceCeil(minutes) {
+  if (minutes <= 0) return 60;
+  if (minutes >= 60) return Math.ceil(minutes / 60) * 60;
+  return Math.ceil(minutes / 15) * 15;
+}
+
+const MONTH_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+function rtShortDate(d) {
+  return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
 }
 
 async function renderReadingTime(data) {
-  const chart = document.getElementById('readingTimeChart');
-  const stats = document.getElementById('readingTimeStats');
-  if (!chart || !stats) return;
+  const body = document.getElementById('readingTimeBody');
+  const rail = document.getElementById('readingTimeRail');
+  if (!body || !rail) return;
 
   const now = new Date();
   const todayKey = getDateKey(now);
 
-  const weekStart = new Date(now);
-  weekStart.setDate(weekStart.getDate() - 6);
-
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-
-  const periods = [
-    { key: 'week', label: 'WEEK', start: weekStart, end: now },
-    { key: 'month', label: 'MONTH', start: monthStart, end: now },
-    { key: 'year', label: 'YEAR', start: yearStart, end: now },
-    { key: 'all', label: 'ALL', start: null, end: null },
-  ];
-
-  for (const p of periods) {
-    p.minutes = 0;
-    p.chars = 0;
+  let start = null;
+  let prevStart = null;
+  let prevEnd = null;
+  if (rtActivePeriod === 'week') {
+    start = new Date(now);
+    start.setDate(start.getDate() - 6);
+    prevStart = new Date(start);
+    prevStart.setDate(prevStart.getDate() - 7);
+    prevEnd = new Date(start);
+    prevEnd.setDate(prevEnd.getDate() - 1);
+  } else if (rtActivePeriod === 'month') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  } else if (rtActivePeriod === 'year') {
+    start = new Date(now.getFullYear(), 0, 1);
+    prevStart = new Date(now.getFullYear() - 1, 0, 1);
+    prevEnd = new Date(now.getFullYear(), 0, 0);
   }
+
+  const startKey = start === null ? null : getDateKey(start);
+  const prevStartKey = prevStart === null ? null : getDateKey(prevStart);
+  const prevEndKey = prevEnd === null ? null : getDateKey(prevEnd);
+
+  let totalMinutes = 0;
+  let totalChars = 0;
+  let prevMinutes = 0;
+  const buckets = new Map();
 
   for (const [dateKey, sessions] of Object.entries(data)) {
     if (!Array.isArray(sessions)) continue;
     for (const s of sessions) {
       const mins = sessionMinutes(s);
       const chars = s.characters || 0;
-      for (const p of periods) {
-        if (
-          p.start === null ||
-          (dateKey >= getDateKey(p.start) && dateKey <= todayKey)
-        ) {
-          p.minutes += mins;
-          p.chars += chars;
+      const inActive =
+        startKey === null || (dateKey >= startKey && dateKey <= todayKey);
+      if (inActive) {
+        totalMinutes += mins;
+        totalChars += chars;
+        const d = new Date(dateKey + 'T00:00:00');
+        let bucketKey;
+        let label;
+        if (rtActivePeriod === 'week') {
+          bucketKey = d.getDay();
+          label = 'SMTWTFS'[bucketKey];
+        } else if (rtActivePeriod === 'month') {
+          bucketKey = d.getDate();
+          label = String(bucketKey);
+        } else if (rtActivePeriod === 'year') {
+          bucketKey = d.getMonth();
+          label = 'JFMAMJJASOND'[bucketKey];
+        } else {
+          bucketKey = d.getFullYear();
+          label = String(bucketKey);
         }
+        const entry = buckets.get(bucketKey) || { minutes: 0, chars: 0, label };
+        entry.minutes += mins;
+        entry.chars += chars;
+        buckets.set(bucketKey, entry);
+      } else if (
+        prevStartKey !== null &&
+        dateKey >= prevStartKey &&
+        dateKey <= prevEndKey
+      ) {
+        prevMinutes += mins;
       }
     }
   }
 
-  const maxMinutes = Math.max(...periods.map((p) => p.minutes), 1);
+  if (rtActivePeriod === 'week') {
+    for (let i = 0; i < 7; i++) {
+      if (!buckets.has(i)) {
+        buckets.set(i, { minutes: 0, chars: 0, label: 'SMTWTFS'[i] });
+      }
+    }
+  } else if (rtActivePeriod === 'month') {
+    for (let d = 1; d <= now.getDate(); d++) {
+      if (!buckets.has(d)) {
+        buckets.set(d, { minutes: 0, chars: 0, label: String(d) });
+      }
+    }
+  } else if (rtActivePeriod === 'year') {
+    for (let m = 0; m < 12; m++) {
+      if (!buckets.has(m)) {
+        buckets.set(m, { minutes: 0, chars: 0, label: 'JFMAMJJASOND'[m] });
+      }
+    }
+  }
 
-  chart.innerHTML = periods
-    .map((p) => {
-      const hours = p.minutes / 60;
-      const heightPct = Math.max(2, (p.minutes / maxMinutes) * 100);
+  const sorted = [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => v);
+
+  const maxMinutes = Math.max(...sorted.map((b) => b.minutes), 1);
+  const niceMax = rtNiceCeil(maxMinutes);
+
+  const nonEmpty = sorted.filter((b) => b.minutes > 0);
+  const avgMinutes = nonEmpty.length
+    ? nonEmpty.reduce((s, b) => s + b.minutes, 0) / nonEmpty.length
+    : 0;
+  const avgTop = 100 - (avgMinutes / niceMax) * 100;
+
+  const periodWord = RT_TABS.find((t) => t.key === rtActivePeriod).word;
+  let deltaText = '';
+  if (prevStartKey !== null && prevMinutes > 0) {
+    const pct = Math.round(((totalMinutes - prevMinutes) / prevMinutes) * 100);
+    const arrow = pct >= 0 ? '↗' : '↘';
+    deltaText = `${arrow} ${Math.abs(pct)}% from previous ${periodWord}`;
+  }
+
+  let rangeLabel;
+  if (start === null) {
+    rangeLabel = 'All time';
+  } else {
+    rangeLabel = `${rtShortDate(start)} – ${rtShortDate(now)}`;
+  }
+
+  const gridlines = [0, 25, 50, 75, 100]
+    .map((p) => `<div class="rt-gridline" style="top: ${100 - p}%"></div>`)
+    .join('');
+
+  const bars = sorted
+    .map((b) => {
+      const h = Math.max(2, (b.minutes / niceMax) * 100);
       return `
         <div class="rt-bar-group">
-          <div class="rt-bar" style="height: ${heightPct}%"></div>
-          <div class="rt-bar-label">${p.label}</div>
+          <div class="rt-bar" style="height: ${h}%"></div>
         </div>
       `;
     })
     .join('');
 
-  stats.innerHTML = periods
-    .map((p) => {
-      const hours = p.minutes / 60;
-      const speed = hours > 0 ? p.chars / hours : 0;
-      return `
-        <div class="rt-stat-row">
-          <span class="rt-stat-period">${p.label}</span>
-          <span class="rt-stat-chars">${p.chars.toLocaleString()}</span>
-          <span class="rt-stat-speed">${formatSpeed(speed)} ch/h</span>
-          <span class="rt-stat-time">${formatHours(hours)}h</span>
-        </div>
-      `;
-    })
-    .join('');
+  const xLabels = sorted.map((b) => `<span>${b.label}</span>`).join('');
+
+  const speed = totalMinutes > 0 ? totalChars / (totalMinutes / 60) : 0;
+
+  body.innerHTML = `
+    <div class="rt-caption">
+      <span class="rt-range">${rangeLabel} Average</span>
+      <span class="rt-delta">${deltaText}</span>
+    </div>
+    <div class="rt-big">${rtFormatDuration(avgMinutes)}</div>
+    <div class="rt-chart">
+      <div class="rt-plot">
+        <div class="rt-gridlines">${gridlines}</div>
+        <div class="rt-avg-line" style="top: ${avgTop}%"><span class="rt-avg-label">avg</span></div>
+        <span class="rt-y-label" style="top: 0%">${rtFormatAxis(niceMax)}</span>
+        <span class="rt-y-label" style="top: 100%">0</span>
+        <div class="rt-bars">${bars}</div>
+      </div>
+      <div class="rt-x-axis">${xLabels}</div>
+    </div>
+    <div class="rt-stats">
+      <div class="rt-stat-row">
+        <span class="rt-stat-label">Characters Read</span>
+        <span class="rt-stat-value">${totalChars.toLocaleString()}</span>
+      </div>
+      <div class="rt-stat-row">
+        <span class="rt-stat-label">Reading Speed</span>
+        <span class="rt-stat-value">${formatSpeed(speed)} ch/h</span>
+      </div>
+      <div class="rt-stat-row">
+        <span class="rt-stat-label">Total Time</span>
+        <span class="rt-stat-value">${rtFormatDuration(totalMinutes)}</span>
+      </div>
+    </div>
+  `;
+
+  rail.querySelectorAll('.rt-rail-tab').forEach((el) => el.remove());
+  for (const t of RT_TABS) {
+    const tab = document.createElement('div');
+    tab.className = 'rt-rail-tab' + (t.key === rtActivePeriod ? ' active' : '');
+    tab.textContent = t.label;
+    rail.appendChild(tab);
+  }
+  const indicator = document.getElementById('rtRailIndicator');
+  const activeTab = rail.querySelector('.rt-rail-tab.active');
+  if (indicator && activeTab) {
+    const railRect = rail.getBoundingClientRect();
+    const tabRect = activeTab.getBoundingClientRect();
+    indicator.style.top = `${tabRect.top - railRect.top + tabRect.height / 2 - 5}px`;
+  }
 }
+
+// Rail interactions: click a tab to switch, or drag/scroll the rail to cycle
+(function () {
+  const rail = document.getElementById('readingTimeRail');
+  if (!rail) return;
+
+  function cycle(delta) {
+    const idx = RT_TABS.findIndex((t) => t.key === rtActivePeriod);
+    if (idx < 0) return;
+    rtActivePeriod =
+      RT_TABS[(idx + delta + RT_TABS.length) % RT_TABS.length].key;
+    getData().then(renderReadingTime);
+  }
+
+  rail.addEventListener('click', (e) => {
+    const tab = e.target.closest('.rt-rail-tab');
+    if (!tab) return;
+    const target = RT_TABS.find((t) => t.label === tab.textContent);
+    if (target && target.key !== rtActivePeriod) {
+      rtActivePeriod = target.key;
+      getData().then(renderReadingTime);
+    }
+  });
+
+  rail.addEventListener('wheel', (e) => {
+    cycle(e.deltaY > 0 ? 1 : -1);
+  });
+
+  let dragStartY = null;
+  rail.addEventListener('pointerdown', (e) => {
+    dragStartY = e.clientY;
+  });
+  rail.addEventListener('pointermove', (e) => {
+    if (dragStartY === null) return;
+    const dy = e.clientY - dragStartY;
+    if (Math.abs(dy) >= 40) {
+      cycle(dy > 0 ? 1 : -1);
+      dragStartY = e.clientY;
+    }
+  });
+  rail.addEventListener('pointerup', () => {
+    dragStartY = null;
+  });
+})();
 
 async function openDaySessions(dateKey) {
   const data = await getData();
