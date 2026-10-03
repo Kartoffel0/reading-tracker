@@ -493,9 +493,8 @@ async function renderStreakMap() {
     'Nov',
     'Dec',
   ];
-  document.getElementById('currentMonth').textContent =
-    monthNames[currentMonth];
-  document.getElementById('currentYear').textContent = currentYear;
+  document.getElementById('currentMonthLabel').textContent =
+    `${monthNames[currentMonth]} ${currentYear}`;
 
   const data = await getData();
   grid.innerHTML = '';
@@ -755,7 +754,7 @@ async function renderRecentlyRead(data) {
           <div class="recent-info">
             <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
             <span class="recent-chars">${entry.totalChars.toLocaleString()} chars</span>
-            <span class="recent-speed">${formatSpeed(speed)} ch/h</span>
+            <span class="recent-speed">${formatSpeed(speed)}/h</span>
             <span class="recent-time">${formatHours(hours)}h</span>
           </div>
         </div>
@@ -1006,7 +1005,7 @@ async function renderReadingTime(data) {
       </div>
       <div class="rt-stat-row">
         <span class="rt-stat-label">Reading Speed</span>
-        <span class="rt-stat-value">${formatSpeed(speed)} ch/h</span>
+        <span class="rt-stat-value">${formatSpeed(speed)}/h</span>
       </div>
       <div class="rt-stat-row">
         <span class="rt-stat-label">Total Time</span>

@@ -128,27 +128,28 @@
 
             <!-- Right Panel - Dashboard Grid (4 sections) -->
             <div class="dashboard-grid">
-                <!-- Card 1: Mini activity map (streak calendar) -->
-                <div class="panel streak-panel mini">
-                    <div class="streak-controls">
-                        <div class="card-title" style="margin-bottom: 0;">ACTIVITY MAP</div>
-                        <div class="month-nav">
-                            <button onclick="changeMonth(-1)">‹</button>
-                            <span class="month-badge" id="currentMonth"></span>
-                            <span class="year-badge" id="currentYear"></span>
-                            <button onclick="changeMonth(1)">›</button>
+                <!-- Card 1: Activity map (streak calendar) -->
+                <div class="panel streak-panel">
+                    <div class="streak-header">
+                        <div class="card-title">ACTIVITY MAP</div>
+                        <div class="month-selector" id="monthSelector">
+                            <button class="month-arrow" onclick="changeMonth(-1)">‹</button>
+                            <span class="month-label" id="currentMonthLabel"></span>
+                            <button class="month-arrow" onclick="changeMonth(1)">›</button>
                         </div>
                     </div>
-                    <div class="streak-grid mini" id="streakGrid"></div>
-                    <div class="legend mini">
-                        <span>LESS</span>
-                        <div class="legend-cell" style="background: rgba(255,255,255,0.02);"></div>
-                        <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.15;"></div>
-                        <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.3;"></div>
-                        <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.45;"></div>
-                        <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.6;"></div>
-                        <div class="legend-cell" style="background: var(--accent-primary);"></div>
-                        <span>MORE</span>
+                    <div class="streak-grid" id="streakGrid"></div>
+                    <div class="legend">
+                        <span class="legend-label">LESS</span>
+                        <div class="legend-cells">
+                            <div class="legend-cell" style="background: rgba(255,255,255,0.02);"></div>
+                            <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.15;"></div>
+                            <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.3;"></div>
+                            <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.45;"></div>
+                            <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.6;"></div>
+                            <div class="legend-cell" style="background: var(--accent-primary);"></div>
+                        </div>
+                        <span class="legend-label">MORE</span>
                     </div>
                 </div>
 

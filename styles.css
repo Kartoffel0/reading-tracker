@@ -601,7 +601,7 @@ button.theme-select {
     letter-spacing: 0.15em;
     color: var(--text-secondary);
     margin-bottom: 14px;
-    margin-top: 2px;
+    margin-top: 0;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1166,79 +1166,82 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     margin: 0 !important;
 }
 
-/* ===== STREAK MAP ===== */
-.streak-panel {
+/* ===== ACTIVITY MAP (STREAK) CARD ===== */
+.panel.streak-panel {
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
 }
 
-.streak-controls {
+.streak-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 24px;
+    gap: 12px;
 }
 
-.streak-panel .card-title {
-    margin-top: 0;
-    margin-bottom: 14px;
+.streak-header .card-title {
+    margin: 0;
 }
 
-.month-nav {
+.month-selector {
     display: flex;
-    gap: 8px;
-}
-
-.month-nav button {
-    width: 36px;
-    height: 36px;
-    background: rgba(255, 255, 255, 0.03);
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: rgba(128, 128, 128, 0.04);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    color: var(--text-secondary);
-    font-size: 1rem;
+}
+
+.month-arrow {
+    font-size: 0.7rem;
+    line-height: 1;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 4px 7px;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: transparent;
+    border: none;
 }
 
-.month-nav button:hover {
-    background: var(--accent-primary-glow);
-    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
-    color: var(--accent-primary);
+.month-arrow:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-card));
 }
 
-.month-badge,
-.year-badge {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
+.month-label {
+    min-width: 62px;
+    text-align: center;
+    font-size: 0.65rem;
     font-weight: 600;
-    color: var(--accent-primary);
-    padding: 6px 12px;
-    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-primary));
-    border: 1px solid color-mix(in srgb, var(--accent-primary) 25%, transparent);
-    border-radius: 6px;
+    color: var(--text-primary);
     letter-spacing: 0.05em;
-    display: flex;
-    align-items: center;
     line-height: 1;
+    pointer-events: none;
 }
 
 .streak-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    margin-bottom: 16px;
+    grid-template-rows: 18px;
+    grid-auto-rows: minmax(26px, 1fr);
+    gap: 5px;
+    flex: 1;
+    min-height: 0;
 }
 
 .day-label {
     text-align: center;
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 600;
     text-transform: uppercase;
     color: var(--text-muted);
-    padding: 4px 0;
+    padding: 2px 0;
     letter-spacing: 0.05em;
 }
 
@@ -1285,14 +1288,13 @@ body.theme-classic .legend-cell {
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-body.theme-classic .month-nav button {
+body.theme-classic .month-selector {
     background: #f5f5f5;
     border-color: #e0e0e0;
 }
 
-body.theme-classic .month-nav button:hover {
+body.theme-classic .month-arrow:hover {
     background: #fce4e4;
-    border-color: #f5c1c1;
 }
 
 /* Sakura Light theme calendar */
@@ -1338,19 +1340,17 @@ body.theme-sakura-light .legend-cell {
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-body.theme-sakura-light .month-nav button {
+body.theme-sakura-light .month-selector {
     background: #faf4f7;
     border-color: #eadbe2;
 }
 
-body.theme-sakura-light .month-nav button:hover {
+body.theme-sakura-light .month-arrow:hover {
     background: #fbe4ea;
-    border-color: #f6ccd8;
 }
 
 .day-cell {
-    aspect-ratio: 1;
-    border-radius: 6px;
+    border-radius: 5px;
     background: rgba(128, 128, 128, 0.08);
     border: 1px solid rgba(128, 128, 128, 0.15);
     cursor: pointer;
@@ -1493,30 +1493,19 @@ body.theme-sakura-light .month-nav button:hover {
 .day-cell .tooltip {
     display: none;
     position: absolute;
-    bottom: calc(100% + 8px);
+    bottom: calc(100% + 6px);
     left: 50%;
     transform: translateX(-50%);
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: var(--text-primary);
     background: var(--bg-card);
     border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    padding: 6px 10px;
     border-radius: 6px;
-    font-size: 0.7rem;
-    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 8px;
     white-space: nowrap;
     pointer-events: none;
     z-index: 100;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
-
-.day-cell .tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 5px solid transparent;
-    border-top-color: var(--bg-card);
 }
 
 .day-cell:hover .tooltip {
@@ -1529,14 +1518,25 @@ body.theme-sakura-light .month-nav button:hover {
     align-items: center;
     justify-content: flex-end;
     gap: 6px;
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: var(--text-muted);
     font-weight: 500;
 }
 
+.legend-label {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.legend-cells {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .legend-cell {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 3px;
 }
 
@@ -2351,46 +2351,6 @@ body.theme-wave .wave-bg {
     flex-direction: column;
 }
 
-/* Mini activity map variant */
-.panel.streak-panel.mini {
-    padding: 14px;
-}
-
-.streak-grid.mini {
-    gap: 3px;
-    margin-bottom: 10px;
-}
-
-.streak-grid.mini .day-label {
-    font-size: 0.55rem;
-    padding: 2px 0;
-}
-
-.streak-grid.mini .day-cell {
-    border-radius: 4px;
-}
-
-.panel.streak-panel.mini .month-nav button {
-    width: 26px;
-    height: 26px;
-    font-size: 0.8rem;
-}
-
-.panel.streak-panel.mini .month-badge,
-.panel.streak-panel.mini .year-badge {
-    font-size: 0.6rem;
-    padding: 4px 8px;
-}
-
-.legend.mini {
-    gap: 4px;
-    font-size: 0.55rem;
-}
-
-.legend.mini .legend-cell {
-    width: 10px;
-    height: 10px;
-}
 
 /* ===== DAILY GOAL CARD ===== */
 .goal-card {
@@ -2566,6 +2526,7 @@ body.theme-wave .wave-bg {
 
 /* ===== READING TIME CARD ===== */
 .reading-time-card {
+    aspect-ratio: 1;
     display: flex;
     flex-direction: column;
 }
@@ -2582,6 +2543,7 @@ body.theme-wave .wave-bg {
 .reading-time-body {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
@@ -2589,7 +2551,7 @@ body.theme-wave .wave-bg {
 .rt-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
 }
 
@@ -2657,11 +2619,11 @@ body.theme-wave .wave-bg {
 }
 
 .rt-big {
-    font-size: 2.2rem;
+    font-size: 1.4rem;
     font-weight: 700;
     color: var(--text-primary);
     font-family: 'JetBrains Mono', monospace;
-    line-height: 1;
+    line-height: 1.2;
     margin-top: 6px;
 }
 
