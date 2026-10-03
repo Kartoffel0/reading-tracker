@@ -821,6 +821,20 @@ function rtShortDate(d) {
   return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
 }
 
+function rtTooltipLabel(bucketKey) {
+  const now = new Date();
+  if (rtActivePeriod === 'week') {
+    const d = new Date(now);
+    d.setDate(now.getDate() - ((now.getDay() - bucketKey + 7) % 7));
+    return rtShortDate(d);
+  } else if (rtActivePeriod === 'month') {
+    return rtShortDate(new Date(now.getFullYear(), now.getMonth(), bucketKey));
+  } else if (rtActivePeriod === 'year') {
+    return MONTH_SHORT[bucketKey];
+  }
+  return String(bucketKey);
+}
+
 async function renderReadingTime(data) {
   const body = document.getElementById('readingTimeBody');
   const tabs = document.getElementById('readingTimeTabs');
@@ -920,7 +934,7 @@ async function renderReadingTime(data) {
 
   const sorted = [...buckets.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([, v]) => v);
+    .map(([key, v]) => ({ key, ...v }));
 
   const maxMinutes = Math.max(...sorted.map((b) => b.minutes), 1);
   const niceMax = rtNiceCeil(maxMinutes);
@@ -953,9 +967,13 @@ async function renderReadingTime(data) {
   const bars = sorted
     .map((b) => {
       const h = Math.max(2, (b.minutes / niceMax) * 100);
+      const tooltip =
+        b.minutes > 0
+          ? `${rtTooltipLabel(b.key)} · ${rtFormatDuration(b.minutes)} · ${b.chars.toLocaleString()} chars`
+          : `${rtTooltipLabel(b.key)} · no sessions`;
       return `
         <div class="rt-bar-group">
-          <div class="rt-bar" style="height: ${h}%"></div>
+          <div class="rt-bar" data-tooltip="${tooltip}" style="height: ${h}%"></div>
         </div>
       `;
     })

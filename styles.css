@@ -2739,6 +2739,7 @@ body.theme-wave .wave-bg {
 }
 
 .rt-bar {
+    position: relative;
     width: 60%;
     max-width: 48px;
     min-height: 2px;
@@ -2746,6 +2747,30 @@ body.theme-wave .wave-bg {
     border-radius: 4px 4px 0 0;
     opacity: 0.85;
     transition: height 0.4s ease;
+}
+
+.rt-bar::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%, -6px);
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 8px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 5;
+}
+
+.rt-bar:hover::after {
+    opacity: 1;
 }
 
 .rt-bar-group:last-child .rt-bar {
