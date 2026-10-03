@@ -686,10 +686,62 @@ function formatSpeed(charsPerHour) {
     : Math.round(charsPerHour).toLocaleString();
 }
 
+// Total value read on a given day, measured in the unit of the current goal.
+function dayGoalValue(sessions, goalUnit) {
+  if (!Array.isArray(sessions)) return 0;
+  return goalUnit === 'characters'
+    ? sessions.reduce((sum, s) => sum + (s.characters || 0), 0)
+    : sessions.reduce((sum, s) => sum + sessionMinutes(s), 0);
+}
+
+// Goal-based streaks: a day only counts when the daily goal is actually met.
+function computeGoalStats(data) {
+  const goalUnit = currentGoal.unit;
+  const goalValue = currentGoal.value;
+  const met = new Set();
+  let daysMet = 0;
+  let bestValue = 0;
+  let bestDate = '';
+
+  for (const [dateKey, sessions] of Object.entries(data)) {
+    const value = dayGoalValue(sessions, goalUnit);
+    if (value <= 0) continue;
+    if (value >= goalValue) {
+      met.add(dateKey);
+      daysMet++;
+    }
+    if (value > bestValue) {
+      bestValue = value;
+      bestDate = dateKey;
+    }
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (!met.has(getDateKey(today))) {
+    today.setDate(today.getDate() - 1);
+  }
+
+  let current = 0;
+  while (met.has(getDateKey(today))) {
+    current++;
+    today.setDate(today.getDate() - 1);
+  }
+
+  return { current, daysMet, bestValue, bestDate };
+}
+
+function formatGoalValue(value, goalUnit) {
+  return goalUnit === 'characters'
+    ? Math.round(value).toLocaleString()
+    : formatHours(value / 60);
+}
+
 async function renderGoalCard(data) {
   const card = document.getElementById('goalCard');
   if (!card) return;
 
+  const gauge = document.getElementById('goalGauge');
   const todayKey = getDateKey(new Date());
   const sessions = data[todayKey] || [];
 
@@ -723,19 +775,149 @@ async function renderGoalCard(data) {
   const arcLength = Math.PI * radius;
   const dash = (progress / 100) * arcLength;
 
-  card.innerHTML = `
-    <div class="goal-gauge">
-      <svg class="goal-gauge-svg" viewBox="0 0 200 112">
+  if (gauge) {
+    // The arc is only drawn when there is progress, so a 0% gauge shows no
+    // stray round cap at the start of the track.
+    const arc =
+      progress > 0
+        ? `<path class="goal-arc" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round" stroke-dasharray="${dash} ${arcLength}"/>`
+        : '';
+
+    gauge.innerHTML = `
+      <svg class="goal-gauge-svg" viewBox="0 0 200 130">
         <path class="goal-track" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round"/>
-        <path class="goal-arc" d="M 20 100 A ${radius} ${radius} 0 0 1 180 100" fill="none" stroke-linecap="round" stroke-dasharray="${dash} ${arcLength}"/>
+        ${arc}
+        <text class="goal-today" x="100" y="44">Today</text>
+        <text class="goal-big" x="100" y="72">${readDisplay}</text>
+        <text class="goal-sub" x="100" y="122">${Math.round(readValue).toLocaleString()} ${readUnit} / ${goalDisplay} ${goalUnitLabel}</text>
       </svg>
-      <div class="goal-gauge-labels">
-        <div class="goal-today">Today</div>
-        <div class="goal-big">${readDisplay}</div>
-        <div class="goal-sub">${Math.round(readValue).toLocaleString()} ${readUnit}<br>/ ${goalDisplay} ${goalUnitLabel}</div>
-      </div>
-    </div>
-  `;
+    `;
+  }
+
+  const stats = computeGoalStats(data);
+  const streakEl = document.getElementById('goalStreak');
+  const daysEl = document.getElementById('goalDaysMet');
+  const bestEl = document.getElementById('goalBestDay');
+  const bestLabelEl = document.getElementById('goalBestDayLabel');
+
+  if (streakEl) streakEl.textContent = stats.current;
+  if (daysEl) daysEl.textContent = stats.daysMet;
+  if (bestEl) {
+    bestEl.textContent = formatGoalValue(stats.bestValue, goalUnit);
+    bestEl.title = stats.bestDate
+      ? `${stats.bestDate} · ${Math.round(stats.bestValue).toLocaleString()} ${goalUnit}`
+      : 'No reading recorded yet';
+  }
+  if (bestLabelEl) {
+    bestLabelEl.textContent =
+      goalUnit === 'characters' ? 'BEST DAY (CHARS)' : 'BEST DAY (HRS)';
+  }
+
+  renderGoalCalendar(data);
+}
+
+// GitHub-style contribution calendar: 7 rows (Mon-Sun) x 53 week-columns,
+// scrollable horizontally, always scrolled to the current week.
+const GC_WEEKS = 53;
+
+function renderGoalCalendar(data) {
+  const cal = document.getElementById('goalCalendar');
+  if (!cal) return;
+
+  cal.innerHTML = '';
+
+  const goalUnit = currentGoal.unit;
+  const goalValue = currentGoal.value;
+  const unitLabel = goalUnit === 'characters' ? 'chars' : 'min';
+
+  // All dates are built from local year/month/day so weekday alignment is
+  // never shifted by UTC parsing.
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // First column = Monday of the week 52 weeks before the current one.
+  const start = new Date(today);
+  start.setDate(
+    start.getDate() - ((start.getDay() + 6) % 7) - (GC_WEEKS - 1) * 7,
+  );
+
+  cal.style.setProperty('--gc-weeks', String(GC_WEEKS));
+
+  for (let week = 0; week < GC_WEEKS; week++) {
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + week * 7 + i);
+
+      // Days after today are not rendered, so the last column ends on today.
+      if (day > today) continue;
+
+      const dateKey = getDateKey(day);
+      const value = dayGoalValue(data[dateKey], goalUnit);
+      const cell = document.createElement('div');
+
+      // Explicit placement keeps every weekday in its own row even though
+      // future days are skipped, so the grid never shifts sideways.
+      cell.style.gridRow = String(i + 1);
+      cell.style.gridColumn = String(week + 1);
+
+      let state = 'gc-empty';
+      if (value >= goalValue) {
+        state = 'gc-met';
+      } else if (value > 0) {
+        state = 'gc-partial';
+      }
+
+      cell.className = `gc-cell ${state}`;
+
+      if (day.getTime() === today.getTime()) {
+        cell.classList.add('gc-today');
+      }
+
+      cell.addEventListener('click', () => openDaySessions(dateKey));
+
+      const tooltip = document.createElement('div');
+      tooltip.className = 'tooltip';
+      if (value > 0) {
+        tooltip.innerHTML = `${dateKey}<br>${Math.round(value).toLocaleString()} ${unitLabel} / ${goalValue} goal`;
+      } else {
+        tooltip.innerHTML = `${dateKey}<br>No reading`;
+      }
+      cell.appendChild(tooltip);
+
+      cal.appendChild(cell);
+    }
+  }
+
+  // Always land on the current week; history is reachable by scrolling.
+  // Computed from the column count instead of scrollWidth, which is still 0
+  // while the grid is being laid out.
+  cal.scrollLeft = (GC_WEEKS - 1) * (12 + 3);
+  attachGoalCalendarWheel();
+}
+
+// Arrow buttons in the legend move the calendar by a page of weeks.
+function scrollGoalCalendar(direction) {
+  const cal = document.getElementById('goalCalendar');
+  if (!cal) return;
+  const page = Math.min(10, GC_WEEKS) * (12 + 3);
+  cal.scrollLeft += direction * page;
+}
+
+// A normal vertical mouse wheel over the calendar scrolls it sideways,
+// since the grid only scrolls horizontally.
+function attachGoalCalendarWheel() {
+  const cal = document.getElementById('goalCalendar');
+  if (!cal || cal.dataset.wired) return;
+  cal.dataset.wired = '1';
+  cal.addEventListener(
+    'wheel',
+    (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      cal.scrollLeft += e.deltaY;
+    },
+    { passive: false },
+  );
 }
 
 async function renderRecentlyRead(data) {

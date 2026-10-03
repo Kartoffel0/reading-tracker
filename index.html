@@ -175,7 +175,43 @@
                 <!-- Card 4: Daily goal -->
                 <div class="panel goal-card">
                     <div class="card-title">DAILY GOAL</div>
-                    <div id="goalCard"></div>
+                    <div id="goalCard">
+                        <div class="goal-gauge-cell">
+                            <div class="goal-gauge" id="goalGauge"></div>
+                        </div>
+                        <div class="goal-stats">
+                            <div class="goal-stat">
+                                <div class="kanji-bg-icon">続</div>
+                                <div class="goal-stat-value" id="goalStreak">0</div>
+                                <div class="goal-stat-label">GOAL STREAK</div>
+                            </div>
+                            <div class="goal-stat">
+                                <div class="kanji-bg-icon">日</div>
+                                <div class="goal-stat-value" id="goalDaysMet">0</div>
+                                <div class="goal-stat-label">DAYS MET</div>
+                            </div>
+                            <div class="goal-stat">
+                                <div class="kanji-bg-icon">最</div>
+                                <div class="goal-stat-value" id="goalBestDay">0</div>
+                                <div class="goal-stat-label" id="goalBestDayLabel">BEST DAY</div>
+                            </div>
+                        </div>
+                        <div class="goal-calendar-wrap">
+                            <div class="goal-calendar" id="goalCalendar"></div>
+                            <div class="goal-calendar-legend">
+                                <div class="gc-nav">
+                                    <button class="month-arrow" onclick="scrollGoalCalendar(-1)" title="Older weeks">‹</button>
+                                    <button class="month-arrow" onclick="scrollGoalCalendar(1)" title="Newer weeks">›</button>
+                                </div>
+                                <div class="gc-legend-cell gc-empty"></div>
+                                <span class="gc-legend-label">none</span>
+                                <div class="gc-legend-cell gc-partial"></div>
+                                <span class="gc-legend-label">not met</span>
+                                <div class="gc-legend-cell gc-met"></div>
+                                <span class="gc-legend-label">met</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

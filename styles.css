@@ -1510,7 +1510,7 @@ body.theme-sakura-light .month-arrow:hover {
     padding: 4px 8px;
     white-space: nowrap;
     pointer-events: none;
-    z-index: 100;
+    z-index: 1;
 }
 
 .day-cell:hover .tooltip {
@@ -2359,23 +2359,33 @@ body.theme-wave .wave-bg {
 
 /* ===== DAILY GOAL CARD ===== */
 .goal-card {
+    aspect-ratio: 1;
     display: flex;
     flex-direction: column;
 }
 
+/* Four parts: gauge (top-left), mini stats (top-right), calendar (bottom, full width) */
 #goalCard {
     flex: 1;
     min-height: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    /* Top row is sized by its content; the calendar keeps a guaranteed slice. */
+    grid-template-rows: auto minmax(150px, 1fr);
+    gap: 12px;
     margin-top: 8px;
 }
 
+.goal-gauge-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+}
+
 .goal-gauge {
-    position: relative;
-    width: 240px;
-    max-width: 90%;
+    width: 170px;
+    max-width: 100%;
 }
 
 .goal-gauge-svg {
@@ -2395,38 +2405,218 @@ body.theme-wave .wave-bg {
     transition: stroke-dasharray 0.5s ease;
 }
 
-.goal-gauge-labels {
-    position: absolute;
-    top: 18px;
-    left: 0;
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    pointer-events: none;
+/* Labels are drawn inside the SVG so they scale with the gauge */
+.goal-gauge-svg text {
+    text-anchor: middle;
 }
 
 .goal-today {
-    font-size: 0.7rem;
+    font-size: 13px;
     font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 6px;
+    fill: var(--text-secondary);
 }
 
 .goal-big {
-    font-size: 2rem;
+    font-size: 34px;
     font-weight: 700;
-    color: var(--text-primary);
+    fill: var(--text-primary);
     font-family: 'JetBrains Mono', monospace;
-    line-height: 1;
 }
 
 .goal-sub {
-    font-size: 0.7rem;
+    font-size: 12px;
+    fill: var(--text-muted);
+}
+
+/* Mini stat cards (top-right) */
+.goal-stats {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    min-width: 0;
+    align-content: center;
+}
+
+.goal-stat {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 6px 9px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.goal-stat:hover {
+    border-color: var(--border-hover);
+}
+
+.goal-stat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+}
+
+.goal-stat:nth-child(1)::before { background: var(--accent-primary); }
+.goal-stat:nth-child(2)::before { background: var(--accent-secondary); }
+.goal-stat:nth-child(3)::before { background: var(--accent-tertiary); }
+
+.goal-stat .kanji-bg-icon {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+    font-size: 1.6rem;
+    opacity: 0.06;
+    color: var(--accent-primary);
+}
+
+.goal-stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.1;
+}
+
+.goal-stat-label {
+    font-size: 0.55rem;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+}
+
+/* GitHub-style goal calendar (bottom, spans both columns) */
+.goal-calendar-wrap {
+    grid-column: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+    min-height: 0;
+    padding-top: 12px;
+}
+
+.goal-calendar {
+    display: grid;
+    grid-template-columns: repeat(var(--gc-weeks, 53), 12px);
+    grid-template-rows: repeat(7, 12px);
+    /* Fill column by column so each week is a vertical column, GitHub style */
+    grid-auto-flow: column;
+    gap: 3px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Room above the cells so the tooltips are not clipped by the scroll box. */
+    padding: 0px 8px;
+}
+
+.goal-calendar::-webkit-scrollbar {
+    display: none;
+}
+
+.gc-cell {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    /* Slightly darker than the card background, no accent, no border */
+    background: color-mix(in srgb, var(--bg-card) 88%, #000);
+    border: 1px solid transparent;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.gc-cell:hover {
+    transform: scale(1.15);
+}
+
+/* Reading, but below the goal: same fill, just a colored border */
+.gc-cell.gc-partial {
+    border-color: var(--accent-primary);
+}
+
+/* Goal met: fully colored */
+.gc-cell.gc-met {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+/* Current day: extra border layered on top of whatever state it has */
+.gc-cell.gc-today {
+    outline: 1px solid var(--accent-secondary);
+    outline-offset: 1px;
+}
+
+.gc-cell .tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 8px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 9;
+}
+
+.gc-cell:hover .tooltip {
+    display: block;
+}
+
+.goal-calendar-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.6rem;
     color: var(--text-muted);
-    line-height: 1.5;
-    margin-top: 6px;
+    font-weight: 500;
+}
+
+.gc-nav {
+    display: flex;
+    gap: 4px;
+    margin-right: auto;
+}
+
+.gc-legend-hint {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-right: auto;
+}
+
+.gc-legend-label {
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.gc-legend-cell {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--bg-card) 88%, #000);
+    border: 1px solid transparent;
+}
+
+.gc-legend-cell.gc-partial {
+    border-color: var(--accent-primary);
+}
+
+.gc-legend-cell.gc-met {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
 }
 
 /* ===== RECENTLY READ CARD ===== */
