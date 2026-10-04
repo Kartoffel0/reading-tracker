@@ -408,7 +408,7 @@ button.theme-select {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 16px;
-    margin-bottom: 32px;
+    margin-bottom: 16px;
 }
 
 @media (max-width: 768px) {
@@ -477,7 +477,7 @@ button.theme-select {
 .main-layout {
     display: grid;
     grid-template-columns: 320px 1fr;
-    gap: 24px;
+    gap: 16px;
 }
 
 @media (max-width: 900px) {
@@ -495,7 +495,6 @@ button.theme-select {
 
 /* Compact input panel (log session) */
 .panel.compact {
-    padding: 16px;
     display: flex;
     flex-direction: column;
 }
@@ -540,11 +539,6 @@ button.theme-select {
     box-sizing: border-box;
     display: flex;
     align-items: center;
-}
-
-.compact-form-wrapper .duration-input {
-    display: flex;
-    gap: 6px;
 }
 
 .compact-form-wrapper .duration-input input {
@@ -737,7 +731,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .duration-input input {
     flex: 1;
-    min-width: 120px;
+    min-width: 140px;
     padding: 12px 16px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -1549,11 +1543,11 @@ body.theme-sakura-light .month-arrow:hover {
 
 /* ===== ENTRIES SECTION ===== */
 .entries-section {
-    margin-top: 24px;
+    margin-top: 16px;
 }
 
 #entryList {
-    max-height: 100px;
+    max-height: 124px;
     overflow-y: auto;
     scrollbar-width: none;
 }
@@ -1566,7 +1560,7 @@ body.theme-sakura-light .month-arrow:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 }
 
 .entries-header h2 {
@@ -1602,7 +1596,7 @@ body.theme-sakura-light .month-arrow:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 16px;
+    padding: 12px 16px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -2342,7 +2336,7 @@ body.theme-wave .wave-bg {
 .dashboard-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 24px;
+    gap: 16px;
     align-items: stretch;
 }
 
@@ -2606,28 +2600,34 @@ body.theme-wave .wave-bg {
 }
 
 /* ===== RECENTLY READ CARD ===== */
-/* The card sizes itself to its content instead of stretching to match the
-   tallest sibling in the dashboard grid. */
+/* The card keeps the same square size as the other dashboard cards. The list
+   inside is scrollable, so adding more books never grows the card. */
 .recently-read-card {
     aspect-ratio: 1;
     display: flex;
     flex-direction: column;
-    align-self: start;
 }
 
 #recentlyReadList {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-top: 8px;
+    gap: 8px;
+    flex: 1;
     min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#recentlyReadList::-webkit-scrollbar {
+    display: none;
 }
 
 .recent-book {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 8px 12px 8px 8px;
+    padding: 6px 12px 6px 6px;
     background: rgba(128, 128, 128, 0.05);
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -2640,7 +2640,7 @@ body.theme-wave .wave-bg {
 }
 
 .recent-cover {
-    height: 100px;
+    height: 90px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     object-fit: cover;
