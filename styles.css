@@ -1495,22 +1495,42 @@ body.theme-sakura-light .month-arrow:hover {
     background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-primary));
 }
 
-.day-cell .tooltip {
-    display: none;
+/* ===== SHARED TOOLTIP STYLE =====
+   Every card tooltip (activity map, goal calendar, reading stats) shares one
+   look: same size, colors, padding and multi-line layout. The content is
+   always built by the helpers in app.js:
+     YYYY MM DD · HHh MMm
+     N,NNN chars
+     N sessions        (activity map only)
+   `white-space: pre` keeps the explicit line breaks from the shared helpers
+   (needed because the reading-stats bar tooltip is plain text via
+   content: attr()). `width: max-content` is essential: an absolutely
+   positioned element with only `left` set is shrink-to-fit against its
+   containing block, so inside a 12px cell the text would wrap word by word.
+   Forcing max-content makes the box as wide as its longest line instead. */
+.day-cell .tooltip,
+.gc-cell .tooltip,
+.rt-bar::after {
     position: absolute;
     bottom: calc(100% + 6px);
     left: 50%;
     transform: translateX(-50%);
     font-size: 0.6rem;
     font-weight: 500;
+    line-height: 1.4;
     color: var(--text-primary);
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 4px 8px;
-    white-space: nowrap;
+    white-space: pre;
+    width: max-content;
     pointer-events: none;
-    z-index: 1;
+    z-index: 20;
+}
+
+.day-cell .tooltip {
+    display: none;
 }
 
 .day-cell:hover .tooltip {
@@ -2482,13 +2502,13 @@ body.theme-wave .wave-bg {
     gap: 3px;
     /* overflow-x: auto also makes overflow-y behave as auto, so the scroll box
        clips anything outside its box. The top padding grows that box upwards to
-       give the tooltips room (a tooltip is ~43px tall and the hover scale
-       makes it ~50px), and the equal negative margin keeps the cells exactly
-       where they already are. pointer-events: none stops the empty padding
-       band from stealing hover/clicks from the cards above; the cells restore
-       it for themselves. */
-    padding: 52px 8px 0;
-    margin-top: -52px;
+       give the tooltips room: the shared three-line tooltip is ~50px tall and
+       the hover scale makes it ~60px, so 64px is needed. The equal negative
+       margin keeps the cells exactly where they already are. pointer-events:
+       none stops the empty padding band from stealing hover/clicks from the
+       cards above; the cells restore it for themselves. */
+    padding: 64px 8px 0;
+    margin-top: -64px;
     overflow-x: auto;
     pointer-events: none;
     scrollbar-width: none;
@@ -2540,20 +2560,6 @@ body.theme-wave .wave-bg {
 
 .gc-cell .tooltip {
     display: none;
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.6rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 4px 8px;
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 9;
 }
 
 /* Cells at either edge of the scroll viewport would have their centered
@@ -2903,28 +2909,24 @@ body.theme-wave .wave-bg {
     transition: height 0.4s ease;
 }
 
+/* Styling comes from the shared tooltip block; only the reveal behaviour is
+   specific to the chart bars. */
 .rt-bar::after {
     content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translate(-50%, -6px);
-    font-size: 0.6rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 4px 8px;
-    white-space: nowrap;
-    pointer-events: none;
     opacity: 0;
     transition: opacity 0.15s ease;
-    z-index: 5;
 }
 
 .rt-bar:hover::after {
     opacity: 1;
+}
+
+/* `opacity: 0.85` on .rt-bar creates a stacking context, which traps the
+   tooltip's `z-index: 5` inside that bar. Sibling bars are painted in DOM
+   order, so any later bar covers the hovered bar's tooltip. Raising the
+   hovered bar lifts its whole stacking context above its neighbours. */
+.rt-bar:hover {
+    z-index: 10;
 }
 
 .rt-bar-group:last-child .rt-bar {

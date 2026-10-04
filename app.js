@@ -174,6 +174,53 @@ function getDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+// ===== SHARED TOOLTIP FORMATTING =====
+// Every card tooltip (activity map, goal calendar, reading stats) is built from
+// these helpers so they all read the same way:
+//   YYYY MM DD · HHh MMm
+//   N,NNN chars
+//   N sessions        (activity map only)
+function formatTooltipDate(dateKey) {
+  return dateKey.replace(/-/g, ' ');
+}
+
+function formatTooltipDuration(minutes) {
+  const total = Math.max(0, Math.round(minutes));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m`;
+}
+
+function formatTooltipChars(chars) {
+  return `${Math.round(chars).toLocaleString()} chars`;
+}
+
+function formatTooltipSessions(count) {
+  return `${count} session${count === 1 ? '' : 's'}`;
+}
+
+// Pass sessions as null to leave the sessions line out.
+function tooltipLines(dateLabel, minutes, chars, sessions) {
+  const lines = [
+    `${dateLabel} · ${formatTooltipDuration(minutes)}`,
+    formatTooltipChars(chars),
+  ];
+  if (sessions !== null && sessions !== undefined) {
+    lines.push(formatTooltipSessions(sessions));
+  }
+  return lines;
+}
+
+// Sums minutes/chars/sessions straight from the day's session list.
+function dayTotals(sessions) {
+  const list = Array.isArray(sessions) ? sessions : [];
+  return {
+    minutes: list.reduce((sum, s) => sum + sessionMinutes(s), 0),
+    chars: list.reduce((sum, s) => sum + (s.characters || 0), 0),
+    sessions: list.length,
+  };
+}
+
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 
@@ -603,13 +650,15 @@ async function renderStreakMap() {
   grid.dataset.rows = rows;
   sizeStreakGrid(grid);
 
-  // Calculate max hours across the visible grid for relative levels
-  const dayTotals = {};
+  // Calculate max hours across the visible grid for relative levels. Named
+  // `dayHours` so it does not shadow the global `dayTotals` helper used by the
+  // tooltips below.
+  const dayHours = {};
   let maxHours = 0;
   for (const { date } of gridCells) {
     const dateKey = getDateKey(date);
     const totalHours = await calculateDayTotal(dateKey);
-    dayTotals[dateKey] = totalHours;
+    dayHours[dateKey] = totalHours;
     if (totalHours > maxHours) maxHours = totalHours;
   }
 
@@ -627,8 +676,7 @@ async function renderStreakMap() {
 
   for (const { date, outOfMonth } of gridCells) {
     const dateKey = getDateKey(date);
-    const totalHours = dayTotals[dateKey];
-    const level = getRelativeLevel(totalHours);
+    const level = getRelativeLevel(dayHours[dateKey]);
     const cell = document.createElement('div');
     cell.className = outOfMonth
       ? `day-cell level-${level} out-of-month`
@@ -651,15 +699,15 @@ async function renderStreakMap() {
       });
     }
 
+    const totals = dayTotals(data[dateKey]);
     const tooltip = document.createElement('div');
     tooltip.className = 'tooltip';
-    if (totalHours > 0) {
-      const sessions = data[dateKey];
-      const sessionCount = sessions ? sessions.length : 0;
-      tooltip.innerHTML = `${dateKey}<br>${totalHours.toFixed(1)}h · ${sessionCount} session${sessionCount !== 1 ? 's' : ''}`;
-    } else {
-      tooltip.innerHTML = `${dateKey}<br>No reading`;
-    }
+    tooltip.innerHTML = tooltipLines(
+      formatTooltipDate(dateKey),
+      totals.minutes,
+      totals.chars,
+      totals.sessions,
+    ).join('<br>');
     cell.appendChild(tooltip);
 
     grid.appendChild(cell);
@@ -909,7 +957,6 @@ function renderGoalCalendar(data) {
 
   const goalUnit = currentGoal.unit;
   const goalValue = currentGoal.value;
-  const unitLabel = goalUnit === 'characters' ? 'chars' : 'min';
 
   // All dates are built from local year/month/day so weekday alignment is
   // never shifted by UTC parsing.
@@ -964,13 +1011,15 @@ function renderGoalCalendar(data) {
 
       cell.addEventListener('click', () => openDaySessions(dateKey));
 
+      const totals = dayTotals(data[dateKey]);
       const tooltip = document.createElement('div');
       tooltip.className = 'tooltip';
-      if (value > 0) {
-        tooltip.innerHTML = `${dateKey}<br>${Math.round(value).toLocaleString()} ${unitLabel} / ${goalValue} goal`;
-      } else {
-        tooltip.innerHTML = `${dateKey}<br>No reading`;
-      }
+      tooltip.innerHTML = tooltipLines(
+        formatTooltipDate(dateKey),
+        totals.minutes,
+        totals.chars,
+        null,
+      ).join('<br>');
       cell.appendChild(tooltip);
 
       // A centered tooltip is clipped by the scroll box for cells at either
@@ -1187,16 +1236,19 @@ function rtShortDate(d) {
   return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
 }
 
+// Tooltip date labels follow the shared "YYYY MM DD" convention. The year and
+// all-time tabs bucket by month and year, so they use the shortened period
+// label ("2026 10" / "2026") instead of a single day.
 function rtTooltipLabel(bucketKey) {
   const now = new Date();
   if (rtActivePeriod === 'week') {
     const d = new Date(now);
     d.setDate(now.getDate() - ((now.getDay() - bucketKey + 7) % 7));
-    return rtShortDate(d);
+    return formatTooltipDate(getDateKey(d));
   } else if (rtActivePeriod === 'month') {
-    return rtShortDate(new Date(now.getFullYear(), now.getMonth(), bucketKey));
+    return `${now.getFullYear()} ${String(now.getMonth() + 1).padStart(2, '0')} ${String(bucketKey).padStart(2, '0')}`;
   } else if (rtActivePeriod === 'year') {
-    return MONTH_SHORT[bucketKey];
+    return `${now.getFullYear()} ${String(bucketKey + 1).padStart(2, '0')}`;
   }
   return String(bucketKey);
 }
@@ -1341,13 +1393,14 @@ async function renderReadingTime(data) {
     .map((b) => {
       const value = metricOf(b);
       const h = Math.max(2, (value / niceMax) * 100);
-      const detail = useChars
-        ? `${b.chars.toLocaleString()} chars · ${rtFormatDuration(b.minutes)}`
-        : `${rtFormatDuration(b.minutes)} · ${b.chars.toLocaleString()} chars`;
-      const tooltip =
-        value > 0
-          ? `${rtTooltipLabel(b.key)} · ${detail}`
-          : `${rtTooltipLabel(b.key)} · no sessions`;
+      // The bar tooltip is plain text (rendered with content: attr()), so the
+      // lines are joined with real newlines and shown via white-space: pre-line.
+      const tooltip = tooltipLines(
+        rtTooltipLabel(b.key),
+        b.minutes,
+        b.chars,
+        null,
+      ).join('\n');
       return `
         <div class="rt-bar-group">
           <div class="rt-bar" data-tooltip="${tooltip}" style="height: ${h}%"></div>
