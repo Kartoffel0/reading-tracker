@@ -1691,7 +1691,7 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 .entry-chars .entry-stat-value {
-    color: var(--accent-secondary);
+    color: var(--text-secondary);
     min-width: 10ch;
 }
 
@@ -1706,6 +1706,11 @@ body.theme-sakura-light .month-arrow:hover {
 
 .entry-speed .entry-stat-unit {
     min-width: 2ch;
+}
+
+/* The stat matching the current goal unit gets the accent color. */
+.entry-highlight .entry-stat-value {
+    color: var(--accent-secondary);
 }
 
 /* The delete button keeps its slot in the layout (opacity only) so the
@@ -2825,7 +2830,7 @@ body.theme-wave .wave-bg {
     color: var(--text-secondary);
 }
 
-.recent-stat-chars {
+.recent-stat-chars, .recent-stat-time {
     color: var(--accent-primary);
 }
 

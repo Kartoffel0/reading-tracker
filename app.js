@@ -1251,14 +1251,18 @@ async function renderRecentlyRead(data) {
     .map(([title, entry]) => {
       const hours = entry.totalMinutes / 60;
       const speed = hours > 0 ? entry.totalChars / hours : 0;
+      // Highlight the stat that matches the unit of the current goal.
+      const goalIsChars = currentGoal.unit === 'characters';
+      const charsClass = goalIsChars ? ' recent-stat-chars' : '';
+      const timeClass = goalIsChars ? '' : ' recent-stat-time';
       return `
         <div class="recent-book">
           ${coverMarkup(title)}
           <div class="recent-info">
             <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
-            <span class="recent-stat"><span class="recent-stat-label">Characters Read</span> <span class="recent-stat-value recent-stat-chars">${entry.totalChars.toLocaleString()}</span></span>
+            <span class="recent-stat"><span class="recent-stat-label">Characters Read</span> <span class="recent-stat-value${charsClass}">${entry.totalChars.toLocaleString()}</span></span>
             <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span> <span class="recent-stat-value">${Math.round(speed).toLocaleString()}/h</span></span>
-            <span class="recent-stat"><span class="recent-stat-label">Total Time</span> <span class="recent-stat-value">${formatDuration(entry.totalMinutes)}</span></span>
+            <span class="recent-stat"><span class="recent-stat-label">Total Time</span> <span class="recent-stat-value${timeClass}">${formatDuration(entry.totalMinutes)}</span></span>
           </div>
         </div>
       `;
@@ -1879,13 +1883,18 @@ async function renderEntries() {
         session.unit === 'minutes' ? session.duration / 60 : session.duration;
       const speed = hours > 0 ? Math.round(chars / hours) : 0;
 
+      // Highlight the stat that matches the unit of the current goal.
+      const goalIsChars = currentGoal.unit === 'characters';
+      const durationClass = goalIsChars ? '' : ' entry-highlight';
+      const charsClass = goalIsChars ? ' entry-highlight' : '';
+
       return `
           <div class="entry-item">
             <span class="entry-date">${dateKey.replaceAll('-', ' ')}</span>
             <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
             <div class="entry-stats">
-                <div class="entry-stat entry-duration"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
-                <div class="entry-stat entry-chars"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chars</span></div>
+                <div class="entry-stat entry-duration${durationClass}"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
+                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chars</span></div>
                 <div class="entry-stat entry-speed"><span class="entry-stat-value">${speed.toLocaleString()}</span><span class="entry-stat-unit">/h</span></div>
             </div>
             <button class="entry-del-btn" onclick="deleteSession('${dateKey}', ${session.id}, false)">&times;</button>
