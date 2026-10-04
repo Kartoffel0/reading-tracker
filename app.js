@@ -1108,6 +1108,53 @@ function attachGoalCalendarWheel() {
   );
 }
 
+// ===== Book Covers =====
+// Covers are resolved and cached in the main process. This map only mirrors the
+// results for the current session so the renderer never asks twice for the same
+// title; anything already on disk is returned by the main process without a
+// network request.
+const coverCache = new Map();
+
+// Resolve covers for titles that are not yet known locally. Titles already in
+// the cache are skipped, so re-rendering the card costs nothing.
+async function ensureCovers(entries) {
+  const pending = entries.filter((e) => e.title && !coverCache.has(e.title));
+  if (pending.length === 0) return;
+  try {
+    const results = await window.electronAPI.ensureCovers(pending);
+    for (const [title, info] of Object.entries(results || {})) {
+      coverCache.set(title, info || { status: 'missing', url: null });
+    }
+  } catch (err) {
+    console.error('Cover lookup failed:', err.message);
+  }
+}
+
+async function uploadCoverFor(title) {
+  const result = await window.electronAPI.uploadCover(title);
+  if (result?.success) {
+    coverCache.set(title, { status: 'manual', url: result.url });
+    showToast('✓ Cover added');
+    renderRecentlyRead(await getData());
+  } else if (!result?.canceled) {
+    showToast(`Cover upload failed: ${result?.error || 'unknown error'}`);
+  }
+}
+
+function coverMarkup(title) {
+  const cover = coverCache.get(title);
+  if (cover?.url) {
+    return `<img class="recent-cover" src="${cover.url}" alt="${escapeHtml(title)} cover" />`;
+  }
+  const initial = escapeHtml((title.trim() || '?')[0]);
+  return `
+    <div class="recent-cover-placeholder">
+      <span class="cover-initial">${initial}</span>
+      <button class="cover-upload-btn" data-cover-title="${escapeHtml(title)}" title="Upload a cover image" aria-label="Upload a cover image">+</button>
+    </div>
+  `;
+}
+
 async function renderRecentlyRead(data) {
   const list = document.getElementById('recentlyReadList');
   if (!list) return;
@@ -1118,12 +1165,18 @@ async function renderRecentlyRead(data) {
     for (const s of sessions) {
       const title = s.title || 'Untitled';
       if (!byTitle[title]) {
-        byTitle[title] = { lastDate: '', totalChars: 0, totalMinutes: 0 };
+        byTitle[title] = {
+          lastDate: '',
+          totalChars: 0,
+          totalMinutes: 0,
+          language: s.language,
+        };
       }
       const entry = byTitle[title];
       if (dateKey > entry.lastDate) entry.lastDate = dateKey;
       entry.totalChars += s.characters || 0;
       entry.totalMinutes += sessionMinutes(s);
+      if (!entry.language && s.language) entry.language = s.language;
     }
   }
 
@@ -1137,15 +1190,18 @@ async function renderRecentlyRead(data) {
     return;
   }
 
-  list.innerHTML = books
-    .slice(0, 5)
+  const shown = books.slice(0, 5);
+  await ensureCovers(
+    shown.map(([title, entry]) => ({ title, language: entry.language })),
+  );
+
+  list.innerHTML = shown
     .map(([title, entry]) => {
       const hours = entry.totalMinutes / 60;
       const speed = hours > 0 ? entry.totalChars / hours : 0;
-      const initial = escapeHtml((title.trim() || '?')[0]);
       return `
         <div class="recent-book">
-          <div class="recent-cover-placeholder">${initial}</div>
+          ${coverMarkup(title)}
           <div class="recent-info">
             <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
             <span class="recent-chars">${entry.totalChars.toLocaleString()} chars</span>
@@ -1157,15 +1213,45 @@ async function renderRecentlyRead(data) {
     })
     .join('');
 
-  // Titles too long for one line scroll horizontally back-and-forth (marquee)
-  for (const title of list.querySelectorAll('.recent-title')) {
-    const inner = title.querySelector('.recent-title-text');
-    if (!inner) continue;
-    const overflow = inner.offsetWidth - title.offsetWidth;
-    if (overflow > 0) {
+  for (const btn of list.querySelectorAll('.cover-upload-btn')) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      uploadCoverFor(btn.dataset.coverTitle);
+    });
+  }
+
+  // Titles too long for one line scroll only while the row is hovered.
+  // The overflow is measured on hover, not at render time, because cover images
+  // load asynchronously and would otherwise make the title column look wider
+  // than it really is (so only the first row would ever qualify).
+  for (const titleEl of list.querySelectorAll('.recent-title')) {
+    const inner = titleEl.querySelector('.recent-title-text');
+    const row = titleEl.closest('.recent-book');
+    if (!inner || !row) continue;
+
+    row.addEventListener('mouseenter', () => {
+      if (inner.dataset.marqueeReady) return;
+
+      const textWidth = inner.offsetWidth;
+      const visibleWidth = titleEl.offsetWidth;
+      if (textWidth <= visibleWidth) return;
+
+      // Duplicate the text so the cycle ends exactly where it started,
+      // giving a seamless one-direction scroll instead of a bounce.
+      const gap = 24;
+      const cycle = textWidth + gap;
+      const text = inner.textContent;
+
+      inner.innerHTML = `${escapeHtml(text)}<span class="marquee-gap"></span>${escapeHtml(text)}`;
+      inner.style.setProperty('--marquee-cycle', `${cycle}px`);
+      // Keep a steady ~40px/s so long titles don't scroll frantically
+      inner.style.setProperty(
+        '--marquee-duration',
+        `${Math.max(4, cycle / 40).toFixed(2)}s`,
+      );
+      inner.dataset.marqueeReady = '1';
       inner.classList.add('marquee');
-      inner.style.setProperty('--marquee-shift', `${Math.ceil(overflow)}px`);
-    }
+    });
   }
 }
 

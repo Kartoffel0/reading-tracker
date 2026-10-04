@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const Database = require('better-sqlite3');
 const fs = require('fs');
+const crypto = require('crypto');
+const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
 
 let mainWindow;
@@ -98,6 +100,187 @@ ipcMain.handle('update-settings', async (event, key, value) => {
     return { success: false, error: error.message };
   }
 });
+
+// ─── Book Covers ─────────────────────────────────────────────────────────────
+// Covers are resolved once per title through the OpenLibrary search API and
+// stored on disk, so the recently-read card never re-downloads them and the
+// app never piles up requests against the API's rate limit.
+const COVERS_DIR = path.join(SETTINGS_DIR, 'covers');
+const COVERS_INDEX_FILE = path.join(COVERS_DIR, 'covers.json');
+
+// Session language names -> OpenLibrary's 3-letter ISO 639-3 codes.
+const LANG_3 = {
+  Japanese: 'jpn',
+  English: 'eng',
+  Portuguese: 'por',
+  Spanish: 'spa',
+  Korean: 'kor',
+  Chinese: 'chi',
+  German: 'ger',
+  French: 'fre',
+  Italian: 'ita',
+  Russian: 'rus',
+};
+
+// Requests are spaced out so a bulk sync of new titles cannot burst the limit.
+const REQUEST_GAP_MS = 500;
+let lastRequestAt = 0;
+
+let coverIndex = null;
+
+function ensureCoversDir() {
+  if (!fs.existsSync(COVERS_DIR)) {
+    fs.mkdirSync(COVERS_DIR, { recursive: true });
+  }
+}
+
+function loadCoverIndex() {
+  if (coverIndex) return coverIndex;
+  try {
+    if (fs.existsSync(COVERS_INDEX_FILE)) {
+      coverIndex = JSON.parse(fs.readFileSync(COVERS_INDEX_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error(
+      '[covers] Could not read cover index, starting fresh:',
+      err.message,
+    );
+  }
+  if (!coverIndex || typeof coverIndex !== 'object') coverIndex = {};
+  return coverIndex;
+}
+
+function saveCoverIndex() {
+  ensureCoversDir();
+  fs.writeFileSync(
+    COVERS_INDEX_FILE,
+    JSON.stringify(coverIndex, null, 2),
+    'utf8',
+  );
+}
+
+// OpenLibrary matches on the bare title, so the trailing publisher/imprint in
+// parentheses (" (MFブックス)") is dropped. Parentheses elsewhere are kept.
+function normalizeTitle(title) {
+  let t = String(title || '').trim();
+  t = t.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  t = t.replace(/\s+/g, ' ');
+  return t;
+}
+
+function coverKey(title) {
+  return normalizeTitle(title).toLowerCase();
+}
+
+function coverPathFor(key) {
+  const hash = crypto.createHash('sha1').update(key).digest('hex');
+  return path.join(COVERS_DIR, `${hash}.jpg`);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function spacedFetch(url) {
+  const wait = REQUEST_GAP_MS - (Date.now() - lastRequestAt);
+  if (wait > 0) await sleep(wait);
+  lastRequestAt = Date.now();
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Reading-Tracker/1.0 (personal reading log)' },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res;
+}
+
+// Returns the first search hit that actually has a cover id.
+async function searchOpenLibrary(query, language) {
+  const params = new URLSearchParams({ q: query });
+  if (language) params.set('language', language);
+  const res = await spacedFetch(
+    `https://openlibrary.org/search.json?${params.toString()}`,
+  );
+  const data = await res.json();
+  const docs = Array.isArray(data.docs) ? data.docs : [];
+  return docs.find((doc) => doc.cover_i) || null;
+}
+
+async function downloadCover(coverId, outPath) {
+  const res = await spacedFetch(
+    `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`,
+  );
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length < 100) throw new Error('cover image is empty');
+  // The covers directory may not exist yet on the very first fetch, so create
+  // it immediately before writing.
+  ensureCoversDir();
+  fs.writeFileSync(outPath, buf);
+}
+
+// Resolve one title: cached hit -> OpenLibrary with language -> OpenLibrary
+// without language -> recorded as missing.
+async function resolveCover(title, language) {
+  const key = coverKey(title);
+  const index = loadCoverIndex();
+  const entry = index[key];
+  const file = coverPathFor(key);
+
+  if (entry && entry.file && fs.existsSync(file)) {
+    return { key, status: entry.status, url: pathToFileURL(file).href };
+  }
+
+  const normalized = normalizeTitle(title);
+  if (!normalized) {
+    return { key, status: 'missing', url: null };
+  }
+
+  let doc = null;
+  try {
+    doc = await searchOpenLibrary(normalized, LANG_3[language] || null);
+    if (!doc) {
+      // Retry without the language filter before giving up.
+      doc = await searchOpenLibrary(normalized, null);
+    }
+  } catch (err) {
+    console.error(`[covers] Search failed for "${normalized}":`, err.message);
+    return { key, status: 'error', url: null };
+  }
+
+  if (doc && doc.cover_i) {
+    try {
+      await downloadCover(doc.cover_i, file);
+      index[key] = {
+        status: 'found',
+        file: path.basename(file),
+        coverId: doc.cover_i,
+        title: doc.title || normalized,
+        fetchedAt: new Date().toISOString(),
+      };
+      saveCoverIndex();
+      return { key, status: 'found', url: pathToFileURL(file).href };
+    } catch (err) {
+      console.error(
+        `[covers] Download failed for cover ${doc.cover_i}:`,
+        err.message,
+      );
+    }
+  }
+
+  index[key] = {
+    status: 'missing',
+    file: null,
+    fetchedAt: new Date().toISOString(),
+  };
+  saveCoverIndex();
+  return { key, status: 'missing', url: null };
+}
+
+function getCoverUrl(title) {
+  const key = coverKey(title);
+  const entry = loadCoverIndex()[key];
+  if (!entry || !entry.file) return null;
+  const file = path.join(COVERS_DIR, entry.file);
+  return fs.existsSync(file) ? pathToFileURL(file).href : null;
+}
 
 function getDbPath() {
   const dataPath = path.join(
@@ -284,6 +467,65 @@ app.whenReady().then(() => {
     return db
       .prepare('SELECT date, COUNT(*) as count FROM sessions GROUP BY date')
       .all();
+  });
+
+  // Covers: resolve missing covers for a list of titles, read a cached one, or
+  // attach a user-provided image.
+  ipcMain.handle('ensure-covers', async (_, requests) => {
+    const results = {};
+    if (!Array.isArray(requests)) return results;
+    for (const req of requests) {
+      if (!req || !req.title) continue;
+      results[req.title] = await resolveCover(req.title, req.language);
+    }
+    return results;
+  });
+
+  ipcMain.handle('get-cover-url', (_, title) => {
+    return getCoverUrl(title);
+  });
+
+  ipcMain.handle('upload-cover', async (_, title) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose a cover image',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const source = result.filePaths[0];
+    const key = coverKey(title);
+    const ext = path.extname(source).toLowerCase() || '.jpg';
+    const target = path.join(
+      COVERS_DIR,
+      `${crypto.createHash('sha1').update(key).digest('hex')}${ext}`,
+    );
+
+    try {
+      ensureCoversDir();
+      // Remove a previously stored cover if it used a different extension.
+      const previous = loadCoverIndex()[key]?.file;
+      if (previous) {
+        const oldPath = path.join(COVERS_DIR, previous);
+        if (oldPath !== target && fs.existsSync(oldPath))
+          fs.unlinkSync(oldPath);
+      }
+      fs.copyFileSync(source, target);
+      loadCoverIndex()[key] = {
+        status: 'manual',
+        file: path.basename(target),
+        title: normalizeTitle(title),
+        fetchedAt: new Date().toISOString(),
+      };
+      saveCoverIndex();
+      return { success: true, url: pathToFileURL(target).href };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   });
 
   // Backup: export database to file

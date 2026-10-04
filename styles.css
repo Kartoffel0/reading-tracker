@@ -1571,7 +1571,7 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 #entryList {
-    max-height: 200px;
+    max-height: 100px;
     overflow-y: auto;
     scrollbar-width: none;
 }
@@ -2509,6 +2509,7 @@ body.theme-wave .wave-bg {
        cards above; the cells restore it for themselves. */
     padding: 64px 8px 0;
     margin-top: -64px;
+    padding-bottom: 8px;
     overflow-x: auto;
     pointer-events: none;
     scrollbar-width: none;
@@ -2623,9 +2624,13 @@ body.theme-wave .wave-bg {
 }
 
 /* ===== RECENTLY READ CARD ===== */
+/* The card sizes itself to its content instead of stretching to match the
+   tallest sibling in the dashboard grid. */
 .recently-read-card {
+    aspect-ratio: 1;
     display: flex;
     flex-direction: column;
+    align-self: start;
 }
 
 #recentlyReadList {
@@ -2633,7 +2638,6 @@ body.theme-wave .wave-bg {
     flex-direction: column;
     gap: 10px;
     margin-top: 8px;
-    flex: 1;
     min-height: 0;
 }
 
@@ -2641,13 +2645,11 @@ body.theme-wave .wave-bg {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 12px;
+    padding: 8px 8px;
     background: rgba(128, 128, 128, 0.05);
     border: 1px solid var(--border-color);
     border-radius: 10px;
     transition: all 0.2s ease;
-    flex: 1;
-    min-height: 0;
 }
 
 .recent-book:hover {
@@ -2655,10 +2657,19 @@ body.theme-wave .wave-bg {
     border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
+.recent-cover {
+    height: 100px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+}
+
 .recent-cover-placeholder {
-    width: 48px;
-    height: 64px;
-    border-radius: 6px;
+    width: 75px;
+    height: 100px;
+    border-radius: 8px;
     border: 1px solid var(--border-color);
     background: linear-gradient(
         135deg,
@@ -2668,10 +2679,37 @@ body.theme-wave .wave-bg {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
+    font-size: 2rem;
     font-weight: 700;
     color: var(--text-primary);
     flex-shrink: 0;
+    position: relative;
+}
+
+.cover-upload-btn {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.recent-book:hover .cover-upload-btn {
+    opacity: 1;
+}
+
+.cover-upload-btn:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--accent-primary) 40%, rgba(0, 0, 0, 0.5));
 }
 
 .recent-info {
@@ -2696,8 +2734,16 @@ body.theme-wave .wave-bg {
     white-space: nowrap;
 }
 
-.recent-title-text.marquee {
-    animation: marquee-scroll 6s linear infinite alternate;
+/* Spacer between the duplicated title copies so the loop reads naturally */
+.marquee-gap {
+    display: inline-block;
+    width: 24px;
+}
+
+/* The scroll only exists while the row is hovered. When the pointer leaves, the
+   animation is removed and the text snaps back to its starting position. */
+.recent-book:hover .recent-title-text.marquee {
+    animation: marquee-scroll var(--marquee-duration, 6s) linear infinite;
 }
 
 @keyframes marquee-scroll {
@@ -2705,7 +2751,7 @@ body.theme-wave .wave-bg {
         transform: translateX(0);
     }
     to {
-        transform: translateX(calc(-1 * var(--marquee-shift, 0px)));
+        transform: translateX(calc(-1 * var(--marquee-cycle, 0px)));
     }
 }
 
