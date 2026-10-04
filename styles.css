@@ -272,7 +272,7 @@ body::after {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     padding-bottom: 16px;
     padding-top: 16px;
     border-bottom: 1px solid var(--border-color);
@@ -1547,7 +1547,7 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 #entryList {
-    max-height: 124px;
+    max-height: 140px;
     overflow-y: auto;
     scrollbar-width: none;
 }
@@ -1592,11 +1592,13 @@ body.theme-sakura-light .month-arrow:hover {
     border-radius: 100px;
 }
 
+/* One line per session: date, title (marquee on hover), goal-unit amount,
+   and a delete affordance that only appears while the row is hovered. */
 .entry-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
+    gap: 36px;
+    padding: 10px 16px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -1611,53 +1613,121 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 .entry-date {
-    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
     font-weight: 500;
+    flex-shrink: 0;
 }
 
-.entry-hours {
-    font-family: 'JetBrains Mono', monospace;
-    color: var(--accent-secondary);
+.entry-title {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
     font-weight: 600;
-    font-size: 0.85rem;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    flex: 1;
+    min-width: 0;
 }
 
-.entry-btns {
+.entry-title-text {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+/* The scroll only exists while the row is hovered. When the pointer leaves,
+   the animation is removed and the text snaps back to its starting position. */
+.entry-item:hover .entry-title-text.marquee {
+    animation: marquee-scroll var(--marquee-duration, 6s) linear infinite;
+}
+
+/* The three stats live in a fixed-width grid so bigger values (13,999 vs
+   990) never push the other columns sideways. Widths are in ch units, which
+   map exactly to one glyph each in the monospace font. */
+.entry-stats {
     display: flex;
-    gap: 8px;
-    align-items: center;
+    gap: 14px;
+    align-items: baseline;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
-.entry-btn {
-    padding: 6px 16px;
-    background: transparent;
-    border: 1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent);
-    color: color-mix(in srgb, var(--accent-primary) 60%, var(--text-secondary));
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 600;
+/* Each stat is its own fixed slot: a right-aligned value column followed by
+   a unit column at a constant offset. Widths are in ch units, which map
+   exactly to one glyph each in the monospace font, so the last digit of
+   every number lines up across rows (990 under 13,999). */
+.entry-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.entry-stat-value {
     font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.entry-stat-unit {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.entry-duration .entry-stat-value {
+    color: var(--text-secondary);
+    min-width: 6ch;
+}
+
+.entry-duration .entry-stat-unit {
+    min-width: 3ch;
+}
+
+.entry-chars .entry-stat-value {
+    color: var(--accent-secondary);
+    min-width: 10ch;
+}
+
+.entry-chars .entry-stat-unit {
+    min-width: 5ch;
+}
+
+.entry-speed .entry-stat-value {
+    color: var(--text-muted);
+    min-width: 10ch;
+}
+
+.entry-speed .entry-stat-unit {
+    min-width: 2ch;
+}
+
+/* The delete button keeps its slot in the layout (opacity only) so the
+   amount column never shifts when the pointer arrives. */
+.entry-del-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: opacity 0.2s ease, color 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 14px;
+    padding: 0 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    line-height: 1;
 }
 
-.entry-btn:hover {
-    background: var(--accent-primary-glow);
-    border-color: var(--accent-primary);
+.entry-del-btn:hover {
     color: var(--accent-primary);
-}
-
-.entry-btn.view-btn {
-    background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-primary));
-    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
-    color: var(--accent-primary);
-}
-
-.entry-btn.view-btn:hover {
-    background: color-mix(in srgb, var(--accent-primary) 22%, var(--bg-primary));
 }
 
 .empty-state {

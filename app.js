@@ -438,10 +438,13 @@ async function logReading() {
   showToast('✓ Session logged');
 }
 
-async function deleteSession(dateKey, sessionId) {
+// openModal keeps the day's session modal refreshed after a delete from the
+// modal itself. The entries card passes false so deleting a line never pops a
+// modal open.
+async function deleteSession(dateKey, sessionId, openModal = true) {
   await removeSession(dateKey, sessionId);
   await updateAll();
-  await openDaySessions(dateKey);
+  if (openModal) await openDaySessions(dateKey);
   showToast('Session deleted');
 }
 
@@ -1163,6 +1166,47 @@ function coverMarkup(title) {
   `;
 }
 
+// Shared by the recently-read and recent-entries cards: titles too long for
+// one line scroll only while the row is hovered. The overflow is measured on
+// hover, not at render time, because cover images load asynchronously and
+// would otherwise make the title column look wider than it really is (so
+// only the first row would ever qualify).
+function attachTitleMarquee(container) {
+  for (const titleEl of container.querySelectorAll(
+    '.recent-title, .entry-title',
+  )) {
+    const inner = titleEl.querySelector(
+      '.recent-title-text, .entry-title-text',
+    );
+    const row = titleEl.closest('.recent-book, .entry-item');
+    if (!inner || !row) continue;
+
+    row.addEventListener('mouseenter', () => {
+      if (inner.dataset.marqueeReady) return;
+
+      const textWidth = inner.offsetWidth;
+      const visibleWidth = titleEl.offsetWidth;
+      if (textWidth <= visibleWidth) return;
+
+      // Duplicate the text so the cycle ends exactly where it started,
+      // giving a seamless one-direction scroll instead of a bounce.
+      const gap = 24;
+      const cycle = textWidth + gap;
+      const text = inner.textContent;
+
+      inner.innerHTML = `${escapeHtml(text)}<span class="marquee-gap"></span>${escapeHtml(text)}`;
+      inner.style.setProperty('--marquee-cycle', `${cycle}px`);
+      // Keep a steady ~40px/s so long titles don't scroll frantically
+      inner.style.setProperty(
+        '--marquee-duration',
+        `${Math.max(4, cycle / 40).toFixed(2)}s`,
+      );
+      inner.dataset.marqueeReady = '1';
+      inner.classList.add('marquee');
+    });
+  }
+}
+
 async function renderRecentlyRead(data) {
   const list = document.getElementById('recentlyReadList');
   if (!list) return;
@@ -1228,39 +1272,7 @@ async function renderRecentlyRead(data) {
     });
   }
 
-  // Titles too long for one line scroll only while the row is hovered.
-  // The overflow is measured on hover, not at render time, because cover images
-  // load asynchronously and would otherwise make the title column look wider
-  // than it really is (so only the first row would ever qualify).
-  for (const titleEl of list.querySelectorAll('.recent-title')) {
-    const inner = titleEl.querySelector('.recent-title-text');
-    const row = titleEl.closest('.recent-book');
-    if (!inner || !row) continue;
-
-    row.addEventListener('mouseenter', () => {
-      if (inner.dataset.marqueeReady) return;
-
-      const textWidth = inner.offsetWidth;
-      const visibleWidth = titleEl.offsetWidth;
-      if (textWidth <= visibleWidth) return;
-
-      // Duplicate the text so the cycle ends exactly where it started,
-      // giving a seamless one-direction scroll instead of a bounce.
-      const gap = 24;
-      const cycle = textWidth + gap;
-      const text = inner.textContent;
-
-      inner.innerHTML = `${escapeHtml(text)}<span class="marquee-gap"></span>${escapeHtml(text)}`;
-      inner.style.setProperty('--marquee-cycle', `${cycle}px`);
-      // Keep a steady ~40px/s so long titles don't scroll frantically
-      inner.style.setProperty(
-        '--marquee-duration',
-        `${Math.max(4, cycle / 40).toFixed(2)}s`,
-      );
-      inner.dataset.marqueeReady = '1';
-      inner.classList.add('marquee');
-    });
-  }
+  attachTitleMarquee(list);
 }
 
 // Reading time state
@@ -1832,56 +1844,57 @@ document.addEventListener('keydown', (e) => {
 async function renderEntries() {
   const data = await getData();
   const entryList = document.getElementById('entryList');
-  const dates = Object.keys(data).sort((a, b) => b.localeCompare(a));
 
-  let totalSessions = 0;
-  dates.forEach((d) => {
-    if (data[d] && Array.isArray(data[d])) {
-      totalSessions += data[d].length;
+  // One line per session, newest first. The card lists sessions, not days.
+  const sessions = [];
+  for (const [dateKey, daySessions] of Object.entries(data)) {
+    if (!Array.isArray(daySessions)) continue;
+    for (const s of daySessions) {
+      sessions.push({ dateKey, session: s });
     }
-  });
+  }
+  sessions.sort(
+    (a, b) =>
+      b.dateKey.localeCompare(a.dateKey) ||
+      (b.session.id || 0) - (a.session.id || 0),
+  );
 
   document.getElementById('entryCount').textContent =
-    `${totalSessions} session${totalSessions !== 1 ? 's' : ''}`;
+    `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
 
-  if (dates.length === 0) {
+  if (sessions.length === 0) {
     entryList.innerHTML =
       '<div class="empty-state"><div class="empty-state-icon">読</div><p>No entries yet. Start reading!</p></div>';
     return;
   }
 
-  entryList.innerHTML = dates
+  entryList.innerHTML = sessions
     .slice(0, 50)
-    .map((dateKey) => {
-      const sessions = data[dateKey];
-      const date = new Date(dateKey + 'T00:00:00');
-      const formatted = date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-      const sessionCount =
-        sessions && Array.isArray(sessions) ? sessions.length : 0;
-      const totalMinutes = sessions
-        ? sessions.reduce(
-            (sum, s) =>
-              sum + (s.unit === 'minutes' ? s.duration : s.duration * 60),
-            0,
-          )
-        : 0;
-      const totalHours = (totalMinutes / 60).toFixed(1);
+    .map(({ dateKey, session }) => {
+      const title = session.title || 'Untitled';
+      const minutes = Math.round(sessionMinutes(session));
+      const chars = session.characters || 0;
+      // Same speed math the session modal uses: chars per hour.
+      const hours =
+        session.unit === 'minutes' ? session.duration / 60 : session.duration;
+      const speed = hours > 0 ? Math.round(chars / hours) : 0;
 
       return `
           <div class="entry-item">
-            <span class="entry-date">${formatted}</span>
-            <span class="entry-hours">${totalHours}h (${sessionCount} session${sessionCount !== 1 ? 's' : ''})</span>
-            <div class="entry-btns">
-                <button class="entry-btn view-btn" onclick="openDaySessions('${dateKey}')">View Sessions</button>
+            <span class="entry-date">${dateKey.replaceAll('-', ' ')}</span>
+            <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
+            <div class="entry-stats">
+                <div class="entry-stat entry-duration"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
+                <div class="entry-stat entry-chars"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chars</span></div>
+                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speed.toLocaleString()}</span><span class="entry-stat-unit">/h</span></div>
             </div>
+            <button class="entry-del-btn" onclick="deleteSession('${dateKey}', ${session.id}, false)">&times;</button>
           </div>
         `;
     })
     .join('');
+
+  attachTitleMarquee(entryList);
 }
 
 async function updateAll() {
