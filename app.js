@@ -744,6 +744,14 @@ function formatHours(hours) {
   return hours >= 100 ? hours.toFixed(0) : hours.toFixed(1);
 }
 
+// "6h 36m" style duration from a minute count.
+function formatDuration(minutes) {
+  const total = Math.max(0, Math.round(minutes));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 function formatSpeed(charsPerHour) {
   return charsPerHour >= 10000
     ? `${(charsPerHour / 1000).toFixed(1)}k`
@@ -1204,9 +1212,9 @@ async function renderRecentlyRead(data) {
           ${coverMarkup(title)}
           <div class="recent-info">
             <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
-            <span class="recent-chars">${entry.totalChars.toLocaleString()} chars</span>
-            <span class="recent-speed">${formatSpeed(speed)}/h</span>
-            <span class="recent-time">${formatHours(hours)}h</span>
+            <span class="recent-stat"><span class="recent-stat-label">Characters Read</span> <span class="recent-stat-value recent-stat-chars">${entry.totalChars.toLocaleString()}</span></span>
+            <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span> <span class="recent-stat-value">${Math.round(speed).toLocaleString()}/h</span></span>
+            <span class="recent-stat"><span class="recent-stat-label">Total Time</span> <span class="recent-stat-value">${formatDuration(entry.totalMinutes)}</span></span>
           </div>
         </div>
       `;
@@ -1746,7 +1754,7 @@ async function openDaySessions(dateKey) {
                                 <span class="session-detail-value">${(session.characters || 0).toLocaleString()}</span>
                             </div>
                             <div class="session-detail-item">
-                                <span class="session-detail-label">Avg Speed</span>
+                                <span class="session-detail-label">Reading Speed</span>
                                 <span class="session-detail-value">${speed.toLocaleString().replace(/\s/g, '')}/h</span>
                             </div>
                         </div>
@@ -1785,7 +1793,7 @@ async function openDaySessions(dateKey) {
                     </div>
                     <div class="day-summary-item">
                         <div class="day-summary-value">${avgSpeedDisplay.replace(/\s/g, '')}/h</div>
-                        <div class="day-summary-label">Avg Speed</div>
+                        <div class="day-summary-label">Reading Speed</div>
                     </div>
                 </div>
             `;

@@ -2645,7 +2645,7 @@ body.theme-wave .wave-bg {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 8px 8px;
+    padding: 8px 12px 8px 8px;
     background: rgba(128, 128, 128, 0.05);
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -2727,6 +2727,7 @@ body.theme-wave .wave-bg {
     font-weight: 600;
     color: var(--text-primary);
     font-size: 0.8rem;
+    margin-bottom: 12px;
 }
 
 .recent-title-text {
@@ -2755,16 +2756,24 @@ body.theme-wave .wave-bg {
     }
 }
 
-.recent-chars,
-.recent-speed,
-.recent-time {
-    display: block;
-    font-family: 'JetBrains Mono', monospace;
+.recent-stat {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
     font-size: 0.65rem;
+}
+
+.recent-stat-label {
     color: var(--text-muted);
 }
 
-.recent-chars {
+.recent-stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-secondary);
+}
+
+.recent-stat-chars {
     color: var(--accent-primary);
 }
 
@@ -3006,9 +3015,8 @@ body.theme-wave .wave-bg {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     padding: 8px 0;
-    border-top: 1px solid rgba(128, 128, 128, 0.1);
     flex: 1;
     min-height: 0;
 }
