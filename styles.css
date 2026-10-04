@@ -2898,6 +2898,16 @@ body.theme-wave .wave-bg {
     min-height: 0;
 }
 
+/* The y-axis labels live in a reserved gutter on the right edge of the plot.
+   The bars and x-axis labels are inset by that same amount so they never sit
+   underneath the axis text. */
+.rt-bars {
+    position: absolute;
+    inset: 0 var(--rt-axis-gutter, 12px) 0 0;
+    display: flex;
+    gap: 6px;
+}
+
 .rt-gridlines {
     position: absolute;
     inset: 0;
@@ -2935,13 +2945,6 @@ body.theme-wave .wave-bg {
     font-size: 0.55rem;
     color: var(--text-muted);
     pointer-events: none;
-}
-
-.rt-bars {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    gap: 6px;
 }
 
 .rt-bar-group {
@@ -2992,6 +2995,8 @@ body.theme-wave .wave-bg {
     display: flex;
     gap: 6px;
     margin-top: 6px;
+    /* Match the bars' inset so the labels stay centered under their bars */
+    padding-right: var(--rt-axis-gutter, 12px);
 }
 
 .rt-x-axis span {
