@@ -26,11 +26,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('restore-database', sourcePath),
   getDbPath: () => ipcRenderer.invoke('get-db-path'),
 
-  // Theme persistence (via settings stored in %APPDATA%)
+  // Theme persistence (via settings stored in %APPDATA%). These helpers must use
+  // ipcRenderer directly: inside the preload's isolated world, window.electronAPI
+  // does not exist yet.
   getTheme: () =>
-    window.electronAPI.getSettings().then((s) => s.theme || 'theme-wave'),
+    ipcRenderer.invoke('get-settings').then((s) => s.theme || 'theme-wave'),
   setTheme: (themeName) =>
-    window.electronAPI.updateSettings('theme', themeName),
+    ipcRenderer.invoke('update-settings', 'theme', themeName),
 
   // Dialogs
   showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),

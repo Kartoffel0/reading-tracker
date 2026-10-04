@@ -84,8 +84,14 @@ ipcMain.handle('save-settings', async (event, data) => {
 ipcMain.handle('update-settings', async (event, key, value) => {
   try {
     const settings = loadSettings();
-    if (!settings.kindle) settings.kindle = {};
-    settings.kindle[key] = value;
+    // `theme` and `timezone` are top-level settings; anything else belongs to
+    // the kindle block.
+    if (key === 'theme' || key === 'timezone') {
+      settings[key] = value;
+    } else {
+      if (!settings.kindle) settings.kindle = {};
+      settings.kindle[key] = value;
+    }
     saveSettings(settings);
     return { success: true };
   } catch (error) {

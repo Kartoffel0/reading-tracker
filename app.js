@@ -19,7 +19,9 @@ const THEME_NAMES = {
 function setTheme(themeName) {
   document.body.className = themeName;
   document.documentElement.className = themeName;
-  window.electronAPI.setTheme(themeName);
+  // The preload's `setTheme` helper reads `window.electronAPI` from its own
+  // isolated world, where it is undefined, so call updateSettings directly.
+  window.electronAPI?.updateSettings?.('theme', themeName);
 }
 
 function changeTheme(themeName) {
@@ -29,18 +31,23 @@ function changeTheme(themeName) {
 // Daily goal state (persisted via settings)
 let currentGoal = { unit: 'minutes', value: 60 };
 
-// Load saved theme from settings
-(async () => {
-  const settings = await window.electronAPI.getSettings();
-  const savedTheme = settings.theme || 'theme-wave';
-  if (THEMES.includes(savedTheme)) {
-    setTheme(savedTheme);
-    document.getElementById('themeSelect').value = savedTheme;
+// Load saved settings (theme + daily goal) before the first render, so the
+// goal card and the reading stats card use the persisted goal unit on startup.
+const settingsReady = (async () => {
+  try {
+    const settings = await window.electronAPI.getSettings();
+    const savedTheme = settings.theme || 'theme-wave';
+    if (THEMES.includes(savedTheme)) {
+      setTheme(savedTheme);
+      document.getElementById('themeSelect').value = savedTheme;
+    }
+    currentGoal = {
+      unit: settings.goalUnit === 'characters' ? 'characters' : 'minutes',
+      value: Number(settings.goalValue) > 0 ? Number(settings.goalValue) : 60,
+    };
+  } catch (err) {
+    console.error('Failed to load settings, using defaults:', err);
   }
-  currentGoal = {
-    unit: settings.goalUnit === 'characters' ? 'characters' : 'minutes',
-    value: Number(settings.goalValue) > 0 ? Number(settings.goalValue) : 60,
-  };
 })();
 
 // Floating Kanji Background
@@ -157,8 +164,14 @@ async function removeSession(dateKey, sessionId) {
   await window.electronAPI.deleteSession(dateKey, sessionId);
 }
 
+// Date keys are built from local year/month/day. Using toISOString() would
+// shift the date across the UTC boundary (e.g. 21:00 local in UTC-3 belongs to
+// tomorrow in UTC), which made the goal gauge read an empty day.
 function getDateKey(date) {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 let currentMonth = new Date().getMonth();
@@ -236,8 +249,8 @@ function renderDatePickerDays() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-  const selectedStr = dpSelectedDate.toISOString().split('T')[0];
+  const todayStr = getDateKey(today);
+  const selectedStr = getDateKey(dpSelectedDate);
 
   // Previous month days
   for (let i = firstDay - 1; i >= 0; i--) {
@@ -296,6 +309,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   dpSelectedDate = new Date(today);
   dpCurrentDate = new Date(today);
   initDatePicker();
+  // The goal unit/value must be loaded before the first render, otherwise the
+  // goal card and reading stats render with the default "minutes" goal.
+  await settingsReady;
   await updateAll();
 });
 
@@ -1131,6 +1147,27 @@ function rtNiceCeil(minutes) {
   return Math.ceil(minutes / 15) * 15;
 }
 
+// Same idea as rtNiceCeil, but for character counts.
+function rtNiceCeilChars(value) {
+  if (value <= 0) return 100;
+  if (value >= 1000) return Math.ceil(value / 1000) * 1000;
+  if (value >= 100) return Math.ceil(value / 100) * 100;
+  return Math.ceil(value / 10) * 10;
+}
+
+function rtFormatChars(value) {
+  const n = Math.round(value);
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toLocaleString();
+}
+
+function rtFormatAxisChars(value) {
+  return value >= 10000
+    ? `${Math.round(value / 1000)}k`
+    : Math.round(value).toLocaleString();
+}
+
 const MONTH_SHORT = [
   'Jan',
   'Feb',
@@ -1196,9 +1233,13 @@ async function renderReadingTime(data) {
   const prevStartKey = prevStart === null ? null : getDateKey(prevStart);
   const prevEndKey = prevEnd === null ? null : getDateKey(prevEnd);
 
+  // The chart mirrors the daily goal unit: characters when the goal is set in
+  // characters, time otherwise. The stats rows below always show both.
+  const useChars = currentGoal.unit === 'characters';
+
   let totalMinutes = 0;
   let totalChars = 0;
-  let prevMinutes = 0;
+  let prevMetric = 0;
   const buckets = new Map();
 
   for (const [dateKey, sessions] of Object.entries(data)) {
@@ -1206,6 +1247,7 @@ async function renderReadingTime(data) {
     for (const s of sessions) {
       const mins = sessionMinutes(s);
       const chars = s.characters || 0;
+      const metric = useChars ? chars : mins;
       const inActive =
         startKey === null || (dateKey >= startKey && dateKey <= todayKey);
       if (inActive) {
@@ -1236,7 +1278,7 @@ async function renderReadingTime(data) {
         dateKey >= prevStartKey &&
         dateKey <= prevEndKey
       ) {
-        prevMinutes += mins;
+        prevMetric += metric;
       }
     }
   }
@@ -1265,19 +1307,21 @@ async function renderReadingTime(data) {
     .sort((a, b) => a[0] - b[0])
     .map(([key, v]) => ({ key, ...v }));
 
-  const maxMinutes = Math.max(...sorted.map((b) => b.minutes), 1);
-  const niceMax = rtNiceCeil(maxMinutes);
+  const metricOf = (b) => (useChars ? b.chars : b.minutes);
+  const maxMetric = Math.max(...sorted.map(metricOf), 1);
+  const niceMax = useChars ? rtNiceCeilChars(maxMetric) : rtNiceCeil(maxMetric);
 
-  const nonEmpty = sorted.filter((b) => b.minutes > 0);
-  const avgMinutes = nonEmpty.length
-    ? nonEmpty.reduce((s, b) => s + b.minutes, 0) / nonEmpty.length
+  const nonEmpty = sorted.filter((b) => metricOf(b) > 0);
+  const avgMetric = nonEmpty.length
+    ? nonEmpty.reduce((s, b) => s + metricOf(b), 0) / nonEmpty.length
     : 0;
-  const avgTop = 100 - (avgMinutes / niceMax) * 100;
+  const avgTop = 100 - (avgMetric / niceMax) * 100;
 
+  const totalMetric = useChars ? totalChars : totalMinutes;
   const periodWord = RT_TABS.find((t) => t.key === rtActivePeriod).word;
   let deltaText = '';
-  if (prevStartKey !== null && prevMinutes > 0) {
-    const pct = Math.round(((totalMinutes - prevMinutes) / prevMinutes) * 100);
+  if (prevStartKey !== null && prevMetric > 0) {
+    const pct = Math.round(((totalMetric - prevMetric) / prevMetric) * 100);
     const arrow = pct >= 0 ? '↗' : '↘';
     deltaText = `${arrow} ${Math.abs(pct)}% from previous ${periodWord}`;
   }
@@ -1295,10 +1339,14 @@ async function renderReadingTime(data) {
 
   const bars = sorted
     .map((b) => {
-      const h = Math.max(2, (b.minutes / niceMax) * 100);
+      const value = metricOf(b);
+      const h = Math.max(2, (value / niceMax) * 100);
+      const detail = useChars
+        ? `${b.chars.toLocaleString()} chars · ${rtFormatDuration(b.minutes)}`
+        : `${rtFormatDuration(b.minutes)} · ${b.chars.toLocaleString()} chars`;
       const tooltip =
-        b.minutes > 0
-          ? `${rtTooltipLabel(b.key)} · ${rtFormatDuration(b.minutes)} · ${b.chars.toLocaleString()} chars`
+        value > 0
+          ? `${rtTooltipLabel(b.key)} · ${detail}`
           : `${rtTooltipLabel(b.key)} · no sessions`;
       return `
         <div class="rt-bar-group">
@@ -1317,12 +1365,18 @@ async function renderReadingTime(data) {
       <span class="rt-range">${rangeLabel} Average</span>
       <span class="rt-delta">${deltaText}</span>
     </div>
-    <div class="rt-big">${rtFormatDuration(avgMinutes)}</div>
+    <div class="rt-big">${
+      useChars
+        ? `${rtFormatChars(avgMetric)} chars`
+        : rtFormatDuration(avgMetric)
+    }</div>
     <div class="rt-chart">
       <div class="rt-plot">
         <div class="rt-gridlines">${gridlines}</div>
         <div class="rt-avg-line" style="top: ${avgTop}%"><span class="rt-avg-label">avg</span></div>
-        <span class="rt-y-label" style="top: 0%">${rtFormatAxis(niceMax)}</span>
+        <span class="rt-y-label" style="top: 0%">${
+          useChars ? rtFormatAxisChars(niceMax) : rtFormatAxis(niceMax)
+        }</span>
         <span class="rt-y-label" style="top: 100%">0</span>
         <div class="rt-bars">${bars}</div>
       </div>
@@ -2066,7 +2120,9 @@ document
       };
       closeSettingsModal();
       showToast('Settings saved!');
-      renderGoalCard(await getData());
+      // Re-render everything so the goal card and the reading stats card both
+      // pick up the new goal unit immediately.
+      await updateAll();
     } else {
       alert('Failed to save settings: ' + result.error);
     }
