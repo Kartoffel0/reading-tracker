@@ -2845,7 +2845,6 @@ body.theme-wave .wave-bg {
     display: flex;
     flex-direction: row;
     gap: 12px;
-    margin-top: 8px;
     flex: 1;
     min-height: 0;
 }
@@ -2863,6 +2862,17 @@ body.theme-wave .wave-bg {
     justify-content: space-between;
     align-items: flex-start;
     gap: 12px;
+}
+
+/* The auto margin absorbs the space-between slack, pinning the arrows to the
+   tab selector while the title keeps the left edge. Buttons reuse .month-arrow. */
+.rt-nav {
+    display: flex;
+    align-self: flex-end;
+    gap: 4px;
+    margin-left: auto;
+    margin-right: -8px;
+    margin-bottom: -4px;
 }
 
 .rt-header .card-title {
@@ -2942,7 +2952,7 @@ body.theme-wave .wave-bg {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    margin-top: 10px;
+    margin-top: 8px;
     padding: 8px;
     background: rgba(128, 128, 128, 0.04);
     border: 1px solid var(--border-color);
@@ -3022,8 +3032,9 @@ body.theme-wave .wave-bg {
 
 .rt-bar {
     position: relative;
-    width: 60%;
+    width: 85%;
     max-width: 48px;
+    /* Keep zero-value bars a visible rounded nub, matching small bars. */
     min-height: 2px;
     background: var(--accent-primary);
     border-radius: 4px 4px 0 0;

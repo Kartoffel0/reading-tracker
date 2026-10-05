@@ -1614,6 +1614,15 @@ async function renderReadingTime(data) {
 }
 
 // Card interactions: click a tab to switch, or scroll/drag the card to cycle
+// ‹ › buttons shift the displayed period by one (older = positive offset).
+// The future is the default view, so the offset never goes negative.
+function shiftReadingPeriod(direction) {
+  const next = Math.max(0, rtPeriodOffset - direction);
+  if (next === rtPeriodOffset) return;
+  rtPeriodOffset = next;
+  getData().then(renderReadingTime);
+}
+
 (function () {
   const card = document.getElementById('readingTimeCard');
   if (!card) return;
@@ -1623,6 +1632,7 @@ async function renderReadingTime(data) {
     if (idx < 0) return;
     rtActivePeriod =
       RT_TABS[(idx + delta + RT_TABS.length) % RT_TABS.length].key;
+    rtPeriodOffset = 0;
     getData().then(renderReadingTime);
   }
 
@@ -1632,6 +1642,7 @@ async function renderReadingTime(data) {
     const target = RT_TABS.find((t) => t.key === tab.dataset.key);
     if (target && target.key !== rtActivePeriod) {
       rtActivePeriod = target.key;
+      rtPeriodOffset = 0;
       getData().then(renderReadingTime);
     }
   });
