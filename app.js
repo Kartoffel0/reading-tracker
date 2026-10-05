@@ -1147,7 +1147,14 @@ async function ensureCovers(entries) {
 async function uploadCoverFor(title) {
   const result = await window.electronAPI.uploadCover(title);
   if (result?.success) {
-    coverCache.set(title, { status: 'manual', url: result.url });
+    // A replaced cover usually lands on the exact same file path, so the
+    // renderer's image cache would keep the previous bitmap for the
+    // unchanged URL. The query string is ignored when resolving the file,
+    // but makes the URL unique, forcing the <img> to reload from disk.
+    coverCache.set(title, {
+      status: 'manual',
+      url: `${result.url}?v=${Date.now()}`,
+    });
     showToast('✓ Cover added');
     renderRecentlyRead(await getData());
   } else if (!result?.canceled) {
@@ -1157,14 +1164,25 @@ async function uploadCoverFor(title) {
 
 function coverMarkup(title) {
   const cover = coverCache.get(title);
+  // The upload button is shared by both branches: books that already have a
+  // cover (found or manual) can replace it by picking a new image.
+  const uploadBtn = `<button class="cover-upload-btn" data-cover-title="${escapeHtml(title)}" title="Upload a cover image" aria-label="Upload a cover image">+</button>`;
   if (cover?.url) {
-    return `<img class="recent-cover" src="${cover.url}" alt="${escapeHtml(title)} cover" />`;
+    // The image sits inside a positioned container that sizes itself to the
+    // image, so the button lands on the cover's corner just like on the
+    // placeholder.
+    return `
+      <div class="recent-cover-wrap">
+        <img class="recent-cover" src="${cover.url}" alt="${escapeHtml(title)} cover" />
+        ${uploadBtn}
+      </div>
+    `;
   }
   const initial = escapeHtml((title.trim() || '?')[0]);
   return `
     <div class="recent-cover-placeholder">
       <span class="cover-initial">${initial}</span>
-      <button class="cover-upload-btn" data-cover-title="${escapeHtml(title)}" title="Upload a cover image" aria-label="Upload a cover image">+</button>
+      ${uploadBtn}
     </div>
   `;
 }

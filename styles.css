@@ -2743,18 +2743,25 @@ body.theme-wave .wave-bg {
     border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
-.recent-cover {
+.recent-cover-wrap {
+    position: relative;
+    width: 68px;
     height: 90px;
+    flex-shrink: 0;
+}
+
+.recent-cover {
+    display: block;
+    height: 100%;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     object-fit: cover;
-    flex-shrink: 0;
     background: var(--bg-secondary);
 }
 
 .recent-cover-placeholder {
-    width: 75px;
-    height: 100px;
+    width: 68px;
+    height: 90px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     background: linear-gradient(
