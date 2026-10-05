@@ -1450,9 +1450,17 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 /* Days that belong to the neighbouring month (leading or trailing) are
-   rendered as real cells, just dimmed, so both edges of the grid match. */
-.day-cell.out-of-month {
-    opacity: 0.55;
+   rendered as real cells, just dimmed, so both edges of the grid match.
+   The dim is a translucent veil on ::before rather than `opacity` on the
+   cell: opacity would fade the whole subtree, including the tooltip, which
+   must keep the shared opaque look. Children paint above ::before. */
+.day-cell.out-of-month::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--bg-card) 45%, transparent);
+    pointer-events: none;
 }
 
 .day-cell.out-of-month.level-0 {
@@ -1466,9 +1474,13 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 .day-cell.out-of-month:not(.level-0):hover {
-    opacity: 0.8;
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-primary));
+}
+
+/* Lighten the veil on hover instead of fading the cell with opacity. */
+.day-cell.out-of-month:hover::before {
+    background: color-mix(in srgb, var(--bg-card) 20%, transparent);
 }
 
 /* ===== SHARED TOOLTIP STYLE =====
@@ -1511,6 +1523,13 @@ body.theme-sakura-light .month-arrow:hover {
 
 .day-cell:hover .tooltip {
     display: block;
+}
+
+/* The current-day cell is scaled up (scale(1.02), 1.08 on hover), which
+   transforms its whole subtree, so its tooltip would render larger than
+   the shared style. Counter-scale it back (0.93 ≈ 1/1.08). */
+.day-cell.today:hover .tooltip {
+    transform: translateX(-50%) scale(0.93);
 }
 
 /* Legend */
@@ -2629,6 +2648,16 @@ body.theme-wave .wave-bg {
 
 .gc-cell:hover .tooltip {
     display: block;
+    /* The cell's hover scale(1.15) transforms its whole subtree, so the
+       tooltip would render 15% larger than the shared style. Counter-scale
+       it back to normal size (0.87 ≈ 1/1.15). */
+    transform: translateX(-50%) scale(0.87);
+}
+
+/* Edge-aligned tooltips keep their side anchor, just counter-scaled. */
+.gc-cell:hover .tooltip.tip-left,
+.gc-cell:hover .tooltip.tip-right {
+    transform: scale(0.87);
 }
 
 .goal-calendar-legend {
@@ -2870,9 +2899,8 @@ body.theme-wave .wave-bg {
     display: flex;
     align-self: flex-end;
     gap: 4px;
-    margin-left: auto;
-    margin-right: -8px;
-    margin-bottom: -4px;
+    margin-bottom: -22px;
+    z-index: 1;
 }
 
 .rt-header .card-title {
@@ -2883,7 +2911,7 @@ body.theme-wave .wave-bg {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 10px;
+    padding: 6px 6px;
     background: rgba(128, 128, 128, 0.04);
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -3036,9 +3064,11 @@ body.theme-wave .wave-bg {
     max-width: 48px;
     /* Keep zero-value bars a visible rounded nub, matching small bars. */
     min-height: 2px;
-    background: var(--accent-primary);
+    /* Translucent paint instead of `opacity`: opacity would fade the bar's
+       ::after tooltip too, but a semi-transparent background leaves the
+       tooltip fully opaque. */
+    background: color-mix(in srgb, var(--accent-primary) 85%, transparent);
     border-radius: 4px 4px 0 0;
-    opacity: 0.85;
     transition: height 0.4s ease;
 }
 
@@ -3054,16 +3084,18 @@ body.theme-wave .wave-bg {
     opacity: 1;
 }
 
-/* `opacity: 0.85` on .rt-bar creates a stacking context, which traps the
-   tooltip's `z-index: 5` inside that bar. Sibling bars are painted in DOM
-   order, so any later bar covers the hovered bar's tooltip. Raising the
-   hovered bar lifts its whole stacking context above its neighbours. */
+/* `z-index: 10` on the hovered bar creates a stacking context that traps the
+   tooltip's own z-index inside it. Sibling bars paint at z-index 0 in DOM
+   order, so raising only the hovered bar lifts its tooltip above them. */
 .rt-bar:hover {
     z-index: 10;
 }
 
-.rt-bar-group:last-child .rt-bar {
-    opacity: 1;
+/* Only the bar holding the current day keeps the full-strength accent;
+   app.js adds the today class to exactly that bucket when the active
+   range contains today. */
+.rt-bar.today {
+    background: var(--accent-primary);
 }
 
 .rt-x-axis {

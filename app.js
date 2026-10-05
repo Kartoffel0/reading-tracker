@@ -653,21 +653,24 @@ async function renderStreakMap() {
   grid.dataset.rows = rows;
   sizeStreakGrid(grid);
 
-  // Calculate max hours across the visible grid for relative levels. Named
-  // `dayHours` so it does not shadow the global `dayTotals` helper used by the
-  // tooltips below.
-  const dayHours = {};
-  let maxHours = 0;
+  // Calculate max intensity across the visible grid for relative levels. The
+  // metric follows the current goal unit (time when the goal is minutes,
+  // characters otherwise), mirroring the reading-time chart, so the map shades
+  // in terms of what the user actually optimizes for.
+  const goalIsChars = currentGoal.unit === 'characters';
+  const dayIntensity = {};
+  let maxIntensity = 0;
   for (const { date } of gridCells) {
     const dateKey = getDateKey(date);
-    const totalHours = await calculateDayTotal(dateKey);
-    dayHours[dateKey] = totalHours;
-    if (totalHours > maxHours) maxHours = totalHours;
+    const totals = dayTotals(data[dateKey]);
+    const intensity = goalIsChars ? totals.chars : totals.minutes;
+    dayIntensity[dateKey] = intensity;
+    if (intensity > maxIntensity) maxIntensity = intensity;
   }
 
-  function getRelativeLevel(hours) {
-    if (hours === 0 || maxHours === 0) return 0;
-    const percentage = hours / maxHours;
+  function getRelativeLevel(intensity) {
+    if (intensity === 0 || maxIntensity === 0) return 0;
+    const percentage = intensity / maxIntensity;
     if (percentage <= 0.2) return 1;
     if (percentage <= 0.4) return 2;
     if (percentage <= 0.6) return 3;
@@ -679,7 +682,7 @@ async function renderStreakMap() {
 
   for (const { date, outOfMonth } of gridCells) {
     const dateKey = getDateKey(date);
-    const level = getRelativeLevel(dayHours[dateKey]);
+    const level = getRelativeLevel(dayIntensity[dateKey]);
     const cell = document.createElement('div');
     cell.className = outOfMonth
       ? `day-cell level-${level} out-of-month`
@@ -1534,6 +1537,26 @@ async function renderReadingTime(data) {
     .map((p) => `<div class="rt-gridline" style="top: ${100 - p}%"></div>`)
     .join('');
 
+  // Bucket key for today within the selected period (only when its range
+  // actually contains today), so just that one bar keeps the full-strength
+  // accent while the rest stay translucent.
+  const todayKey = getDateKey(new Date());
+  let todayBucketKey = null;
+  if (
+    rtActivePeriod === 'all' ||
+    (startKey <= todayKey && todayKey <= endKey)
+  ) {
+    const t = new Date();
+    todayBucketKey =
+      rtActivePeriod === 'week'
+        ? t.getDay()
+        : rtActivePeriod === 'month'
+          ? t.getDate()
+          : rtActivePeriod === 'year'
+            ? t.getMonth()
+            : t.getFullYear();
+  }
+
   const bars = sorted
     .map((b) => {
       const value = metricOf(b);
@@ -1546,9 +1569,10 @@ async function renderReadingTime(data) {
         b.chars,
         null,
       ).join('\n');
+      const todayClass = b.key === todayBucketKey ? ' today' : '';
       return `
         <div class="rt-bar-group">
-          <div class="rt-bar" data-tooltip="${tooltip}" style="height: ${h}%"></div>
+          <div class="rt-bar${todayClass}" data-tooltip="${tooltip}" style="height: ${h}%"></div>
         </div>
       `;
     })
