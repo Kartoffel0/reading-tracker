@@ -2965,6 +2965,13 @@ body.theme-wave .wave-bg {
     gap: 6px;
 }
 
+/* Month charts carry 31 columns, so the regular 6px gap pushes the chart
+   past the card. Dense charts shrink the gap for both bars and axis. */
+.rt-bars[data-period='month'],
+.rt-x-axis[data-period='month'] {
+    gap: 2px;
+}
+
 .rt-gridlines {
     position: absolute;
     inset: 0;
@@ -3058,6 +3065,9 @@ body.theme-wave .wave-bg {
 
 .rt-x-axis span {
     flex: 1;
+    /* Keep every span the same width even when its text is wider ("30" vs
+       ""), so labels stay centered under their bars. Mirrors .rt-bar-group. */
+    min-width: 0;
     text-align: center;
     font-size: 0.6rem;
     font-weight: 600;

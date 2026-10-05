@@ -1281,6 +1281,7 @@ async function renderRecentlyRead(data) {
 
 // Reading time state
 let rtActivePeriod = 'week';
+let rtPeriodOffset = 0; // periods shifted back from the current one
 const RT_TABS = [
   { key: 'week', label: 'W', word: 'week' },
   { key: 'month', label: 'M', word: 'month' },
@@ -1346,19 +1347,54 @@ function rtShortDate(d) {
   return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
 }
 
+// Dense month charts would be unreadable with a label on every day, so only
+// days 1, 5, 10, 15, 20, 25 and 30 get a tick label on the x-axis.
+function rtMonthTickLabel(day) {
+  return day === 1 || day % 5 === 0 ? String(day) : '';
+}
+
+// The [start, end] range for the currently selected period. rtPeriodOffset
+// (0 = current) shifts back by whole periods: weeks by 7 days, months and
+// years by calendar units. All dates are local so weekday alignment is safe.
+function rtPeriodRange() {
+  const now = new Date();
+  if (rtActivePeriod === 'week') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - now.getDay() - rtPeriodOffset * 7);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return { start, end };
+  }
+  if (rtActivePeriod === 'month') {
+    const start = new Date(
+      now.getFullYear(),
+      now.getMonth() - rtPeriodOffset,
+      1,
+    );
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    return { start, end };
+  }
+  if (rtActivePeriod === 'year') {
+    const start = new Date(now.getFullYear() - rtPeriodOffset, 0, 1);
+    const end = new Date(start.getFullYear(), 11, 31);
+    return { start, end };
+  }
+  return { start: null, end: null };
+}
+
 // Tooltip date labels follow the shared "YYYY MM DD" convention. The year and
 // all-time tabs bucket by month and year, so they use the shortened period
 // label ("2026 10" / "2026") instead of a single day.
 function rtTooltipLabel(bucketKey) {
-  const now = new Date();
+  const { start } = rtPeriodRange();
   if (rtActivePeriod === 'week') {
-    const d = new Date(now);
-    d.setDate(now.getDate() - ((now.getDay() - bucketKey + 7) % 7));
+    const d = new Date(start);
+    d.setDate(start.getDate() + bucketKey);
     return formatTooltipDate(getDateKey(d));
   } else if (rtActivePeriod === 'month') {
-    return `${now.getFullYear()} ${String(now.getMonth() + 1).padStart(2, '0')} ${String(bucketKey).padStart(2, '0')}`;
+    return `${start.getFullYear()} ${String(start.getMonth() + 1).padStart(2, '0')} ${String(bucketKey).padStart(2, '0')}`;
   } else if (rtActivePeriod === 'year') {
-    return `${now.getFullYear()} ${String(bucketKey + 1).padStart(2, '0')}`;
+    return `${start.getFullYear()} ${String(bucketKey + 1).padStart(2, '0')}`;
   }
   return String(bucketKey);
 }
@@ -1368,30 +1404,24 @@ async function renderReadingTime(data) {
   const tabs = document.getElementById('readingTimeTabs');
   if (!body || !tabs) return;
 
-  const now = new Date();
-  const todayKey = getDateKey(now);
-
-  let start = null;
+  const { start, end } = rtPeriodRange();
   let prevStart = null;
   let prevEnd = null;
-  if (rtActivePeriod === 'week') {
-    start = new Date(now);
-    start.setDate(start.getDate() - 6);
-    prevStart = new Date(start);
-    prevStart.setDate(prevStart.getDate() - 7);
+  if (start !== null) {
     prevEnd = new Date(start);
     prevEnd.setDate(prevEnd.getDate() - 1);
-  } else if (rtActivePeriod === 'month') {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-    prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-  } else if (rtActivePeriod === 'year') {
-    start = new Date(now.getFullYear(), 0, 1);
-    prevStart = new Date(now.getFullYear() - 1, 0, 1);
-    prevEnd = new Date(now.getFullYear(), 0, 0);
+    prevStart = new Date(start);
+    if (rtActivePeriod === 'week') {
+      prevStart.setDate(prevStart.getDate() - 7);
+    } else if (rtActivePeriod === 'month') {
+      prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
+    } else {
+      prevStart = new Date(start.getFullYear() - 1, 0, 1);
+    }
   }
 
   const startKey = start === null ? null : getDateKey(start);
+  const endKey = end === null ? null : getDateKey(end);
   const prevStartKey = prevStart === null ? null : getDateKey(prevStart);
   const prevEndKey = prevEnd === null ? null : getDateKey(prevEnd);
 
@@ -1411,7 +1441,7 @@ async function renderReadingTime(data) {
       const chars = s.characters || 0;
       const metric = useChars ? chars : mins;
       const inActive =
-        startKey === null || (dateKey >= startKey && dateKey <= todayKey);
+        startKey === null || (dateKey >= startKey && dateKey <= endKey);
       if (inActive) {
         totalMinutes += mins;
         totalChars += chars;
@@ -1423,7 +1453,7 @@ async function renderReadingTime(data) {
           label = 'SMTWTFS'[bucketKey];
         } else if (rtActivePeriod === 'month') {
           bucketKey = d.getDate();
-          label = String(bucketKey);
+          label = rtMonthTickLabel(bucketKey);
         } else if (rtActivePeriod === 'year') {
           bucketKey = d.getMonth();
           label = 'JFMAMJJASOND'[bucketKey];
@@ -1452,9 +1482,14 @@ async function renderReadingTime(data) {
       }
     }
   } else if (rtActivePeriod === 'month') {
-    for (let d = 1; d <= now.getDate(); d++) {
+    const daysInMonth = new Date(
+      start.getFullYear(),
+      start.getMonth() + 1,
+      0,
+    ).getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
       if (!buckets.has(d)) {
-        buckets.set(d, { minutes: 0, chars: 0, label: String(d) });
+        buckets.set(d, { minutes: 0, chars: 0, label: rtMonthTickLabel(d) });
       }
     }
   } else if (rtActivePeriod === 'year') {
@@ -1492,7 +1527,7 @@ async function renderReadingTime(data) {
   if (start === null) {
     rangeLabel = 'All time';
   } else {
-    rangeLabel = `${rtShortDate(start)} – ${rtShortDate(now)}`;
+    rangeLabel = `${rtShortDate(start)} – ${rtShortDate(end)}`;
   }
 
   const gridlines = [0, 25, 50, 75, 100]
@@ -1541,9 +1576,9 @@ async function renderReadingTime(data) {
           useChars ? rtFormatAxisChars(niceMax) : rtFormatAxis(niceMax)
         }</span>
         <span class="rt-y-label" style="top: 100%">0</span>
-        <div class="rt-bars">${bars}</div>
+        <div class="rt-bars" data-period="${rtActivePeriod}">${bars}</div>
       </div>
-      <div class="rt-x-axis">${xLabels}</div>
+      <div class="rt-x-axis" data-period="${rtActivePeriod}">${xLabels}</div>
     </div>
     <div class="rt-stats">
       <div class="rt-stat-row">
