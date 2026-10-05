@@ -123,8 +123,8 @@ html.theme-sakura-dark {
     --accent-primary-glow: rgba(240, 133, 168, 0.3);
     --accent-secondary: #f4b8c8;
     --accent-secondary-glow: rgba(244, 184, 200, 0.2);
-    --accent-tertiary: #d4a843;
-    --accent-tertiary-glow: rgba(212, 168, 67, 0.2);
+    --accent-tertiary: #c2476e;
+    --accent-tertiary-glow: rgba(194, 71, 110, 0.15);
     --kanji-color: rgba(240, 133, 168, 0.06);
     --grid-color: rgba(240, 133, 168, 0.02);
     --glow-color: rgba(244, 154, 188, 0.07);
@@ -1798,7 +1798,7 @@ body.theme-sakura-light .month-arrow:hover {
 
 /* Base modal container - import modal aesthetic */
 .modal {
-    background: color-mix(in srgb, var(--bg-card) 70%, transparent);
+    background: color-mix(in srgb, var(--bg-card) 90%, transparent);
     border: 1px solid var(--border-color);
     border-radius: 16px;
     width: 90%;

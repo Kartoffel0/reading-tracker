@@ -11,7 +11,7 @@ A minimal Electron desktop app for tracking reading sessions with SQLite storage
 
 ## Origin
 
-Little project started mostly as a test for the capabilities of Qwen 3.6 35B A3B, turned out pretty nice.
+Little project started mostly as a test for the capabilities of ~~Qwen 3.6 35B A3B~~*, turned out pretty nice. *Friendship ended with 3.6, now 3.8 Flash Next is my best friend
 
 At first I tried to use the built-in Kindle reading stats to make a reading streak plugin, only to discover the stats are completely broken for Japanese books. My monkey brain does like streak calendars and I do want to force myself to read more, so I still wanted to make something along that idea.
 
@@ -20,7 +20,7 @@ By manually placing `krs.start` and `krs.end` notes on the books I'm reading on 
 ## Functionalities
 
 - **Reading Session Tracking** — Log sessions by date, title, language, and duration
-- **Activity Heatmap** — Visualize reading streaks and habits over time
+- **Stats and also Stats** - Reading stats! Stats of your reading!!
 - **Bulk CSV Import** — Import multiple sessions at once via CSV with flexible column mapping
 - **Kindle Sync** — Pull sidecar and book data from a jailbroken Kindle via SSH and extract reading sessions
 - **Database Backup & Restore** — Export and import the SQLite database
@@ -75,9 +75,12 @@ npm run build:nsis
 
 - Windows: `%APPDATA%\reading-tracker\data.db`
 
-### Tech Stack
+### Acknowledgments
 
-- Electron — Desktop app shell
-- better-sqlite3 — Fast, local SQLite database
-- Vanilla JS + CSS — UI
-- Python - Kindle stuff
+[kindle-reading-dashboard](https://github.com/zevisvei/kindle-reading-dashboard) - Served as basis for almost the entire Kindle Sync logic.
+
+[KRDS](https://github.com/K-R-D-S/KRDS) - Handles the parsing of all Kindle sidecar data.
+
+[kaikozlov/kindle.koplugin](https://github.com/kaikozlov/kindle.koplugin) - I snitched their kfxlib folder!
+
+[Hoshi-Reader-Desktop](https://github.com/Manhhao/Hoshi-Reader-Desktop) - I snitched their stats layout ideas!
