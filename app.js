@@ -2329,6 +2329,8 @@ async function openSettingsModal() {
   document.getElementById('kindle-password').value = settings.password || '';
   document.getElementById('themeSelect').value = settings.theme || 'theme-wave';
   document.getElementById('timezoneSelect').value = settings.timezone || '-3';
+  document.getElementById('sessionDayEndSelect').value =
+    settings.sessionDayEnd || '04:00';
   document.getElementById('goalUnitSelect').value =
     settings.goalUnit === 'characters' ? 'characters' : 'minutes';
   document.getElementById('goalValue').value = settings.goalValue || 60;
@@ -2366,6 +2368,7 @@ document
       password: document.getElementById('kindle-password').value,
       theme: document.getElementById('themeSelect').value,
       timezone: document.getElementById('timezoneSelect').value,
+      sessionDayEnd: document.getElementById('sessionDayEndSelect').value,
       goalUnit: document.getElementById('goalUnitSelect').value,
       goalValue: document.getElementById('goalValue').value,
     };

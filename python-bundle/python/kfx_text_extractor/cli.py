@@ -10,7 +10,12 @@ from .sidecar_annotation_extractor import extract_from_sidecars, list_valid_side
 from .book_matcher import find_matching_book, extract_book_info
 from .kfx_index import build_pid_index
 from .text_extractor import extract_text
-from .csv_exporter import export_sessions, export_sessions_to_dicts, DEFAULT_COLUMNS
+from .csv_exporter import (
+    export_sessions,
+    export_sessions_to_dicts,
+    DEFAULT_COLUMNS,
+    SESSION_ADJUSTMENT_HOURS,
+)
 
 
 def _extract_numeric_pid(pos) -> Optional[int]:
@@ -54,6 +59,9 @@ def _build_parser():
                         help='Timezone for date output (default: UTC). Examples: America/Sao_Paulo, Europe/London')
     parser.add_argument('--no-time', action='store_true', default=False,
                         help='Output only dates (YYYY-MM-DD) for start_date/end_date, without time component')
+    parser.add_argument('--session-adjustment-hours', type=int, default=SESSION_ADJUSTMENT_HOURS,
+                        help='Hour-of-day boundary for session_date: sessions ending after midnight but '
+                             'before this hour are attributed to the previous day (default: 4). Set 0 to disable.')
     parser.add_argument('--scan-only', action='store_true', default=False,
                         help='Only scan and list sidecar files containing valid Krs.start/Krs.end pairs, without full processing')
     parser.add_argument('--book-folder', type=str, default=None,
@@ -92,6 +100,7 @@ def run_sidecar_mode(
     timezone: str = 'UTC',
     include_time: bool = True,
     book_folder: str | None = None,
+    session_adjustment_hours: int = SESSION_ADJUSTMENT_HOURS,
 ) -> list | dict:
     """Run the full sidecar extraction pipeline.
 
@@ -105,6 +114,7 @@ def run_sidecar_mode(
         timezone: Timezone string for date output.
         include_time: Whether to include time component in dates.
         book_folder: Optional directory to search for book files first.
+        session_adjustment_hours: Hour-of-day boundary for the session_date adjustment.
 
     Returns:
         If output is None: a dict with 'sessions' (list[dict]) and 'stats' (dict).
@@ -197,6 +207,7 @@ def run_sidecar_mode(
             annotation_notes=annotation_notes,
             timezone_str=timezone,
             include_time=include_time,
+            session_adjustment_hours=session_adjustment_hours,
         )
         result = {
             "sessions": session_dicts,
@@ -218,6 +229,7 @@ def run_sidecar_mode(
         annotation_notes=annotation_notes,
         timezone_str=timezone,
         include_time=include_time,
+        session_adjustment_hours=session_adjustment_hours,
     )
 
     print("Done!")
@@ -247,6 +259,7 @@ def _run_sidecar_mode_from_args(args):
         timezone=args.timezone,
         include_time=not args.no_time,
         book_folder=args.book_folder,
+        session_adjustment_hours=args.session_adjustment_hours,
     )
 
 

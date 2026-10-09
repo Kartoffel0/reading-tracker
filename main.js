@@ -26,7 +26,13 @@ function loadSettings() {
     return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
   }
   return {
-    kindle: { host: '192.168.15.244', user: 'root', password: '', sshKey: '' },
+    kindle: {
+      host: '192.168.15.244',
+      user: 'root',
+      password: '',
+      sshKey: '',
+      sessionDayEnd: '04:00',
+    },
     theme: 'theme-wave',
     timezone: '-3',
     goal: { unit: 'minutes', value: 60 },
@@ -51,6 +57,7 @@ ipcMain.handle('get-settings', () => {
     timezone: settings.timezone || '-3',
     goalUnit: settings.goal?.unit || 'minutes',
     goalValue: settings.goal?.value || 60,
+    sessionDayEnd: settings.kindle?.sessionDayEnd || '04:00',
   };
 });
 
@@ -61,7 +68,8 @@ ipcMain.handle('save-settings', async (event, data) => {
       host: data.host,
       user: data.user,
       password: data.password || '',
-      sshKey: data.sshKey || '',
+      sshKey: '',
+      sessionDayEnd: data.sessionDayEnd || '04:00',
     };
     settings.theme = data.theme || 'theme-wave';
     settings.timezone = data.timezone || '-3';
@@ -663,6 +671,7 @@ app.whenReady().then(() => {
       env.KINDLE_SSH_KEY = settings.kindle?.sshKey || '';
       env.CACHE_DIR = getCacheDir();
       env.KINDLE_TIMEZONE = settings.timezone || '-3';
+      env.KINDLE_SESSION_DAY_END = settings.kindle?.sessionDayEnd || '04:00';
 
       const child = spawn(pythonCmd, [syncScript], { env });
       let resultJson = '';

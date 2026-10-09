@@ -41,11 +41,12 @@ Kindle sidecar parsing and sync scripts are heavily inspired by [kindle-reading-
 
 #### Kindle Sync Settings
 
-| Field       | Default          | Description               |
-| ----------- | ---------------- | ------------------------- |
-| Kindle Host | `192.168.15.244` | Kindle's local IP address |
-| Kindle User | `root`           | SSH username              |
-| Password    | `kindle`         | SSH password              |
+| Field             | Default          | Description                                             |
+| ----------------- | ---------------- | ------------------------------------------------------- |
+| Kindle Host       | `192.168.15.244` | Kindle's local IP address                               |
+| Kindle User       | `root`           | SSH username                                            |
+| Password          | `kindle`         | SSH password                                            |
+| Session Day Ends At | `04:00`        | Sessions ending after midnight before this time are counted as the previous day; `00:00` disables that |
 
 ## Setup
 

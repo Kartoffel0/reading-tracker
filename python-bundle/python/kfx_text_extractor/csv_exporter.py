@@ -32,7 +32,8 @@ DEFAULT_TIMEZONE = 'UTC'
 DEFAULT_TIME_FORMAT = '%Y-%m-%dT%H:%M:%S%z'
 DATE_ONLY_FORMAT = '%Y-%m-%d'
 
-# Offset to use when session spans midnight and end is before 4am
+# Default hour-of-day boundary for the session_date adjustment: sessions that
+# end after midnight but before this wall-clock hour belong to the previous day
 SESSION_ADJUSTMENT_HOURS = 4
 
 
@@ -67,31 +68,27 @@ def _format_datetime(dt: datetime, include_time: bool = True) -> str:
     return dt.strftime(DATE_ONLY_FORMAT)
 
 
-def _adjust_session_date(end_date: datetime, start_date: datetime) -> datetime:
+def _adjust_session_date(end_date: datetime, session_adjustment_hours: int = SESSION_ADJUSTMENT_HOURS) -> datetime:
     """Calculate adjusted session date.
-    
-    If the session spanned midnight (start date != end date) AND end_date's
-    wall-clock time is before SESSION_ADJUSTMENT_HOURS (default 4am),
-    the session is considered to have ended on the previous day.
-    
+
+    Any session that ended after midnight but before
+    `session_adjustment_hours` (default 4am) is considered to have ended on
+    the previous calendar day. The session does NOT need to have spanned
+    midnight: sessions that started and ended in the small hours after
+    midnight are also attributed to the previous day.
+
     Args:
         end_date: timezone-aware datetime for end of session
-        start_date: timezone-aware datetime for start of session
-    
+        session_adjustment_hours: hour-of-day boundary; sessions ending before
+                                  this hour are attributed to the previous day.
+                                  0 disables the adjustment.
+
     Returns:
         Adjusted end_date as a date
     """
-    adj_date = end_date.date()
-    
-    # Check if session spanned midnight
-    if start_date.date() != end_date.date():
-        # Check if end time is before the adjustment threshold
-        if end_date.time() < datetime.strptime(
-            f"{SESSION_ADJUSTMENT_HOURS}:00:00", '%H:%M:%S'
-        ).time() if end_date.tzinfo is not None else False:
-            adj_date = end_date.date() - timedelta(days=1)
-    
-    return adj_date
+    if end_date.hour < session_adjustment_hours:
+        return end_date.date() - timedelta(days=1)
+    return end_date.date()
 
 
 def export_sessions(
@@ -102,6 +99,7 @@ def export_sessions(
     annotation_notes: Optional[dict] = None,
     timezone_str: str = DEFAULT_TIMEZONE,
     include_time: bool = True,
+    session_adjustment_hours: int = SESSION_ADJUSTMENT_HOURS,
 ) -> None:
     """Export reading sessions to a CSV file.
 
@@ -115,6 +113,10 @@ def export_sessions(
                       Defaults to UTC.
         include_time: If True, include time component in start_date/end_date
                       (YYYY-MM-DDTHH:MM:SS+HH:MM). If False, date only (YYYY-MM-DD).
+        session_adjustment_hours: Hour-of-day boundary for the session_date
+                                   adjustment; sessions ending after midnight but
+                                   before this hour are attributed to the previous
+                                   day (default: 4am; 0 disables the adjustment).
     """
     if columns is None:
         columns = DEFAULT_COLUMNS
@@ -156,7 +158,8 @@ def export_sessions(
 
                 elif col == 'session_date':
                     row['session_date'] = _format_column_session_date(
-                        session.start_date, session.end_date, tz
+                        session.start_date, session.end_date, tz,
+                        session_adjustment_hours
                     )
 
                 elif col == 'session_duration':
@@ -228,7 +231,8 @@ def _format_column_start_end(date_str: Optional[str], tz, include_time: bool) ->
     return _format_datetime(dt, include_time)
 
 
-def _format_column_session_date(start_str: Optional[str], end_str: Optional[str], tz) -> str:
+def _format_column_session_date(start_str: Optional[str], end_str: Optional[str], tz,
+                                session_adjustment_hours: int = SESSION_ADJUSTMENT_HOURS) -> str:
     """Format session_date column."""
     start_dt = _parse_date_to_aware(start_str, tz)
     end_dt = _parse_date_to_aware(end_str, tz)
@@ -236,7 +240,7 @@ def _format_column_session_date(start_str: Optional[str], end_str: Optional[str]
     if start_dt is None or end_dt is None:
         return ''
     
-    adj_date = _adjust_session_date(end_dt, start_dt)
+    adj_date = _adjust_session_date(end_dt, session_adjustment_hours)
     return adj_date.strftime(DATE_ONLY_FORMAT)
 
 
@@ -260,6 +264,7 @@ def export_sessions_to_dicts(
     annotation_notes: Optional[dict] = None,
     timezone_str: str = DEFAULT_TIMEZONE,
     include_time: bool = True,
+    session_adjustment_hours: int = SESSION_ADJUSTMENT_HOURS,
 ) -> List[dict]:
     """Export reading sessions to a list of dicts (JSON-serializable).
 
@@ -270,6 +275,7 @@ def export_sessions_to_dicts(
         annotation_notes: Optional dict mapping session index to annotation note text
         timezone_str: Timezone string for date output (e.g. 'UTC', 'America/Sao_Paulo').
         include_time: If True, include time component in start_date/end_date.
+        session_adjustment_hours: Hour-of-day boundary for the session_date adjustment.
 
     Returns:
         List of dicts, one per session, containing only the requested columns.
@@ -306,7 +312,8 @@ def export_sessions_to_dicts(
 
             elif col == 'session_date':
                 row['session_date'] = _format_column_session_date(
-                    session.start_date, session.end_date, tz
+                    session.start_date, session.end_date, tz,
+                    session_adjustment_hours
                 )
 
             elif col == 'session_duration':

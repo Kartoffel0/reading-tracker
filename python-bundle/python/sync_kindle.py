@@ -24,6 +24,10 @@ DEFAULT_USER = "root"
 DEFAULT_PASSWORD = "kindle"
 DEFAULT_CACHE_DIR = os.path.join(os.environ.get("APPDATA", ""), "reading-tracker", "kindle-cache")
 
+# Session-day boundary: a session that ended after midnight but before this
+# wall-clock time is attributed to the previous day. "00:00" disables it.
+DEFAULT_SESSION_DAY_END = "04:00"
+
 KINDLE_DOC_PATH = "/mnt/us/documents"
 
 # KRDS sidecar extensions — the file suffixes we look for on the Kindle
@@ -41,6 +45,21 @@ def status(msg: str) -> None:
     print(msg, flush=True)
 
 
+def parse_session_day_end_hour(value: str) -> int:
+    """Parse a "HH:MM" (or bare hour) session-day-end value into an hour 0-23.
+
+    Unusable values fall back to the documented default boundary, so a corrupt
+    settings file never silently shifts every session by an arbitrary hour.
+    """
+    try:
+        hour = int(str(value).strip().split(":")[0])
+    except ValueError:
+        hour = -1
+    if 0 <= hour <= 23:
+        return hour
+    return parse_session_day_end_hour(DEFAULT_SESSION_DAY_END)
+
+
 def load_settings() -> dict:
     """Load Kindle settings from environment variables or defaults."""
     return {
@@ -50,6 +69,7 @@ def load_settings() -> dict:
         "ssh_key": os.environ.get("KINDLE_SSH_KEY", ""),
         "cache_dir": os.environ.get("CACHE_DIR", DEFAULT_CACHE_DIR),
         "timezone": os.environ.get("KINDLE_TIMEZONE", "-3"),
+        "session_day_end": os.environ.get("KINDLE_SESSION_DAY_END", DEFAULT_SESSION_DAY_END),
     }
 
 
@@ -334,7 +354,9 @@ def run_sync(from_cache: bool = False) -> dict:
         from kfx_text_extractor import run_sidecar_mode
 
         timezone = settings.get("timezone", "-3")
-        result = run_sidecar_mode(sidecar_dir=str(cache_dir), columns=['session_date', 'book_title', 'language', 'char_count', 'session_duration'], timezone=timezone)
+        day_end_hour = parse_session_day_end_hour(settings["session_day_end"])
+        status("Session day ends at %02d:00" % day_end_hour)
+        result = run_sidecar_mode(sidecar_dir=str(cache_dir), columns=['session_date', 'book_title', 'language', 'char_count', 'session_duration'], timezone=timezone, session_adjustment_hours=day_end_hour)
         sessions = result.get("sessions", [])
 
         # Phase 5: Output result
