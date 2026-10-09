@@ -746,7 +746,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .duration-input input::-webkit-outer-spin-button,
-.duration-input input::-webkit-inner-spin-button {
+.duration-input input::-webkit-inner-spin-button,
+.form-input::-webkit-outer-spin-button,
+.form-input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
@@ -1984,12 +1986,21 @@ body.theme-sakura-light .month-arrow:hover {
 
 .session-card-header {
     display: flex;
-    justify-content: space-around;
     align-items: center;
+    gap: 12px;
     margin-bottom: 12px;
 }
 
+/* Title owns the leftover row so the badge and close button keep the same
+   x-position on every card, whatever the title length is. */
+.session-card-header .session-badge,
+.session-card-header .modal-close-btn {
+    flex-shrink: 0;
+}
+
 .session-title {
+    flex: 1;
+    min-width: 0;
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-primary);
@@ -3158,4 +3169,92 @@ body.theme-wave .wave-bg {
 /* ===== UTILITY CLASSES ===== */
 .hidden {
     display: none !important;
+}
+
+/* Branded option list. The rules above only reach the in-page control, so
+   engines without base-select keep the UA picker; Chromium gets the panel
+   painted with app tokens instead (rounded, accent-highlighted, one caret). */
+@supports (appearance: base-select) {
+    .form-select,
+    .unit-toggle,
+    .duration-input select {
+        appearance: base-select;
+        background-image: none;
+        position: relative;
+    }
+
+    /* the dropdown icon would sit flush right against the edge; pin it
+       absolutely so its right inset matches the text's left inset (the
+       padding), and keep it vertically centered */
+    .form-select::picker-icon,
+    .unit-toggle::picker-icon {
+        position: absolute;
+        top: 50%;
+        translate: 0 -50%;
+    }
+
+    .form-select::picker-icon {
+        right: 16px;
+    }
+
+    .unit-toggle::picker-icon {
+        right: 14px;
+    }
+
+    .form-select::picker(select),
+    .unit-toggle::picker(select) {
+        appearance: base-select;
+        background: var(--bg-card-hover);
+        border: 1px solid var(--border-hover);
+        border-radius: 12px;
+        padding: 10px;
+        /* NEVER set display here: the closed picker is hidden with a UA-level
+           display:none (it is a popover), and an author display value overrides
+           that hiding, painting the option list while the select is closed. */
+    }
+
+    .form-select:open::picker(select),
+    .unit-toggle:open::picker(select) {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .form-select option,
+    .unit-toggle option {
+        list-style: none;
+        background: transparent;
+        color: var(--text-primary);
+        border-radius: 6px;
+        padding: 4px 10px;
+        line-height: 1.5;
+    }
+
+    /* the UA's own hover paint is overridden by the option rule above,
+       so hovering needs an explicit affordance while the picker is open */
+    .form-select option:hover,
+    .unit-toggle option:hover {
+        background: color-mix(in srgb, var(--accent-primary) 35%, transparent);
+    }
+
+    /* the selected row reads as a plain accent tint; the platform
+       check mark is suppressed so no glyph marks the selection */
+
+    .form-select option::checkmark,
+    .unit-toggle option::checkmark {
+        display: none;
+    }
+
+    .form-select option:checked,
+    .unit-toggle option:checked {
+        background: color-mix(in srgb, var(--accent-primary) 25%, transparent);
+        color: var(--accent-secondary);
+    }
+
+    .form-select option:focus-visible,
+    .unit-toggle option:focus-visible {
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        outline-color: var(--accent-primary);
+    }
 }
