@@ -2038,7 +2038,9 @@ async function backupDatabase() {
 async function restoreDatabase() {
   const result = await window.electronAPI.showOpenDialog({
     title: 'Restore Reading Database',
-    defaultPath: await window.electronAPI.getDocumentsPath(),
+    // Automatic snapshots live beside the app data; starting the picker there
+    // keeps the newest one in reach.
+    defaultPath: await window.electronAPI.getBackupsPath(),
     properties: ['openFile'],
     filters: [
       { name: 'SQLite Database', extensions: ['db', 'sqlite'] },

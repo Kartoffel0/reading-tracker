@@ -23,7 +23,7 @@ By manually placing `krs.start` and `krs.end` notes on the books I'm reading on 
 - **Stats and also Stats** - Reading stats! Stats of your reading!!
 - **Bulk CSV Import** — Import multiple sessions at once via CSV with flexible column mapping
 - **Kindle Sync** — Pull sidecar and book data from a jailbroken Kindle via SSH and extract reading sessions
-- **Database Backup & Restore** — Export and import the SQLite database
+- **Database Backup & Restore** — Export/import the whole SQLite database by hand, plus an automatic snapshot at app start whenever the data changed
 
 ## Kindle Sync
 
@@ -47,6 +47,18 @@ Kindle sidecar parsing and sync scripts are heavily inspired by [kindle-reading-
 | Kindle User       | `root`           | SSH username                                            |
 | Password          | `kindle`         | SSH password                                            |
 | Session Day Ends At | `04:00`        | Sessions ending after midnight before this time are counted as the previous day; `00:00` disables that |
+
+## Database Backup & Restore
+
+The ⚙ menu buttons are manual: export writes the entire SQLite file to the place you choose, and restore swaps the live database for the file you pick (the app reads the file first and refuses anything without a `sessions` table). A restore replaces the current database, it does not merge.
+
+Automatic backups:
+
+- One snapshot is taken when the app starts, and only when the current database differs from the newest snapshot already on disk — an unchanged launch writes nothing.
+- Snapshots live in `backups/` next to `data.db` inside the app-data folder (`%APPDATA%\reading-tracker` on Windows), named `data-YYYY-MM-DD-HH-MM-SS.db` so the folder lists as a timeline.
+- Only the 10 newest snapshots are kept; older ones are deleted. Files you put in that folder yourself are never touched.
+- A snapshot is `data.db` only. Cover images under `covers/` and `settings.json` (Kindle credentials, CSV import settings) are not part of it; manual export of the database file is the way to move everything you chose.
+- SQLite journaling does leave `data.db-wal` and `data.db-shm` beside the **live** database — the write-ahead log (pages waiting to be folded in) and its fixed-size index. They are transient bookkeeping, hold no reading data on their own, and the app never leaves such a pair beside a snapshot.
 
 ## Setup
 

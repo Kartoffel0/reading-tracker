@@ -321,8 +321,106 @@ function openDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
   `);
+  // migration_flag guarded a one-shot data migration that no longer exists in
+  // the app, so the table is dead weight that also trips off every backup: drop
+  // it on sight, which scrubs it out of older backups when they get restored.
+  db.exec('DROP TABLE IF EXISTS migration_flag;');
 
   return db;
+}
+
+// ─── Automatic database backups ──────────────────────────────────────────────
+//
+// Snapshots live beside the live database, under the app-data folder, and their
+// names carry date, hour, minute, and seconds so the folder lists as a timeline.
+// Only files this code names are ever rotated; a manual export keeps whatever
+// name and place the user chose.
+const BACKUPS_DIR = path.join(path.dirname(getDbPath()), 'backups');
+const AUTO_BACKUP_KEEP = 10;
+const AUTO_BACKUP_NAME = /^data-\d{4}-\d{2}-\d{2}-\d{2}(?:-\d{2}){0,2}\.db$/;
+
+// Two digits, zero padded: names sort the same way they read.
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function backupStamp(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}-${pad2(date.getHours())}`;
+}
+
+function ensureBackupsDir() {
+  if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+  return BACKUPS_DIR;
+}
+
+// Newest first. The names are chronological, so sorting names is sorting time,
+// and the pattern test keeps a user-placed file out of the pruning list.
+function listAutoBackups() {
+  if (!fs.existsSync(BACKUPS_DIR)) return [];
+  return fs
+    .readdirSync(BACKUPS_DIR)
+    .filter((name) => AUTO_BACKUP_NAME.test(name))
+    .sort((a, b) => (a < b ? 1 : -1))
+    .map((name) => path.join(BACKUPS_DIR, name));
+}
+
+// Opening a WAL-mode database leaves a -wal plus a fixed-size -shm beside the
+// file. When that -wal holds no records the pair is bookkeeping only, so a file
+// this code merely read is left without one; a -wal with records stays, because
+// those records belong to that file.
+function removeEmptyWalPair(file) {
+  const wal = `${file}-wal`;
+  if (!fs.existsSync(wal) || fs.statSync(wal).size !== 0) return;
+  for (const sidecar of [wal, `${file}-shm`])
+    if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+}
+
+// data-2026-10-09-19-38-05.db: day and hour first for reading the folder as a
+// timeline, minutes and seconds after so a snapshot never reuses a name.
+function autoBackupFile(date) {
+  return path.join(
+    ensureBackupsDir(),
+    `data-${backupStamp(date)}-${pad2(date.getMinutes())}-${pad2(date.getSeconds())}.db`,
+  );
+}
+
+// Content fingerprint: declared schema plus every row in a fixed order. Raw file
+// bytes churn for reasons unrelated to the data (page counts, free-list
+// pointers), so the rows are what gets compared. Hex digest because two Buffers
+// compare by identity.
+function fingerprint(database) {
+  const hash = crypto.createHash('sha256');
+  const shapes = database
+    .prepare("SELECT type, name, sql FROM sqlite_master WHERE name != 'sqlite_sequence'")
+    .all();
+  for (const shape of shapes) hash.update(`${shape.type} ${shape.name} ${shape.sql ?? ''}`);
+  for (const shape of shapes) {
+    if (shape.type !== 'table') continue;
+    const rows = database.prepare(`SELECT * FROM "${shape.name}"`).all();
+    rows.sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
+    for (const row of rows) hash.update(JSON.stringify(row));
+  }
+  return hash.digest('hex');
+}
+
+// Called once per app start: write a snapshot only when the live database differs
+// from the newest one on disk. Returns the written file, or null when nothing
+// changed.
+async function snapshotIfNeeded() {
+  const previous = listAutoBackups()[0];
+  if (previous) {
+    const last = new Database(previous, { readonly: true, fileMustExist: true });
+    const unchanged = fingerprint(last) === fingerprint(db);
+    last.close();
+    removeEmptyWalPair(previous);
+    if (unchanged) return null;
+  }
+
+  // The export is written in pages asynchronously, so awaiting is what leaves a
+  // complete file before anything reads it back.
+  const target = autoBackupFile(new Date());
+  await db.backup(target);
+
+  for (const stale of listAutoBackups().slice(AUTO_BACKUP_KEEP)) fs.unlinkSync(stale);
+  return target;
 }
 
 function createWindow() {
@@ -353,6 +451,16 @@ function createWindow() {
 
 app.whenReady().then(() => {
   db = openDatabase();
+
+  // Snapshot on open: a session that changed nothing writes no file, so the
+  // rotating set only ever holds distinct states of the database. The export
+  // runs beside startup: a failed snapshot only logs.
+  snapshotIfNeeded()
+    .then((snapshot) => {
+      if (snapshot) console.info('[reading-tracker] wrote auto-backup ' + snapshot);
+    })
+    .catch((err) => console.error('[reading-tracker] auto-backup skipped: ' + err.message));
+
   createWindow();
 
   // ===== IPC Handlers =====
@@ -536,52 +644,60 @@ app.whenReady().then(() => {
     }
   });
 
-  // Backup: export database to file
+  // Backup: write the entire live database (every table, index, and row) into a
+  // single self-contained file — the same layout restore-database reads back.
   ipcMain.handle('backup-database', async (_, targetPath) => {
     if (!db) throw new Error('No database connected');
-    db.backup(targetPath);
+    // better-sqlite3 exports asynchronously: awaiting is what guarantees the
+    // whole database is on disk before the UI reports success.
+    await db.backup(targetPath);
     return targetPath;
   });
 
-  // Restore: load from a .sqlite file
+  // Restore: swap the live database file for a backup .sqlite file
   ipcMain.handle('restore-database', async (_, sourcePath) => {
-    // Close current db before restoring
-    if (db) db.close();
-    const sourceDb = new Database(sourcePath);
-    const destDb = new Database(getDbPath());
-    destDb.exec('DROP TABLE IF EXISTS sessions;');
-    // Copy tables from source to dest using SQL
-    const tables = sourceDb
-      .prepare(
-        "SELECT * FROM sqlite_master WHERE type='table' AND name!='sqlite_sequence'",
-      )
-      .all()
-      .filter((t) => t.type === 'table');
-    for (const table of tables) {
-      destDb.exec(table.sql);
-      const rows = sourceDb.prepare(`SELECT * FROM "${table.name}"`).all();
-      if (rows.length > 0) {
-        const columns = Object.keys(rows[0]);
-        const placeholders = columns.map(() => '?').join(', ');
-        const insertSql = `INSERT INTO "${table.name}" (${columns.map((c) => '"' + c + '"').join(', ')}) VALUES (${placeholders})`;
-        const insertStmt = destDb.prepare(insertSql);
-        for (const row of rows) {
-          insertStmt.run(...columns.map((c) => row[c]));
-        }
-      }
-    }
+    const dbPath = getDbPath();
+
+    // Validate the backup before clobbering anything: readonly + fileMustExist
+    // means a bad path or a non-SQLite file fails without creating a db, and
+    // requiring a sessions table rejects databases from other apps (the file
+    // picker accepts any .db).
+    const sourceDb = new Database(sourcePath, { readonly: true, fileMustExist: true });
+    const hasSessions = sourceDb
+      .prepare("SELECT 'sessions' FROM sqlite_master WHERE name = 'sessions'")
+      .get();
     sourceDb.close();
-    destDb.close();
-    // Reopen our main db
-    db = new Database(getDbPath());
-    db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = NORMAL');
+
+    if (!hasSessions)
+      throw new Error('Not a reading-tracker backup: no sessions table in that file.');
+
+    // That validation open left a WAL pair beside the picked file; drop it when it
+    // is only bookkeeping.
+    removeEmptyWalPair(sourcePath);
+
+    if (db) db.close();
+    db = null;
+
+    // copyFileSync truncates the destination first, so a self-restore must no-op.
+    if (path.resolve(sourcePath) !== path.resolve(dbPath)) fs.copyFileSync(sourcePath, dbPath);
+
+    // WAL sidecars describe the database we just replaced; left in place, SQLite
+    // replays their records onto the freshly copied file.
+    for (const sidecar of [`${dbPath}-wal`, `${dbPath}-shm`])
+      if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+
+    db = openDatabase();
     return true;
   });
 
   // Get database path for info
   ipcMain.handle('get-db-path', () => {
     return getDbPath();
+  });
+
+  // Folder holding the automatic snapshots, so the Restore dialog can open it
+  ipcMain.handle('get-backups-path', () => {
+    return ensureBackupsDir();
   });
 
   // Dialogs

@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restoreDatabase: (sourcePath) =>
     ipcRenderer.invoke('restore-database', sourcePath),
   getDbPath: () => ipcRenderer.invoke('get-db-path'),
+  getBackupsPath: () => ipcRenderer.invoke('get-backups-path'),
 
   // Theme persistence (via settings stored in %APPDATA%). These helpers must use
   // ipcRenderer directly: inside the preload's isolated world, window.electronAPI
