@@ -672,11 +672,6 @@ input[type="date"] {
     cursor: pointer;
 }
 
-input[type="date"]:hover {
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px var(--accent-primary-glow);
-}
-
 input[type="date"]:focus {
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 3px var(--accent-primary-glow);
@@ -791,7 +786,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     padding: 8px;
 }
 
-.unit-toggle:hover,
 .unit-toggle:focus {
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 3px var(--accent-primary-glow);
@@ -933,11 +927,6 @@ input[type="submit"]:focus-visible,
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-}
-
-.date-picker-display:hover {
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px var(--accent-primary-glow);
 }
 
 .date-picker-display .date-picker-icon {
