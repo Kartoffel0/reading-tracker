@@ -2595,7 +2595,7 @@ body.theme-wave .wave-bg {
     height: 12px;
     border-radius: 3px;
     /* Slightly darker than the card background, no accent, no border */
-    background: color-mix(in srgb, var(--bg-card) 88%, #000);
+    background: rgba(128, 128, 128, 0.15);
     border: 1px solid transparent;
     position: relative;
     cursor: pointer;
@@ -2690,7 +2690,7 @@ body.theme-wave .wave-bg {
     width: 12px;
     height: 12px;
     border-radius: 3px;
-    background: color-mix(in srgb, var(--bg-card) 88%, #000);
+    background: rgba(128, 128, 128, 0.15);
     border: 1px solid transparent;
 }
 
