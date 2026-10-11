@@ -584,18 +584,18 @@ function sizeStreakGrid(grid) {
 async function renderStreakMap() {
   const grid = document.getElementById('streakGrid');
   const monthNames = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
   ];
   document.getElementById('currentMonthLabel').textContent =
     `${monthNames[currentMonth]} ${currentYear}`;

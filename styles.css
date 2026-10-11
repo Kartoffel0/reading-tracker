@@ -1157,10 +1157,10 @@ input[type="submit"]:focus-visible,
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 6px 8px;
+    padding: 6px 6px;
     background: rgba(128, 128, 128, 0.04);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 10px;
 }
 
 .month-arrow {
@@ -1182,14 +1182,14 @@ input[type="submit"]:focus-visible,
 }
 
 .month-label {
-    min-width: 62px;
+    min-width: 72px;
     text-align: center;
     font-size: 0.65rem;
     font-weight: 600;
     color: var(--text-primary);
     letter-spacing: 0.05em;
-    line-height: 1;
     pointer-events: none;
+    padding: 5px 7px 3px;
 }
 
 .streak-grid {
