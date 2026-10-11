@@ -2971,6 +2971,7 @@ body.theme-wave .wave-bg {
 .rt-delta {
     font-size: 0.7rem;
     color: var(--text-muted);
+    min-height: 16px;
 }
 
 .rt-big {
