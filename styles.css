@@ -7,31 +7,6 @@
     box-sizing: border-box;
 }
 
-/* Dark Japanese (default) */
-html,
-body.theme-dark-jp {
-    --bg-primary: #0a0a0f;
-    --bg-secondary: #0d0d14;
-    --bg-card: rgba(12, 12, 20, 0.75);
-    --bg-card-hover: rgba(18, 18, 30, 0.9);
-    --border-color: rgba(255, 255, 255, 0.05);
-    --border-hover: rgba(255, 255, 255, 0.1);
-    --text-primary: #e8e6e1;
-    --text-secondary: #8a8694;
-    --text-muted: #4a4756;
-    --accent-primary: #dc2626;
-    --accent-primary-glow: rgba(220, 38, 38, 0.3);
-    --accent-secondary: #d4a843;
-    --accent-secondary-glow: rgba(212, 168, 67, 0.2);
-    --accent-tertiary: #4f46e5;
-    --accent-tertiary-glow: rgba(79, 70, 229, 0.2);
-    --kanji-color: rgba(220, 38, 38, 0.06);
-    --grid-color: rgba(220, 38, 38, 0.02);
-    --glow-color: rgba(220, 38, 38, 0.06);
-    --glow-pos: top -30% right -20%;
-    --toast-border: var(--accent-primary);
-}
-
 /* Classic Red & White */
 body.theme-classic,
 html.theme-classic {
@@ -1323,15 +1298,6 @@ body.theme-classic .legend-cell {
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-body.theme-classic .month-selector {
-    background: #f5f5f5;
-    border-color: #e0e0e0;
-}
-
-body.theme-classic .month-arrow:hover {
-    background: #fce4e4;
-}
-
 /* Sakura Light theme calendar */
 body.theme-sakura-light .day-cell {
     background: #f7f0f3;
@@ -1373,15 +1339,6 @@ body.theme-sakura-light .day-cell.empty {
 
 body.theme-sakura-light .legend-cell {
     border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-body.theme-sakura-light .month-selector {
-    background: #faf4f7;
-    border-color: #eadbe2;
-}
-
-body.theme-sakura-light .month-arrow:hover {
-    background: #fbe4ea;
 }
 
 .day-cell {
@@ -1923,7 +1880,7 @@ body.theme-sakura-light .month-arrow:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 28px 0px;
+    padding: 20px 20px 0px;
     flex-shrink: 0;
 }
 
@@ -1955,7 +1912,7 @@ body.theme-sakura-light .month-arrow:hover {
     color: var(--text-secondary);
     font-size: 1.5rem;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 0 8px;
     line-height: 1;
     transition: all 0.2s ease;
     display: flex;
@@ -1969,7 +1926,7 @@ body.theme-sakura-light .month-arrow:hover {
 
 /* Base modal body */
 .modal-body {
-    padding: 28px;
+    padding: 20px;
     overflow-y: auto;
     flex: 1;
     min-height: 0;
@@ -1986,7 +1943,7 @@ body.theme-sakura-light .month-arrow:hover {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    padding: 20px 28px;
+    padding: 20px 20px;
     flex-shrink: 0;
 }
 
@@ -2074,7 +2031,7 @@ body.theme-sakura-light .month-arrow:hover {
 
 .session-card-header {
     display: flex;
-    align-items: center;
+    align-items: start;
     gap: 12px;
     margin-bottom: 12px;
 }
@@ -2208,7 +2165,7 @@ body.theme-sakura-light .month-arrow:hover {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--accent-primary);
-    padding: 0 8px;
+    padding-bottom: 12px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -2880,19 +2837,26 @@ body.theme-wave .wave-bg {
 
 .cover-upload-btn {
     position: absolute;
-    right: 6px;
+    /* The cover's left edge is the only edge that stays put across aspect
+       ratios (the right edge follows the image width), so pin the button
+       there: it lands in the same pixel for any cover, or for a cover-less
+       placeholder of the same box. */
+    left: 6px;
     bottom: 6px;
     width: 22px;
     height: 22px;
     border-radius: 5px;
     border: 1px solid var(--border-color);
-    background: rgba(0, 0, 0, 0.35);
-    color: var(--text-secondary);
+    /* Reuse the cards' own surface and ink so the chip follows whichever
+       theme is active; the muted --text-secondary glyph vanished over the
+       covers. */
+    background: var(--bg-card);
+    color: var(--text-primary);
     font-size: 1rem;
     line-height: 1;
     cursor: pointer;
     opacity: 0;
-    transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease;
+    transition: opacity 0.2s ease, background 0.2s ease;
 }
 
 .recent-book:hover .cover-upload-btn {
@@ -2900,8 +2864,7 @@ body.theme-wave .wave-bg {
 }
 
 .cover-upload-btn:hover {
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--accent-primary) 40%, rgba(0, 0, 0, 0.5));
+    background: color-mix(in srgb, var(--accent-primary) 40%, var(--bg-card-hover));
 }
 
 .recent-info {
@@ -3038,6 +3001,11 @@ body.theme-wave .wave-bg {
 .rt-tab.active {
     color: var(--text-primary);
     background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-card));
+}
+
+.rt-tab:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--accent-primary) 20%, var(--bg-card));
 }
 
 .rt-tab-indicator {

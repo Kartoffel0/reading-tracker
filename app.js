@@ -1,6 +1,5 @@
 // Theme management
 const THEMES = [
-  'theme-dark-jp',
   'theme-classic',
   'theme-rising-sun',
   'theme-wave',
@@ -8,12 +7,11 @@ const THEMES = [
   'theme-sakura-light',
 ];
 const THEME_NAMES = {
-  'theme-dark-jp': 'Dark Japanese',
-  'theme-classic': 'Classic Red & White',
+  'theme-classic': 'Red & White',
   'theme-rising-sun': 'Rising Sun',
-  'theme-wave': 'Great Wave (波)',
-  'theme-sakura-dark': 'Sakura Dark (桜)',
-  'theme-sakura-light': 'Sakura Light (桜)',
+  'theme-wave': 'Great Wave',
+  'theme-sakura-dark': 'Sakura Dark',
+  'theme-sakura-light': 'Sakura Light',
 };
 
 function setTheme(themeName) {
@@ -1310,9 +1308,10 @@ function coverMarkup(title) {
   // cover (found or manual) can replace it by picking a new image.
   const uploadBtn = `<button class="cover-upload-btn" data-cover-title="${escapeHtml(title)}" title="Upload a cover image" aria-label="Upload a cover image">+</button>`;
   if (cover?.url) {
-    // The image sits inside a positioned container that sizes itself to the
-    // image, so the button lands on the cover's corner just like on the
-    // placeholder.
+    // The button lives inside the fixed 68x90 box in both branches, pinned
+    // to its bottom-left corner. That corner IS the cover's left edge for
+    // every aspect ratio — only the right edge moves, so anchoring right
+    // would drift across covers.
     return `
       <div class="recent-cover-wrap">
         <img class="recent-cover" src="${cover.url}" alt="${escapeHtml(title)} cover" />
@@ -1987,8 +1986,8 @@ async function openDaySessions(dateKey) {
       return `
                     <div class="session-card">
                         <div class="session-card-header">
-                            <span class="session-title">${session.title}</span>
                             <span class="session-badge lang-badge">${langCode.toUpperCase()}</span>
+                            <span class="session-title">${session.title}</span>
                             <button class="modal-close-btn" onclick="deleteSession('${dateKey}', ${session.id})">&times;</button>
                         </div>
                         <div class="session-details">

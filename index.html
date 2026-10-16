@@ -31,7 +31,12 @@
             <div class="stat-card">
                 <div class="kanji-bg-icon">続</div>
                 <div class="value" id="currentStreak">0</div>
-                <div class="label">DAY STREAK</div>
+                <div class="label">CURRENT STREAK</div>
+            </div>
+            <div class="stat-card">
+                <div class="kanji-bg-icon">最</div>
+                <div class="value" id="bestStreak">0</div>
+                <div class="label">LONGEST STREAK</div>
             </div>
             <div class="stat-card">
                 <div class="kanji-bg-icon">日</div>
@@ -42,11 +47,6 @@
                 <div class="kanji-bg-icon">時</div>
                 <div class="value" id="totalHours">0</div>
                 <div class="label">TOTAL HOURS</div>
-            </div>
-            <div class="stat-card">
-                <div class="kanji-bg-icon">最</div>
-                <div class="value" id="bestStreak">0</div>
-                <div class="label">BEST STREAK</div>
             </div>
         </div>
 
@@ -88,7 +88,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">TITLE / WORK</label>
-                        <input type="text" id="sessionTitle" class="form-input" placeholder="e.g., 1Q84, Poetry Collection...">
+                        <input type="text" id="sessionTitle" class="form-input" placeholder="e.g., Fate/stay night, 金の月のマヤ(2) 秘...">
                         <div class="title-suggestions" id="titleSuggestions"></div>
                     </div>
                     <div class="form-group">
@@ -280,7 +280,7 @@
                 <div class="import-format-help">
                     <h4>CSV Format</h4>
                     <code>date,title,language,characters,duration,unit</code>
-                    <div class="note">unit: minutes (default) or hours. Example: 2024-01-15,1Q84 Japanese 500 30 minutes</div>
+                    <div class="note">unit: minutes (default) or hours. Example: 2024-01-15,1Q84, Japanese, 500, 30, minutes</div>
                 </div>
             </div>
         </div>
@@ -297,24 +297,23 @@
                 <form id="settings-form">
                     <!-- General Settings Section -->
                     <fieldset class="settings-section">
-                        <legend>General</legend>
                         <div class="form-group">
+                            <legend>General</legend>
                             <label class="form-label" for="themeSelect">Theme</label>
                             <select id="themeSelect" class="form-select" onchange="changeTheme(this.value)">
-                                <option value="theme-dark-jp">Dark Japanese</option>
-                                <option value="theme-classic">Classic Red & White</option>
+                                <option value="theme-classic">Red & White</option>
                                 <option value="theme-rising-sun">Rising Sun</option>
-                                <option value="theme-wave">Great Wave (波)</option>
-                                <option value="theme-sakura-dark">Sakura Dark (桜)</option>
-                                <option value="theme-sakura-light">Sakura Light (桜)</option>
+                                <option value="theme-wave">Great Wave</option>
+                                <option value="theme-sakura-dark">Sakura Dark</option>
+                                <option value="theme-sakura-light">Sakura Light</option>
                             </select>
                         </div>
                     </fieldset>
 
                     <!-- Daily Goal Section -->
                     <fieldset class="settings-section">
-                        <legend>Daily Goal</legend>
                         <div class="form-group">
+                            <legend>Daily Goal</legend>
                             <label class="form-label" for="goalUnitSelect">Goal Unit</label>
                             <select id="goalUnitSelect" class="form-select">
                                 <option value="minutes">Minutes per day</option>
@@ -329,8 +328,8 @@
 
                     <!-- Kindle Sync Section -->
                     <fieldset class="settings-section">
-                        <legend>Kindle Sync</legend>
                         <div class="form-group">
+                            <legend>Kindle Sync</legend>
                             <label class="form-label" for="kindle-host">Host</label>
                             <input type="text" id="kindle-host" class="form-input" />
                         </div>
