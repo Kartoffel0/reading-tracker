@@ -1161,6 +1161,7 @@ input[type="submit"]:focus-visible,
     background: rgba(128, 128, 128, 0.04);
     border: 1px solid var(--border-color);
     border-radius: 10px;
+    position: relative;
 }
 
 .month-arrow {
@@ -1489,6 +1490,7 @@ body.theme-sakura-light .month-arrow:hover {
    Forcing max-content makes the box as wide as its longest line instead. */
 .day-cell .tooltip,
 .gc-cell .tooltip,
+.month-selector .tooltip,
 .rt-bar::after {
     position: absolute;
     bottom: calc(100% + 6px);
@@ -1513,6 +1515,16 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 .day-cell:hover .tooltip {
+    display: block;
+}
+
+/* Reuses the shared upward anchor so the month tooltip matches the day ones;
+   the box overflowing the card's top edge is exactly what that costs. */
+.month-selector .tooltip {
+    display: none;
+}
+
+.month-selector:hover .tooltip {
     display: block;
 }
 

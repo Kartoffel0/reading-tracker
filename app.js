@@ -712,6 +712,11 @@ async function renderStreakMap() {
 
   const todayStr = today.toDateString();
 
+  // Aggregates for the whole displayed month (grid edge cells excluded), shown
+  // by the month selector's tooltip in the same shape as day tooltips.
+  let monthMinutes = 0;
+  let monthChars = 0;
+  let monthSessions = 0;
   for (const { date, outOfMonth } of gridCells) {
     const dateKey = getDateKey(date);
     const level = getRelativeLevel(dayIntensity[dateKey]);
@@ -738,6 +743,11 @@ async function renderStreakMap() {
     }
 
     const totals = dayTotals(data[dateKey]);
+    if (!outOfMonth) {
+      monthMinutes += totals.minutes;
+      monthChars += totals.chars;
+      monthSessions += totals.sessions;
+    }
     const tooltip = document.createElement('div');
     tooltip.className = 'tooltip';
     tooltip.innerHTML = tooltipLines(
@@ -750,6 +760,18 @@ async function renderStreakMap() {
 
     grid.appendChild(cell);
   }
+
+  const selector = document.getElementById('monthSelector');
+  selector.querySelectorAll(':scope > .tooltip').forEach((node) => node.remove());
+  const monthTooltip = document.createElement('div');
+  monthTooltip.className = 'tooltip';
+  monthTooltip.innerHTML = tooltipLines(
+    `${currentYear} ${String(currentMonth + 1).padStart(2, '0')}`,
+    monthMinutes,
+    monthChars,
+    monthSessions,
+  ).join('<br>');
+  selector.appendChild(monthTooltip);
 }
 
 function changeMonth(delta) {
