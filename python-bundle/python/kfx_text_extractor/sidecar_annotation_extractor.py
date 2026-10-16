@@ -307,9 +307,11 @@ def _extract_krs_pairs_from_sidecar(sidecar_data, book_title):
     Algorithm:
     1. List all highlights as position ranges
     2. Collect ALL Krs notes into one unified list, sorted by creationTime
-    3. For each Krs note: Find nearest highlight by position proximity
-       - If Krs.start -> use highlight's startPosition
-       - If Krs.end -> use highlight's endPosition
+    3. Match each Krs note to its highlight: Kindle writes the marker at a
+       highlight's end position, so match that exactly when one exists; fall
+       back to range proximity only for unanchored notes
+       - If Krs.start -> use that highlight's startPosition
+       - If Krs.end -> use that highlight's endPosition
     4. Validate sequence: if two Krs.start in a row, keep second & warn about first;
        if two Krs.end in a row, keep first & warn about second
     5. Pair consecutive valid (start, end) entries into reading sessions
@@ -365,22 +367,44 @@ def _extract_krs_pairs_from_sidecar(sidecar_data, book_title):
 
     # Step 3: Find nearest highlight for each Krs note, extract position
     def find_nearest_highlight(note):
-        """Find the nearest highlight range to a note by position proximity."""
+        """Match a Krs note to the highlight carrying its position.
+
+        Kindle stores a Krs marker at the end position of a highlight, so an
+        exact end-position match is authoritative; proximity is only a
+        fallback for notes that carry no such anchor.
+        """
         if not ranges:
             return None
         note_start = note.get("startPosition", "")
         note_end = note.get("endPosition", "")
-        
-        best_range = None
-        best_dist = float('inf')
-        
+        note_num = _position_number(note_end) or 0
+
+        anchored = [
+            rng for rng in ranges
+            if note_num and _position_number(rng["end_position"]) == note_num
+        ]
+        if anchored:
+            # Nested highlights can share an end position: take the innermost.
+            return max(
+                anchored,
+                key=lambda rng: _position_number(rng["start_position"]) or 0,
+            )
+
+        is_start = KRS_START_MARKER.lower() in note.get("note", "").lower()
+        best = None
+        best_rank = None
         for rng in ranges:
-            dist = _position_distance(note_start, note_end, rng["start_position"], rng["end_position"])
-            if dist < best_dist:
-                best_dist = dist
-                best_range = rng
-        
-        return best_range
+            edge = rng["start_position"] if is_start else rng["end_position"]
+            edge_num = _position_number(edge) or 0
+            rank = (
+                _position_distance(note_start, note_end, rng["start_position"], rng["end_position"]),
+                abs(note_num - edge_num),
+                edge_num,
+            )
+            if best_rank is None or rank < best_rank:
+                best_rank = rank
+                best = rng
+        return best
 
     # Build validated, processed Krs entries
     # Each entry: {'type': 'start'/'end', 'note': dict, 'position': str, 'is_valid': bool}
@@ -477,35 +501,33 @@ def _extract_krs_pairs_from_sidecar(sidecar_data, book_title):
     return entries
 
 
-def _position_distance(start1, end1, start2, end2):
-    """Calculate distance between two position ranges.
+def _position_number(pos):
+    """Numeric pid of a position value, or None when it is not one.
 
-    For KFX positions (format: "PREFIX:NUMERIC"), uses the numeric suffix.
-    For other formats, uses string distance as fallback.
+    KFX positions are "PREFIX:NUMERIC"; MOBI sidecars use plain integers.
     """
-    def extract_num(pos):
-        """Extract the numeric portion from a position string."""
-        if isinstance(pos, int):
-            return pos
-        if not isinstance(pos, str):
-            return 0
-        if ":" in pos:
-            parts = pos.rsplit(":", 1)
-            try:
-                return int(parts[1])
-            except (ValueError, IndexError):
-                return 0
-        try:
-            return int(pos)
-        except (ValueError, TypeError):
-            return 0
+    if isinstance(pos, int):
+        return pos
+    if not isinstance(pos, str):
+        return None
+    tail = pos.rsplit(":", 1)[1] if ":" in pos else pos
+    try:
+        return int(tail)
+    except ValueError:
+        return None
 
-    num1_end = extract_num(end1)
-    num2_end = extract_num(end2)
-    num1_start = extract_num(start1)
-    num2_start = extract_num(start2)
 
-    return abs(num1_end - num2_start) + abs(num2_end - num1_start)
+def _position_distance(start1, end1, start2, end2):
+    """Gap in pids between two position ranges; 0 when they overlap.
+
+    Unparseable positions count as 0, matching how malformed sidecar entries
+    were treated before.
+    """
+    a_start = _position_number(start1) or 0
+    a_end = _position_number(end1) or 0
+    b_start = _position_number(start2) or 0
+    b_end = _position_number(end2) or 0
+    return max(0, max(a_start - b_end, b_start - a_end))
 
 
 def extract_from_sidecars(documents_dir, max_books=None):
@@ -611,6 +633,7 @@ def _extract_from_sdr_directory(sdr_dir):
             if sidecar_data is None:
                 continue
 
+            #print(sidecar_data)
             entries = _extract_krs_pairs_from_sidecar(sidecar_data, book_title)
             for entry in entries:
                 # Deduplicate by (start_pid, end_pid) pair
