@@ -1370,6 +1370,18 @@ function attachTitleMarquee(container) {
   }
 }
 
+// Same plumbing for every container that renders the shared card element: each
+// cover chip gets the upload handler, so a cover-less row can be filled in from
+// inside the row itself.
+function attachCoverUploads(container) {
+  for (const btn of container.querySelectorAll('.cover-upload-btn')) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      uploadCoverFor(btn.dataset.coverTitle);
+    });
+  }
+}
+
 async function renderRecentlyRead(data) {
   const list = document.getElementById('recentlyReadList');
   if (!list) return;
@@ -1432,12 +1444,7 @@ async function renderRecentlyRead(data) {
     })
     .join('');
 
-  for (const btn of list.querySelectorAll('.cover-upload-btn')) {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      uploadCoverFor(btn.dataset.coverTitle);
-    });
-  }
+  attachCoverUploads(list);
 
   attachTitleMarquee(list);
 }
@@ -1924,8 +1931,15 @@ async function openDaySessions(dateKey) {
   let totalMinutes = 0;
   let totalChars = 0;
 
+  // Covers are resolved by the same helper the Recently Read card uses, so the
+  // modal rows show the cover art the card already has for that title.
+  await ensureCovers(
+    sessions.map((session) => ({ title: session.title || 'Untitled', language: session.language })),
+  );
+
   const sessionsHtml = sessions
     .map((session) => {
+      const title = session.title || 'Untitled';
       // Calculate reading speed for this session (characters per hour)
       const durationHours =
         session.unit === 'minutes' ? session.duration / 60 : session.duration;
@@ -1933,6 +1947,11 @@ async function openDaySessions(dateKey) {
         durationHours > 0
           ? Math.round((session.characters || 0) / durationHours)
           : 0;
+      // Same goal-unit highlight the Recently Read card uses: the session stat
+      // that matches the current goal's unit is the one drawn in accent.
+      const goalIsChars = currentGoal.unit === 'characters';
+      const charsClass = goalIsChars ? ' recent-stat-chars' : '';
+      const timeClass = goalIsChars ? '' : ' recent-stat-time';
 
       // Reverse language map: full name -> ISO 639 code
       const LANG_REVERSE = {
@@ -1984,25 +2003,17 @@ async function openDaySessions(dateKey) {
       totalChars += session.characters || 0;
 
       return `
-                    <div class="session-card">
-                        <div class="session-card-header">
-                            <span class="session-badge lang-badge">${langCode.toUpperCase()}</span>
-                            <span class="session-title">${session.title}</span>
-                            <button class="modal-close-btn" onclick="deleteSession('${dateKey}', ${session.id})">&times;</button>
-                        </div>
-                        <div class="session-details">
-                            <div class="session-detail-item">
-                                <span class="session-detail-label">Duration</span>
-                                <span class="session-detail-value">${durationDisplay}</span>
-                            </div>
-                            <div class="session-detail-item">
-                                <span class="session-detail-label">Characters</span>
-                                <span class="session-detail-value">${(session.characters || 0).toLocaleString()}</span>
-                            </div>
-                            <div class="session-detail-item">
-                                <span class="session-detail-label">Reading Speed</span>
-                                <span class="session-detail-value">${speed.toLocaleString().replace(/\s/g, '')}/h</span>
-                            </div>
+                    <div class="recent-book">
+                        ${coverMarkup(title)}
+                        <div class="recent-info">
+                            <span class="session-title-row">
+                                <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
+                                <span class="session-badge lang-badge">${langCode.toUpperCase()}</span>
+                                <button class="modal-close-btn" onclick="deleteSession('${dateKey}', ${session.id})">&times;</button>
+                            </span>
+                            <span class="recent-stat"><span class="recent-stat-label">Duration</span> <span class="recent-stat-value${timeClass}">${durationDisplay}</span></span>
+                            <span class="recent-stat"><span class="recent-stat-label">Characters</span> <span class="recent-stat-value${charsClass}">${(session.characters || 0).toLocaleString()}</span></span>
+                            <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span> <span class="recent-stat-value">${speed.toLocaleString().replace(/\s/g, '')}/h</span></span>
                         </div>
                     </div>
                 `;
@@ -2046,6 +2057,9 @@ async function openDaySessions(dateKey) {
 
   modalBody.innerHTML = sessionsHtml;
   footerSummary.innerHTML = summaryHtml;
+
+  attachTitleMarquee(modalBody);
+  attachCoverUploads(modalBody);
 
   modal.classList.add('active');
 }

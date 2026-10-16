@@ -1960,6 +1960,9 @@ body.theme-sakura-light .legend-cell {
 }
 
 #session-modal .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     padding-bottom: 110px;
 }
 
@@ -1984,7 +1987,7 @@ body.theme-sakura-light .legend-cell {
     display: flex;
     gap: 24px;
     justify-content: center;
-    padding: 18px;
+    padding: 10px;
     border: none;
     border-radius: 12px;
     width: 100%;
@@ -2013,42 +2016,61 @@ body.theme-sakura-light .legend-cell {
     display: block;
 }
 
-/* Session card (inside session modal) */
-.session-card {
+/* Session rows reuse the Recently Read card element (.recent-book, its cover,
+   .recent-info, .recent-title, .recent-stat) so the modal and the dashboard card
+   are one component: same box, same title treatment, same stat rows — including
+   the goal-unit highlight — and the same hover marquee. The controls ride in the
+   title line itself, title then language badge then delete, and that line owns the
+   leftover width while the title keeps the flexible share, so the badge and the
+   delete mark hold one x-position whatever the title is, and stay put whatever the
+   cover aspect ratio is. They are drawn at the title's own scale, which keeps the
+   line height within a couple of px of the dashboard card's. */
+/* The card's own background is a 5% grey, which is invisible on the modal's
+   translucent surface. The rows take the stats-chip surface the day-summary
+   footer uses instead, so each session reads as its own chip. */
+#session-modal .recent-book {
     background: color-mix(in srgb, var(--accent-primary) 5%, var(--bg-card));
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 18px;
-    margin-bottom: 14px;
-    transition: all 0.2s ease;
 }
 
-.session-card:hover {
-    border-color: var(--accent-primary);
-    box-shadow: 0 4px 20px var(--accent-primary-glow);
-    transform: translateY(-2px);
+#session-modal .recent-book .recent-stat {
+    font-size: 0.75rem;
 }
 
-.session-card-header {
+#session-modal .recent-book .recent-info {
+    gap: 2px;
+}
+
+#session-modal .recent-book .recent-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+#session-modal .recent-info > .session-title-row {
     display: flex;
-    align-items: start;
-    gap: 12px;
-    margin-bottom: 12px;
+    align-items: center;
+    gap: 8px;
+    /* .recent-title's own 12px drop moves out here, so the gap to the first
+       stat row is the drop the dashboard card uses rather than a second one. */
+    margin-bottom: 8px;
 }
 
-/* Title owns the leftover row so the badge and close button keep the same
-   x-position on every card, whatever the title length is. */
-.session-card-header .session-badge,
-.session-card-header .modal-close-btn {
+/* The title takes the leftover width; the badge and the delete mark never do. */
+#session-modal .recent-info > .session-title-row > .recent-title {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+#session-modal .recent-info > .session-title-row > .session-badge,
+#session-modal .recent-info > .session-title-row > .modal-close-btn {
     flex-shrink: 0;
 }
 
-.session-title {
-    flex: 1;
-    min-width: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-primary);
+/* The delete mark belongs to the title line, so it is drawn at the title's scale
+   instead of the modal header's 1.5rem: a row-sized × would make the line taller
+   and drag every stat row below it down. */
+#session-modal .recent-info > .session-title-row > .modal-close-btn {
+    padding: 0 0 0 8px;
 }
 
 .session-badge {
@@ -2066,55 +2088,8 @@ body.theme-sakura-light .legend-cell {
     color: var(--accent-primary);
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;
-}
-
-.session-details {
-    display: flex;
-    justify-content: space-around;
-    gap: 12px;
-}
-
-.session-detail-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-}
-
-.session-detail-label {
-    font-size: 0.65rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-    text-align: center;
-}
-
-.session-detail-value {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    font-family: 'JetBrains Mono', monospace;
-    text-align: center;
-}
-
-.session-delete-btn {
-    padding: 4px 10px;
-    background: transparent;
-    border: 1px solid var(--accent-primary);
-    border-radius: 6px;
-    color: var(--accent-primary);
-    font-size: 0.7rem;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.session-delete-btn:hover {
-    background: var(--accent-primary);
-    color: white;
-    transform: scale(1.05);
+    padding: 2px 8px;
 }
 
 .day-summary {
@@ -2916,7 +2891,8 @@ body.theme-wave .wave-bg {
     align-items: baseline;
     justify-content: space-between;
     gap: 8px;
-    font-size: 0.65rem;
+    font-size: 0.7rem;
+    font-weight: 600;
 }
 
 .recent-stat-label {
