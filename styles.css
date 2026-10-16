@@ -560,6 +560,67 @@ button.theme-select {
     box-sizing: border-box;
 }
 
+/* The title suggestion panel: NOT a dropdown — the title field stays a plain
+   text input and this never moves focus or carries option semantics. But it
+   is painted and floats exactly like the branded option picker (same tokens,
+   radii, padding, hover), anchored in place below the field. app.js fills
+   the rows; the .active class toggles visibility. */
+.form-group:has(#sessionTitle) {
+    position: relative;
+}
+
+.title-suggestions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 30;
+    display: none;
+}
+
+.title-suggestions.active {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(3, 3, 3, 0.3);
+    padding: 8px;
+    backdrop-filter: blur(2px);
+}
+
+.title-suggestion {
+    background: transparent;
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 6px 10px;
+    line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    white-space: pre;
+    overflow: hidden;
+}
+
+.title-suggestion:hover {
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-card));
+    color: var(--accent-primary);
+}
+
+/* Long suggestion titles reuse the cards' marquee (see .recent-title-text
+   and @keyframes marquee-scroll further down): the shared JS helper
+   duplicates the text and sets the cycle variables on hover; the row
+   itself already clips at its own padding, so it plays the wrapper role
+   for the helper, with the inner span carrying the looping text. */
+.title-suggestion-text {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.title-suggestion:hover .title-suggestion-text.marquee {
+    animation: marquee-scroll var(--marquee-duration, 6s) linear infinite;
+}
+
 /* ===== UNIFIED CARD / PANEL TITLE ===== */
 .card-title {
     font-size: 0.7rem;
@@ -707,7 +768,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .form-select option {
-    background: var(--bg-primary);
+    background: var(--bg-card);
     color: var(--text-primary);
     padding: 8px;
 }
@@ -781,7 +842,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .unit-toggle option {
-    background: var(--bg-primary);
+    background: var(--bg-card);
     color: var(--text-primary);
     padding: 8px;
 }
@@ -812,6 +873,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-top: 8px;
 }
 
 .btn-primary:hover {
@@ -954,6 +1016,7 @@ input[type="submit"]:focus-visible,
     z-index: 100;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     animation: dpFadeIn 0.15s ease;
+    backdrop-filter: blur(2px);
 }
 
 .date-picker-dropdown.active {
@@ -1324,7 +1387,7 @@ body.theme-sakura-light .month-arrow:hover {
 .day-cell {
     border-radius: 5px;
     background: rgba(128, 128, 128, 0.08);
-    border: 1px solid rgba(128, 128, 128, 0.15);
+    border: 1px solid rgba(128, 128, 128, 0.1);
     cursor: pointer;
     transition: all 0.2s ease;
     position: relative;
@@ -1332,7 +1395,7 @@ body.theme-sakura-light .month-arrow:hover {
 
 .day-cell.level-0 {
     background: rgba(128, 128, 128, 0.05);
-    border-color: rgba(128, 128, 128, 0.1);
+    border-color: rgba(128, 128, 128, 0.15);
 }
 
 .day-cell.level-1 {
@@ -1362,6 +1425,34 @@ body.theme-sakura-light .month-arrow:hover {
     color: white;
 }
 
+.day-cell:hover {
+    transform: scale(1.04);
+}
+
+.day-cell:hover.level-0 {
+    background: rgba(128, 128, 128, 0.12);
+}
+
+.day-cell:hover.level-1 {
+    background: color-mix(in srgb, var(--accent-primary) 20%, rgba(128, 128, 128, 0.15));
+}
+
+.day-cell:hover.level-2 {
+    background: color-mix(in srgb, var(--accent-primary) 35%, rgba(128, 128, 128, 0.1));
+}
+
+.day-cell:hover.level-3 {
+    background: color-mix(in srgb, var(--accent-primary) 55%, rgba(128, 128, 128, 0.08));
+}
+
+.day-cell:hover.level-4 {
+    background: color-mix(in srgb, var(--accent-primary) 70%, rgba(128, 128, 128, 0.05));
+}
+
+.day-cell:hover.level-5 {
+    background: color-mix(in srgb, var(--accent-secondary) 30%, var(--accent-primary));
+}
+
 .day-cell.level-1,
 .day-cell.level-2,
 .day-cell.level-3,
@@ -1377,8 +1468,7 @@ body.theme-sakura-light .month-arrow:hover {
 
 .day-cell.today {
     border: 2px solid var(--accent-secondary) !important;
-    box-shadow: 0 0 10px var(--accent-primary-glow), 0 0 20px var(--accent-primary-glow), inset 0 0 12px var(--accent-primary-glow);
-    transform: scale(1.02);
+    box-shadow: 0 0 8px var(--accent-primary-glow), 0 0 12px var(--accent-primary-glow), inset 0 0 12px var(--accent-primary-glow);
     z-index: 5;
     cursor: pointer;
     overflow: visible;
@@ -1409,7 +1499,7 @@ body.theme-sakura-light .month-arrow:hover {
 }
 
 .day-cell.today:hover {
-    transform: scale(1.08);
+    transform: scale(1.04);
 }
 
 .day-cell.today:hover.level-0 {
@@ -1451,7 +1541,7 @@ body.theme-sakura-light .month-arrow:hover {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: color-mix(in srgb, var(--bg-card) 45%, transparent);
+    background: color-mix(in srgb, var(--bg-card) 65%, transparent);
     pointer-events: none;
 }
 
@@ -1465,14 +1555,17 @@ body.theme-sakura-light .month-arrow:hover {
     border-color: rgba(128, 128, 128, 0.4);
 }
 
-.day-cell.out-of-month:not(.level-0):hover {
-    border-color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-primary));
-}
-
 /* Lighten the veil on hover instead of fading the cell with opacity. */
 .day-cell.out-of-month:hover::before {
-    background: color-mix(in srgb, var(--bg-card) 20%, transparent);
+    background: color-mix(in srgb, var(--bg-card) 40%, transparent);
+}
+
+.day-cell.out-of-month:hover {
+    transform: scale(1.04);
+}
+
+.day-cell:hover .tooltip {
+    transform: translateX(-50%) scale(0.97);
 }
 
 /* ===== SHARED TOOLTIP STYLE =====
@@ -1508,6 +1601,7 @@ body.theme-sakura-light .month-arrow:hover {
     width: max-content;
     pointer-events: none;
     z-index: 20;
+    backdrop-filter: blur(2px);
 }
 
 .day-cell .tooltip {
@@ -1526,13 +1620,6 @@ body.theme-sakura-light .month-arrow:hover {
 
 .month-selector:hover .tooltip {
     display: block;
-}
-
-/* The current-day cell is scaled up (scale(1.02), 1.08 on hover), which
-   transforms its whole subtree, so its tooltip would render larger than
-   the shared style. Counter-scale it back (0.93 ≈ 1/1.08). */
-.day-cell.today:hover .tooltip {
-    transform: translateX(-50%) scale(0.93);
 }
 
 /* Legend */
@@ -3175,7 +3262,8 @@ body.theme-wave .wave-bg {
 
 /* Branded option list. The rules above only reach the in-page control, so
    engines without base-select keep the UA picker; Chromium gets the panel
-   painted with app tokens instead (rounded, accent-highlighted, one caret). */
+   matched to the date-picker calendar's surface (--bg-card, --border-color,
+   8px, calendar hover/selected paints) instead. */
 @supports (appearance: base-select) {
     .form-select,
     .unit-toggle,
@@ -3206,20 +3294,25 @@ body.theme-wave .wave-bg {
     .form-select::picker(select),
     .unit-toggle::picker(select) {
         appearance: base-select;
-        background: var(--bg-card-hover);
-        border: 1px solid var(--border-hover);
-        border-radius: 12px;
-        padding: 10px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        padding: 8px;
         /* NEVER set display here: the closed picker is hidden with a UA-level
            display:none (it is a popover), and an author display value overrides
            that hiding, painting the option list while the select is closed. */
+        /* an open option panel sits flush against the control by default;
+           a margin on the auto-anchored picker separates the two */
+        margin-top: 4px;
+        backdrop-filter: blur(2px);
     }
 
     .form-select:open::picker(select),
     .unit-toggle:open::picker(select) {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 4px;
     }
 
     .form-select option,
@@ -3228,7 +3321,7 @@ body.theme-wave .wave-bg {
         background: transparent;
         color: var(--text-primary);
         border-radius: 6px;
-        padding: 4px 10px;
+        padding: 6px 10px;
         line-height: 1.5;
     }
 
@@ -3236,7 +3329,8 @@ body.theme-wave .wave-bg {
        so hovering needs an explicit affordance while the picker is open */
     .form-select option:hover,
     .unit-toggle option:hover {
-        background: color-mix(in srgb, var(--accent-primary) 35%, transparent);
+        background: color-mix(in srgb, var(--accent-primary) 15%, var(--bg-card));
+        color: var(--accent-primary);
     }
 
     /* the selected row reads as a plain accent tint; the platform
@@ -3249,8 +3343,8 @@ body.theme-wave .wave-bg {
 
     .form-select option:checked,
     .unit-toggle option:checked {
-        background: color-mix(in srgb, var(--accent-primary) 25%, transparent);
-        color: var(--accent-secondary);
+        background: color-mix(in srgb, var(--accent-primary) 100%, var(--bg-card));
+        color: white;
     }
 
     .form-select option:focus-visible,

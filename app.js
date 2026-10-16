@@ -472,6 +472,96 @@ async function logReading() {
   showToast('✓ Session logged');
 }
 
+// ─── Title Suggestions ─────────────────────────────────────────────────────
+// A panel below the TITLE field shows only while that field holds focus:
+// empty it lists the three most recently read titles; once text is typed it
+// lists existing titles containing that text, the exact match dropped. Rows
+// are NOT a dropdown — the field stays a plain text input — but they are
+// painted like the branded picker so the panel reads as its twin. Pressing
+// a row fills the field with the exact title. The row binds mousedown, not
+// click: clicking anywhere blurs this field BEFORE its own click event
+// hit-tests the (now hidden) row, but a mousedown listener fires BEFORE
+// that blur (observed order ["md","blur"]) — so blur may hide in sync.
+let titleFieldFocused = false;
+let renderedSignature = null;
+
+function clearTitleSuggestions() {
+  const box = document.getElementById('titleSuggestions');
+  if (!box) return;
+  box.querySelectorAll(':scope > .title-suggestion').forEach((node) => node.remove());
+  box.classList.remove('active');
+}
+
+async function refreshTitleSuggestions() {
+  if (!titleFieldFocused) {
+    clearTitleSuggestions();
+    renderedSignature = null;
+    return;
+  }
+  const box = document.getElementById('titleSuggestions');
+  const typed = document.getElementById('sessionTitle').value.trim();
+  const data = await getData();
+
+  // Latest session date per title; ISO date keys sort lexicographically.
+  const latest = new Map();
+  for (const [dateKey, sessions] of Object.entries(data)) {
+    for (const session of sessions || []) {
+      if (!session.title) continue;
+      const seen = latest.get(session.title);
+      if (!seen || seen < dateKey) latest.set(session.title, dateKey);
+    }
+  }
+
+  let pool = [...latest.entries()].sort((a, b) => b[1].localeCompare(a[1]));
+  if (typed) {
+    const needle = typed.toLowerCase();
+    pool = pool.filter(
+      (entry) => entry[0].toLowerCase().includes(needle) && entry[0] !== typed,
+    );
+  }
+  const picks = pool.slice(0, 3).map(([title]) => title);
+
+  // Never touch the DOM across the await: clearing before getData() would
+  // repaint an EMPTY panel every keystroke — the flicker. So the swap is
+  // synchronous (clear right here, rows right below) and a keystroke that
+  // would not change the visible rows is skipped outright.
+  const signature = picks.join('\u0000');
+  if (signature === renderedSignature) {
+    if (box.children.length) box.classList.add('active');
+    return;
+  }
+  renderedSignature = signature;
+  clearTitleSuggestions();
+  for (const title of picks) {
+    const row = document.createElement('div');
+    row.className = 'title-suggestion';
+    const text = document.createElement('span');
+    text.className = 'title-suggestion-text';
+    text.innerText = title;
+    row.appendChild(text);
+    row.addEventListener('mousedown', () => {
+      document.getElementById('sessionTitle').value = title;
+      void refreshTitleSuggestions();
+    });
+    box.appendChild(row);
+  }
+  if (box.children.length) box.classList.add('active');
+  attachTitleMarquee(box);
+}
+
+document.getElementById('sessionTitle').addEventListener('input', () => {
+  void refreshTitleSuggestions();
+});
+document.getElementById('sessionTitle').addEventListener('focus', () => {
+  titleFieldFocused = true;
+  void refreshTitleSuggestions();
+});
+document.getElementById('sessionTitle').addEventListener('blur', () => {
+  titleFieldFocused = false;
+  const box = document.getElementById('titleSuggestions');
+  if (box) box.classList.remove('active');
+});
+
 // openModal keeps the day's session modal refreshed after a delete from the
 // modal itself. The entries card passes false so deleting a line never pops a
 // modal open.
@@ -1239,20 +1329,21 @@ function coverMarkup(title) {
   `;
 }
 
-// Shared by the recently-read and recent-entries cards: titles too long for
-// one line scroll only while the row is hovered. The overflow is measured on
-// hover, not at render time, because cover images load asynchronously and
-// would otherwise make the title column look wider than it really is (so
-// only the first row would ever qualify).
+// Shared by the recently-read and recent-entries cards AND the TITLE
+// SUGGESTION PANEL: titles too long for one line scroll only while the
+// row is hovered. The overflow is measured on hover, not at render time,
+// because cover images load asynchronously and would otherwise make the
+// title column look wider than it really is (so only the first row would
+// ever qualify). Suggestion rows have no covers, but keeping the
+// measurement at hover time is what lets them share this one code path.
 function attachTitleMarquee(container) {
   for (const titleEl of container.querySelectorAll(
-    '.recent-title, .entry-title',
+    '.recent-title, .entry-title, .title-suggestion',
   )) {
     const inner = titleEl.querySelector(
-      '.recent-title-text, .entry-title-text',
+      '.recent-title-text, .entry-title-text, .title-suggestion-text',
     );
-    const row = titleEl.closest('.recent-book, .entry-item');
-    if (!inner || !row) continue;
+    const row = titleEl.closest('.recent-book, .entry-item, .title-suggestion');
 
     row.addEventListener('mouseenter', () => {
       if (inner.dataset.marqueeReady) return;
@@ -2054,6 +2145,7 @@ async function updateAll() {
   await renderGoalCard(data);
   await renderRecentlyRead(data);
   await renderReadingTime(data);
+  await refreshTitleSuggestions();
 }
 
 // Update duration unit labels dynamically
