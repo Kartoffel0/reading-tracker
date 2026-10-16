@@ -48,6 +48,12 @@ Kindle sidecar parsing and sync scripts are heavily inspired by [kindle-reading-
 | Password          | `kindle`         | SSH password                                            |
 | Session Day Ends At | `04:00`        | Sessions ending after midnight before this time are counted as the previous day; `00:00` disables that |
 
+`Session Day Ends At` is app-wide, not just Kindle Sync: during the hours after
+midnight that come before that boundary, the app treats the previous day as today.
+The Log Session date field, the activity map, the daily goal card and the reading
+stats card all anchor on that day, which is the day such sessions are filed under.
+`00:00` keeps the ordinary midnight boundary.
+
 ## Database Backup & Restore
 
 The ⚙ menu buttons are manual: export writes the entire SQLite file to the place you choose, and restore swaps the live database for the file you pick (the app reads the file first and refuses anything without a `sessions` table). A restore replaces the current database, it does not merge.

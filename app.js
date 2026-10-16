@@ -31,8 +31,21 @@ function changeTheme(themeName) {
 // Daily goal state (persisted via settings)
 let currentGoal = { unit: 'minutes', value: 60 };
 
-// Load saved settings (theme + daily goal) before the first render, so the
-// goal card and the reading stats card use the persisted goal unit on startup.
+// Session-day boundary hour (persisted via settings): a session that ends
+// after midnight but before this hour belongs to the previous calendar day, so
+// the UI anchors its "today" on that previous day during those early hours.
+// 0 disables the shift; mirrors parse_session_day_end_hour in sync_kindle.py.
+const DEFAULT_SESSION_DAY_END_HOUR = 4;
+let sessionDayEndHour = DEFAULT_SESSION_DAY_END_HOUR;
+
+function parseSessionDayEndHour(value) {
+  const hour = parseInt(String(value ?? '').trim().split(':')[0], 10);
+  return hour >= 0 && hour <= 23 ? hour : DEFAULT_SESSION_DAY_END_HOUR;
+}
+
+// Load saved settings (theme, daily goal, session-day boundary) before the
+// first render: the goal/reading-stats cards use the persisted goal unit, and
+// every card's "today" anchor uses the persisted session-day boundary.
 const settingsReady = (async () => {
   try {
     const settings = await window.electronAPI.getSettings();
@@ -45,6 +58,7 @@ const settingsReady = (async () => {
       unit: settings.goalUnit === 'characters' ? 'characters' : 'minutes',
       value: Number(settings.goalValue) > 0 ? Number(settings.goalValue) : 60,
     };
+    sessionDayEndHour = parseSessionDayEndHour(settings.sessionDayEnd);
   } catch (err) {
     console.error('Failed to load settings, using defaults:', err);
   }
@@ -174,6 +188,24 @@ function getDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+// The session day the UI treats as "today", floored to local midnight: during
+// the hours after midnight that precede the session-day boundary, that is the
+// previous calendar day. Every card (date picker, activity map, goal card,
+// reading stats) anchors its highlight, ranges and streaks on this, so the
+// dates shown always match the day the sessions are filed under.
+function sessionDayDate() {
+  const day = new Date();
+  if (sessionDayEndHour > 0 && day.getHours() < sessionDayEndHour) {
+    day.setDate(day.getDate() - 1);
+  }
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
+
+function sessionDayKey() {
+  return getDateKey(sessionDayDate());
+}
+
 // ===== SHARED TOOLTIP FORMATTING =====
 // Every card tooltip (activity map, goal calendar, reading stats) is built from
 // these helpers so they all read the same way:
@@ -244,9 +276,15 @@ const dpMonthNames = [
   'December',
 ];
 
-function initDatePicker() {
-  dpSelectedDate = new Date();
-  dpCurrentDate = new Date();
+// The date picker always opens on the current session day, and the activity
+// map starts on the month that day belongs to. Called on startup once the
+// settings are known, and again if the session-day boundary is changed.
+function alignToSessionDay() {
+  const today = sessionDayDate();
+  currentMonth = today.getMonth();
+  currentYear = today.getFullYear();
+  dpSelectedDate = new Date(today);
+  dpCurrentDate = new Date(today);
   updateDatePickerDisplay();
   renderDatePickerDays();
 }
@@ -295,8 +333,7 @@ function renderDatePickerDays() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
-  const today = new Date();
-  const todayStr = getDateKey(today);
+  const todayStr = sessionDayKey();
   const selectedStr = getDateKey(dpSelectedDate);
 
   // Previous month days
@@ -352,13 +389,10 @@ function getSelectedDateKey() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const today = new Date();
-  dpSelectedDate = new Date(today);
-  dpCurrentDate = new Date(today);
-  initDatePicker();
-  // The goal unit/value must be loaded before the first render, otherwise the
-  // goal card and reading stats render with the default "minutes" goal.
+  // Settings load first: the persisted session-day boundary decides which day
+  // the date picker and every card anchor their "today" on.
   await settingsReady;
+  alignToSessionDay();
   await updateAll();
 });
 
@@ -453,8 +487,7 @@ function calculateStreaks(data) {
   if (dates.length === 0) return { current: 0, best: 0 };
 
   let currentStreak = 0;
-  let checkDate = new Date();
-  checkDate.setHours(0, 0, 0, 0);
+  let checkDate = sessionDayDate();
 
   const todayKey = getDateKey(checkDate);
   if (
@@ -614,8 +647,7 @@ async function renderStreakMap() {
   const lastDay = new Date(currentYear, currentMonth + 1, 0);
   const daysInMonth = lastDay.getDate();
   const startDayOfWeek = firstDay.getDay();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = sessionDayDate();
 
   // Build every grid slot: leading days from the previous month, this month's
   // days, and trailing days from the next month, so the grid is always a full
@@ -794,8 +826,7 @@ function computeGoalStats(data) {
     }
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = sessionDayDate();
   if (!met.has(getDateKey(today))) {
     today.setDate(today.getDate() - 1);
   }
@@ -849,7 +880,7 @@ async function renderGoalCard(data) {
   if (!card) return;
 
   const gauge = document.getElementById('goalGauge');
-  const todayKey = getDateKey(new Date());
+  const todayKey = sessionDayKey();
   const sessions = data[todayKey] || [];
 
   const goalUnit = currentGoal.unit;
@@ -974,8 +1005,7 @@ function renderGoalCalendar(data) {
 
   // All dates are built from local year/month/day so weekday alignment is
   // never shifted by UTC parsing.
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = sessionDayDate();
 
   const firstKey = firstRecordedDate(data);
   // 'T00:00:00' (no Z) is parsed as local time, so weekday alignment is safe.
@@ -1378,7 +1408,7 @@ function rtMonthTickLabel(day) {
 // (0 = current) shifts back by whole periods: weeks by 7 days, months and
 // years by calendar units. All dates are local so weekday alignment is safe.
 function rtPeriodRange() {
-  const now = new Date();
+  const now = sessionDayDate();
   if (rtActivePeriod === 'week') {
     const start = new Date(now);
     start.setDate(start.getDate() - now.getDay() - rtPeriodOffset * 7);
@@ -1558,13 +1588,13 @@ async function renderReadingTime(data) {
   // Bucket key for today within the selected period (only when its range
   // actually contains today), so just that one bar keeps the full-strength
   // accent while the rest stay translucent.
-  const todayKey = getDateKey(new Date());
+  const todayKey = sessionDayKey();
   let todayBucketKey = null;
   if (
     rtActivePeriod === 'all' ||
     (startKey <= todayKey && todayKey <= endKey)
   ) {
-    const t = new Date();
+    const t = sessionDayDate();
     todayBucketKey =
       rtActivePeriod === 'week'
         ? t.getDay()
@@ -2380,6 +2410,11 @@ document
         unit: data.goalUnit === 'characters' ? 'characters' : 'minutes',
         value: Number(data.goalValue) > 0 ? Number(data.goalValue) : 60,
       };
+      const dayEnd = parseSessionDayEndHour(data.sessionDayEnd);
+      if (dayEnd !== sessionDayEndHour) {
+        sessionDayEndHour = dayEnd;
+        alignToSessionDay();
+      }
       closeSettingsModal();
       showToast('Settings saved!');
       // Re-render everything so the goal card and the reading stats card both
