@@ -3230,12 +3230,15 @@ body.theme-wave .wave-bg {
 
     /* the dropdown icon would sit flush right against the edge; pin it
        absolutely so its right inset matches the text's left inset (the
-       padding), and keep it vertically centered */
+       padding), and keep it vertically centered. The transition belongs on this
+       closed-state rule: it is the only rule both states match, so turning
+       back animates the same way turning does. */
     .form-select::picker-icon,
     .unit-toggle::picker-icon {
         position: absolute;
         top: 50%;
         translate: 0 -50%;
+        transition: transform 0.25s ease;
     }
 
     .form-select::picker-icon {
@@ -3244,6 +3247,15 @@ body.theme-wave .wave-bg {
 
     .unit-toggle::picker-icon {
         right: 14px;
+    }
+
+    /* open: the caret turns away from the panel it just opened, so the state is
+       legible without following the panel. The timing matches the panel's own
+       dpFadeIn, so the two read as one gesture rather than a panel arriving
+       behind the icon. */
+    .form-select:open::picker-icon,
+    .unit-toggle:open::picker-icon {
+        transform: rotate(180deg);
     }
 
     .form-select::picker(select),
