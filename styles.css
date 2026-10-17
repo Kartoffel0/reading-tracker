@@ -990,7 +990,7 @@ input[type="submit"]:focus-visible,
     padding: 16px;
     z-index: 100;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    animation: dpFadeIn 0.15s ease;
+    animation: dpFadeIn 0.3s ease;
     backdrop-filter: blur(2px);
 }
 
@@ -1654,7 +1654,6 @@ body.theme-sakura-light .legend-cell {
     font-size: 0.7rem;
     color: var(--text-muted);
     padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.02);
     border-radius: 100px;
 }
 
@@ -1785,7 +1784,6 @@ body.theme-sakura-light .legend-cell {
     background: none;
     border: none;
     color: var(--text-secondary);
-    font-size: 1.1rem;
     cursor: pointer;
     transition: opacity 0.2s ease, color 0.2s ease;
     flex-shrink: 0;
@@ -1834,8 +1832,8 @@ body.theme-sakura-light .legend-cell {
 
 .modal-overlay.active {
     display: flex;
-    background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(4px);
+    animation: fadeIn 0.3s ease;
 }
 
 @keyframes fadeIn {
@@ -1852,7 +1850,7 @@ body.theme-sakura-light .legend-cell {
     max-width: 600px;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     animation: slideUp 0.3s ease;
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -1963,14 +1961,13 @@ body.theme-sakura-light .legend-cell {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding-bottom: 110px;
+    padding-bottom: 116px;
 }
 
 #session-modal .modal-footer {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 10px 24px;
     border-top: none;
     border-radius: 0 0 12px 12px;
     background: transparent;
@@ -1987,11 +1984,11 @@ body.theme-sakura-light .legend-cell {
     display: flex;
     gap: 24px;
     justify-content: center;
-    padding: 10px;
     border: none;
     border-radius: 12px;
     width: 100%;
     pointer-events: auto;
+    padding: 0 40px;
 }
 
 #modalFooterSummaryDiv .day-summary-item {
@@ -2001,9 +1998,17 @@ body.theme-sakura-light .legend-cell {
 #modalFooterSummaryDiv .day-summary-value {
     font-size: 1.3rem;
     font-weight: 700;
-    color: var(--accent-primary);
+    color: var(--text-secondary);
     font-family: 'JetBrains Mono', monospace;
     display: block;
+}
+
+/* Only the stat matching the current goal unit keeps the accent, the same way
+   the entry stats and the card stats do it. The token stays --accent-primary
+   rather than the entries' --accent-secondary because this footer sits under
+   the session rows, which show the same numbers in --accent-primary. */
+#modalFooterSummaryDiv .day-summary-highlight .day-summary-value {
+    color: var(--accent-primary);
 }
 
 #modalFooterSummaryDiv .day-summary-label {
@@ -2030,6 +2035,11 @@ body.theme-sakura-light .legend-cell {
    footer uses instead, so each session reads as its own chip. */
 #session-modal .recent-book {
     background: color-mix(in srgb, var(--accent-primary) 5%, var(--bg-card));
+}
+
+#session-modal .recent-book:hover {
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-card));
+    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
 #session-modal .recent-book .recent-stat {
@@ -2062,15 +2072,15 @@ body.theme-sakura-light .legend-cell {
 }
 
 #session-modal .recent-info > .session-title-row > .session-badge,
-#session-modal .recent-info > .session-title-row > .modal-close-btn {
+#session-modal .recent-info > .session-title-row > .entry-del-btn {
     flex-shrink: 0;
 }
 
 /* The delete mark belongs to the title line, so it is drawn at the title's scale
    instead of the modal header's 1.5rem: a row-sized × would make the line taller
    and drag every stat row below it down. */
-#session-modal .recent-info > .session-title-row > .modal-close-btn {
-    padding: 0 0 0 8px;
+#session-modal .recent-info > .session-title-row > .entry-del-btn {
+    padding: 0;
 }
 
 .session-badge {
@@ -2099,8 +2109,9 @@ body.theme-sakura-light .legend-cell {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     display: flex;
+    flex-grow: 1;
     gap: 24px;
-    justify-content: center;
+    justify-content: space-evenly;
 }
 
 .day-summary-item {
@@ -2110,7 +2121,7 @@ body.theme-sakura-light .legend-cell {
 .day-summary-value {
     font-size: 1.3rem;
     font-weight: 700;
-    color: var(--accent-primary);
+    color: var(--text-secondary);
     font-family: 'JetBrains Mono', monospace;
 }
 
@@ -3250,6 +3261,7 @@ body.theme-wave .wave-bg {
            a margin on the auto-anchored picker separates the two */
         margin-top: 4px;
         backdrop-filter: blur(2px);
+        animation: dpFadeIn 0.3s ease;
     }
 
     .form-select:open::picker(select),

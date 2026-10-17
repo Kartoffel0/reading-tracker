@@ -1918,7 +1918,7 @@ async function openDaySessions(dateKey) {
   const modalBody = document.getElementById('modalBody');
   const footerSummary = document.getElementById('modalFooterSummaryDiv');
 
-  modalTitle.textContent = `Sessions - ${dateKey}`;
+  modalTitle.textContent = `Sessions - ${dateKey.replaceAll("-", " ")}`;
 
   if (!sessions || !Array.isArray(sessions) || sessions.length === 0) {
     modalBody.innerHTML =
@@ -2009,7 +2009,7 @@ async function openDaySessions(dateKey) {
                             <span class="session-title-row">
                                 <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
                                 <span class="session-badge lang-badge">${langCode.toUpperCase()}</span>
-                                <button class="modal-close-btn" onclick="deleteSession('${dateKey}', ${session.id})">&times;</button>
+                                <button class="entry-del-btn" onclick="deleteSession('${dateKey}', ${session.id})">✖</button>
                             </span>
                             <span class="recent-stat"><span class="recent-stat-label">Duration</span> <span class="recent-stat-value${timeClass}">${durationDisplay}</span></span>
                             <span class="recent-stat"><span class="recent-stat-label">Characters</span> <span class="recent-stat-value${charsClass}">${(session.characters || 0).toLocaleString()}</span></span>
@@ -2034,17 +2034,23 @@ async function openDaySessions(dateKey) {
   const avgSpeedDisplay =
     avgSpeed >= 1000 ? `${(avgSpeed / 1000).toFixed(1)}k` : `${avgSpeed}`;
 
+  // Same treatment as the entry stats and the card stats: the one stat whose
+  // unit matches the current goal is the only one that keeps the accent.
+  const goalIsChars = currentGoal.unit === 'characters';
+  const timeClass = goalIsChars ? '' : ' day-summary-highlight';
+  const charsClass = goalIsChars ? ' day-summary-highlight' : '';
+
   const summaryHtml = `
                 <div class="day-summary">
                     <div class="day-summary-item">
                         <div class="day-summary-value">${sessions.length}</div>
                         <div class="day-summary-label">Sessions</div>
                     </div>
-                    <div class="day-summary-item">
+                    <div class="day-summary-item${timeClass}">
                         <div class="day-summary-value">${totalHours}h</div>
                         <div class="day-summary-label">Total Time</div>
                     </div>
-                    <div class="day-summary-item">
+                    <div class="day-summary-item${charsClass}">
                         <div class="day-summary-value">${totalChars.toLocaleString()}</div>
                         <div class="day-summary-label">Characters</div>
                     </div>
@@ -2141,7 +2147,7 @@ async function renderEntries() {
                 <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chars</span></div>
                 <div class="entry-stat entry-speed"><span class="entry-stat-value">${speed.toLocaleString()}</span><span class="entry-stat-unit">/h</span></div>
             </div>
-            <button class="entry-del-btn" onclick="deleteSession('${dateKey}', ${session.id}, false)">&times;</button>
+            <button class="entry-del-btn" onclick="deleteSession('${dateKey}', ${session.id}, false)">✖</button>
           </div>
         `;
     })
