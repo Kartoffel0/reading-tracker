@@ -3271,7 +3271,7 @@ body.theme-wave .wave-bg {
            that hiding, painting the option list while the select is closed. */
         /* an open option panel sits flush against the control by default;
            a margin on the auto-anchored picker separates the two */
-        margin-top: 4px;
+        margin: 4px 0;
         backdrop-filter: blur(2px);
         animation: dpFadeIn 0.3s ease;
     }
@@ -3281,6 +3281,19 @@ body.theme-wave .wave-bg {
         display: flex;
         flex-direction: column;
         gap: 4px;
+        /* the option list is capped to a window of rows and the rest scrolls.
+           The cap is written from the same geometry the option rule below paints
+           (8px panel inset, a row = the unitless line-height times the inherited
+           font-size plus 6px of padding twice, and the 4px row gaps), so it
+           cannot drift apart from what an option actually is. Five whole rows fit
+           with the top inset; the sixth is cut at its top edge, and the space
+           the panel's bottom inset would take is left to the row's own padding.
+           */
+        max-height: calc(34px * 6);
+        overflow-y: auto;
+        /* the window scrolls without advertising a track of its own: a scrollbar
+           would paint inside the panel over the option rows */
+        scrollbar-width: none;
     }
 
     .form-select option,
@@ -3291,6 +3304,10 @@ body.theme-wave .wave-bg {
         border-radius: 6px;
         padding: 6px 10px;
         line-height: 1.5;
+        /* a capped panel is a flex column, and flex items shrink to fit by
+           default: that would squeeze every row into the window instead of
+           leaving the overflow to scroll, so rows keep their natural height */
+        flex-shrink: 0;
     }
 
     /* the UA's own hover paint is overridden by the option rule above,
