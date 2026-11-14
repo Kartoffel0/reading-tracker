@@ -93,11 +93,14 @@ def build_book_path_from_sdr(sdr_dir: str, book_ext: str) -> str:
     sdr_path = Path(sdr_dir)
     sdr_basename = sdr_path.name
     # Strip .sdr from the end
-    if sdr_basename.endswith('.sdr'):
-        book_basename = sdr_basename[:-4] + book_ext
+    if sdr_basename.lower().endswith('.sdr'):
+        book_basename = sdr_basename[:-4]
     else:
         # Fallback: just use the name as-is with the extension
-        book_basename = sdr_basename + book_ext
+        book_basename = sdr_basename
+    # KOReader .sdr folders may already include the book extension
+    if not book_basename.lower().endswith(book_ext.lower()):
+        book_basename += book_ext
     return str(sdr_path.parent / book_basename)
 
 
@@ -130,24 +133,36 @@ def _find_matching_book_in_dir(sdr_dir: str, book_ext: str, book_folder: str | N
     return None
 
 
-def _find_sdr_dirs_for_title(search_dirs: list[str], title: str, book_ext: str) -> Optional[str]:
+def _sdr_dirs_in(search_dir: str, recursive: bool) -> tuple[str, ...]:
+    """List ``.sdr`` directories in a search directory, optionally recursively."""
+    folder = Path(search_dir)
+    if not folder.is_dir():
+        return ()
+    matches = folder.rglob("*.sdr") if recursive else folder.glob("*.sdr")
+    return tuple(str(path) for path in matches if path.is_dir())
+
+
+def _find_sdr_dirs_for_title(
+    search_dirs: list[str],
+    title: str,
+    book_ext: str,
+    recursive_dir: str | None = None,
+) -> Optional[str]:
     """Search multiple directories for a book file matching the given title.
 
     Looks for .sdr directories whose basename (minus .sdr) matches the title,
-    then tries to find the corresponding book file.
+    then tries to find the corresponding book file. ``recursive_dir`` (the
+    documents directory) is walked recursively, so books kept in subfolders -
+    Kindle and KOReader both allow this - are still found.
     """
     normalized_title = _normalize_title(title)
+    recursive_path = os.path.abspath(recursive_dir) if recursive_dir else None
 
     for search_dir in search_dirs:
-        folder_path = Path(search_dir)
-        if not folder_path.is_dir():
-            continue
+        recursive = recursive_path is not None and os.path.abspath(search_dir) == recursive_path
 
-        # Find all .sdr directories in this folder
-        for sdr_dir in folder_path.glob("*.sdr"):
-            if not sdr_dir.is_dir():
-                continue
-
+        for sdr_path in _sdr_dirs_in(search_dir, recursive):
+            sdr_dir = Path(sdr_path)
             sdr_name = sdr_dir.name
             if sdr_name.endswith('.sdr'):
                 book_name_prefix = sdr_name[:-4]
@@ -157,15 +172,18 @@ def _find_sdr_dirs_for_title(search_dirs: list[str], title: str, book_ext: str) 
             # Check if the book name prefix matches the title
             normalized_prefix = _normalize_title(book_name_prefix)
 
+            # The book lives next to its .sdr folder
+            sdr_folder = str(sdr_dir.parent)
+
             # Try direct match
             if normalized_title == normalized_prefix:
-                book_path = _find_matching_book_in_dir(str(sdr_dir), book_ext, str(folder_path))
+                book_path = _find_matching_book_in_dir(sdr_path, book_ext, sdr_folder)
                 if book_path:
                     return book_path
 
             # Try partial match (one contains the other)
             if normalized_title in normalized_prefix or normalized_prefix in normalized_title:
-                book_path = _find_matching_book_in_dir(str(sdr_dir), book_ext, str(folder_path))
+                book_path = _find_matching_book_in_dir(sdr_path, book_ext, sdr_folder)
                 if book_path:
                     return book_path
 
@@ -177,7 +195,7 @@ def _find_sdr_dirs_for_title(search_dirs: list[str], title: str, book_ext: str) 
                 prefix_words = set(normalized_prefix.split())
                 common_words = title_words & prefix_words
                 if common_words:
-                    book_path = _find_matching_book_in_dir(str(sdr_dir), book_ext, str(folder_path))
+                    book_path = _find_matching_book_in_dir(sdr_path, book_ext, sdr_folder)
                     if book_path:
                         return book_path
 
@@ -190,6 +208,7 @@ def find_matching_book(
     book_folder: str | None = None,
     sidecar_dir: str = '.',
     max_books: int | None = None,
+    book_ext: str | None = None,
 ) -> Optional[str]:
     """Find a book file matching the given clipping title and reader extension.
 
@@ -202,15 +221,17 @@ def find_matching_book(
 
     Args:
         title: Book title from a clipping entry
-        reader_ext: The sidecar reader extension (e.g., '.yjr', '.azw3r', '.mbp1')
+        reader_ext: The sidecar reader extension (e.g., '.yjr', '.azw3r', '.mbp1', '.sdr')
         book_folder: Optional specific directory to search first
         sidecar_dir: Path to the sidecar directory or file (used to determine search dirs)
         max_books: Optional limit on number of books to process
+        book_ext: Explicit book extension. KOReader sidecars declare it in the
+            metadata file name (metadata.epub.lua), so it overrides reader_ext.
 
     Returns:
         Path to the matching book file, or None if no match found
     """
-    book_ext = get_book_ext_for_reader(reader_ext)
+    book_ext = book_ext or get_book_ext_for_reader(reader_ext)
     if book_ext is None:
         return None
 
@@ -244,11 +265,32 @@ def find_matching_book(
             unique_dirs.append(d)
     search_dirs = unique_dirs
 
-    return _find_sdr_dirs_for_title(search_dirs, title, book_ext)
+    return _find_sdr_dirs_for_title(search_dirs, title, book_ext, recursive_dir=str(sidecar_path))
 
 
 def extract_book_info(book_path: str) -> BookInfo:
     """Extract metadata from a book file and its sidecar."""
+    book_ext = os.path.splitext(book_path)[1]
+
+    # Clean fallback title
+    fallback_title = os.path.basename(book_path).rsplit('.', 1)[0]
+    for ext in ('.sdr', '.yjr', '.azw3r', '.mbp1'):
+        fallback_title = fallback_title.rsplit(ext, 1)[0]
+    fallback_title = fallback_title.strip(' -_')
+
+    if book_ext.lower() == '.epub':
+        from .epub_extractor import read_epub_metadata
+
+        metadata = read_epub_metadata(book_path)
+        return BookInfo(
+            book_path=book_path,
+            book_title=metadata.get("title") or fallback_title,
+            asin=metadata.get("identifier"),
+            author=metadata.get("author"),
+            language=metadata.get("language"),
+            book_extension=book_ext,
+        )
+
     from .kfxlib import YJ_Book
 
     book = YJ_Book(book_path)
@@ -259,16 +301,9 @@ def extract_book_info(book_path: str) -> BookInfo:
     author = book.get_metadata_value("author", default="Unknown")
     asin = book.get_metadata_value("ASIN", default=None)
     language = book.get_metadata_value("language", default=None)
-    book_ext = os.path.splitext(book_path)[1]
 
     # ASIN is already extracted from book metadata above; sidecar files are binary KRDS
     # and require the same decoder, so we rely on the book's metadata
-
-    # Clean fallback title
-    fallback_title = os.path.basename(book_path).rsplit('.', 1)[0]
-    for ext in ('.sdr', '.yjr', '.azw3r', '.mbp1'):
-        fallback_title = fallback_title.rsplit(ext, 1)[0]
-    fallback_title = fallback_title.strip(' -_')
 
     return BookInfo(
         book_path=book_path,

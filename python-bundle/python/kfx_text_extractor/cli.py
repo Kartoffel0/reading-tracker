@@ -40,6 +40,23 @@ def _extract_numeric_pid(pos) -> Optional[int]:
         return None
 
 
+def _build_book_index(book_path: str):
+    """Build a text index for a book: EPUB xpointer offsets or KFX pids."""
+    if book_path.lower().endswith('.epub'):
+        from .epub_extractor import build_epub_index
+
+        return build_epub_index(book_path)
+    return build_pid_index(book_path)
+
+
+def _resolve_position(index, pos) -> Optional[int]:
+    """Resolve a sidecar position (pid or XPointer) to a numeric index."""
+    resolver = getattr(index, 'resolve_position', None)
+    if resolver is not None:
+        return resolver(pos)
+    return _extract_numeric_pid(pos)
+
+
 def _build_parser():
     """Build and return the CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -48,7 +65,8 @@ def _build_parser():
     )
 
     parser.add_argument('input_path', nargs='?', default='.',
-                        help='Path to a single .sdr/ directory or documents directory to scan for sidecar files')
+                        help='Path to a single .sdr/ directory or documents directory to scan for '
+                             'sidecar files (Kindle KRDS or KOReader metadata.*.lua)')
     parser.add_argument('-o', '--output', default=None,
                         help='Output CSV file path. If omitted, returns JSON instead of writing a file.')
     parser.add_argument('--max-books', type=int, default=None,
@@ -65,7 +83,7 @@ def _build_parser():
     parser.add_argument('--scan-only', action='store_true', default=False,
                         help='Only scan and list sidecar files containing valid Krs.start/Krs.end pairs, without full processing')
     parser.add_argument('--book-folder', type=str, default=None,
-                        help='Directory to search for book files (KFX/AZW3/MOBI). '
+                        help='Directory to search for book files (KFX/AZW3/MOBI/EPUB). '
                              'Searches here first, then sidecar directory, then parent directory.')
     return parser
 
@@ -149,6 +167,7 @@ def run_sidecar_mode(
             reader_ext=session.reader_ext or ".yjr",
             book_folder=book_folder,
             sidecar_dir=sidecar_dir,
+            book_ext=getattr(session, 'book_extension', None),
         )
         if book_path is None:
             print(f"  Warning: No book file found for '{session.book_title}'")
@@ -175,18 +194,24 @@ def run_sidecar_mode(
 
         # Build text index
         try:
-            index = build_pid_index(book_path)
+            index = _build_book_index(book_path)
             print(f"  Built index: {index.total_pids} pids, {len(index.pid_map)} chunks")
         except Exception as e:
             print(f"  Error building index: {e}")
             continue
 
-        # Extract numeric pids for text extraction
-        start_int = _extract_numeric_pid(session.start_pid)
-        end_int = _extract_numeric_pid(session.end_pid)
+        # Resolve sidecar positions to text offsets
+        start_int = _resolve_position(index, session.start_pid)
+        end_int = _resolve_position(index, session.end_pid)
+        if getattr(session, 'end_exclusive', False) and end_int is not None:
+            end_int -= 1
         if start_int is None or end_int is None:
-            print(f"  Warning: Could not parse pids ({session.start_pid}, {session.end_pid})")
+            print(f"  Warning: Could not resolve positions ({session.start_pid}, {session.end_pid})")
             continue
+
+        # Export resolved numeric offsets instead of raw sidecar positions
+        session.start_pid = start_int
+        session.end_pid = end_int
 
         # Extract text
         try:

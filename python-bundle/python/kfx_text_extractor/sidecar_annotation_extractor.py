@@ -39,11 +39,18 @@ KRS_END_MARKER = "Krs.end"
 
 
 def _timestamp_to_iso(ts):
-    """Convert a millisecond timestamp to ISO 8601 format (matching krds.py)."""
+    """Convert a KRDS millisecond epoch timestamp to an ISO 8601 UTC string.
+
+    KRDS stores an absolute epoch (UTC). Keep the "+00:00" offset instead of
+    converting to the host's local time and dropping the offset, so downstream
+    code can render it in the configured timezone.
+    """
     if ts in (0, -1):
         return None
     try:
-        return datetime.datetime.fromtimestamp(ts / 1000.0).isoformat()
+        return datetime.datetime.fromtimestamp(
+            ts / 1000.0, datetime.timezone.utc
+        ).isoformat()
     except Exception:
         return None
 
@@ -63,6 +70,8 @@ class ClippingEntry:
         "book_title_metadata",
         "language",
         "reader_ext",
+        "book_extension",
+        "end_exclusive",
     )
 
     def __init__(self, book_title, start_pid, end_pid, start_date, end_date,
@@ -78,8 +87,12 @@ class ClippingEntry:
         # Optional fields populated from KFX metadata
         self.book_title_metadata = None
         self.language = None
-        # Sidecar reader extension (e.g., '.yjr', '.azw3r', '.mbp1')
+        # Sidecar reader extension (e.g., '.yjr', '.azw3r', '.mbp1', '.sdr')
         self.reader_ext = reader_ext
+        # Book extension declared by the sidecar (KOReader: metadata.<ext>.lua)
+        self.book_extension = None
+        # True when end_pid is an exclusive end offset (KOReader pos1)
+        self.end_exclusive = False
 
 
 def _strip_ext(name, exts):
@@ -301,6 +314,28 @@ def _decode_json_sidecar(filepath):
 
 
 
+def _parse_creation_time(creation_time):
+    """Parse a Krs marker timestamp for chronological sorting.
+
+    Kindle stamps are UTC ISO strings with an offset; KOReader stamps are
+    naive local strings. Aware values are normalized to naive UTC so every
+    key is comparable (mixing aware and naive datetimes raises TypeError).
+    """
+    if not creation_time:
+        return datetime.datetime.min
+    try:
+        parsed = datetime.datetime.fromisoformat(creation_time)
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        return parsed
+    except ValueError:
+        pass
+    try:
+        return datetime.datetime.strptime(creation_time, "%Y/%m/%d %H:%M:%S")
+    except ValueError:
+        return datetime.datetime.min
+
+
 def _extract_krs_pairs_from_sidecar(sidecar_data, book_title):
     """Extract Krs.start/Krs.end paired entries from a single sidecar's annotation data.
 
@@ -348,22 +383,7 @@ def _extract_krs_pairs_from_sidecar(sidecar_data, book_title):
             krs_notes.append(note)
 
     # Sort by creationTime (parse as datetime for comparison)
-    def parse_creation_time(note):
-        """Parse creation time string for sorting."""
-        creation_time = note.get("creationTime", "")
-        if not creation_time:
-            return datetime.datetime.min
-        try:
-            for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
-                try:
-                    return datetime.datetime.strptime(creation_time, fmt)
-                except ValueError:
-                    continue
-            return datetime.datetime.min
-        except Exception:
-            return datetime.datetime.min
-
-    krs_notes.sort(key=parse_creation_time)
+    krs_notes.sort(key=lambda note: _parse_creation_time(note.get("creationTime", "")))
 
     # Step 3: Find nearest highlight for each Krs note, extract position
     def find_nearest_highlight(note):
@@ -592,7 +612,16 @@ class Deserializer:
 
 
 def _extract_from_sdr_directory(sdr_dir):
-    """Extract entries from a single .sdr/ directory.
+    """Extract entries from a single .sdr/ directory (Kindle or KOReader)."""
+    from .koreader_extractor import extract_from_koreader_sdr, find_koreader_metadata
+
+    if find_koreader_metadata(sdr_dir) is not None:
+        return extract_from_koreader_sdr(sdr_dir)
+    return _extract_kindle_sdr_entries(sdr_dir)
+
+
+def _extract_kindle_sdr_entries(sdr_dir):
+    """Extract entries from a single Kindle .sdr/ directory.
 
     Decodes binary sidecar files directly in memory (no JSON file dependency)
     and extracts KRS pairs from them.
@@ -663,54 +692,22 @@ def list_valid_sidecars(documents_dir, max_books=None):
     Returns:
         List of sidecar file/directory paths with valid Krs.start/Krs.end pairs.
     """
-    valid_sidecars = []
-
-    # Check if documents_dir is itself a sidecar directory (e.g., .sdr/ folder)
+    # Single sidecar directory mode (e.g. a .sdr/ folder)
     if ".sdr" in os.path.basename(documents_dir).lower():
-        # Single sidecar directory mode
-        book_title = _clean_title(documents_dir)
-        # Collect all binary sidecar files
-        for ext in READER_EXTS:
-            for filepath in glob.glob(os.path.join(documents_dir, "*" + ext)):
-                try:
-                    with open(filepath, 'rb') as f:
-                        binary_data = f.read()
-                    sidecar_data = _decode_krds(binary_data)
-                    entries = _extract_krs_pairs_from_sidecar(sidecar_data, book_title)
-                    if entries:
-                        if documents_dir not in valid_sidecars:
-                            valid_sidecars.append(documents_dir)
-                        break
-                except Exception:
-                    continue
-        return valid_sidecars
+        return [documents_dir] if _extract_from_sdr_directory(documents_dir) else []
 
     # Mode: documents_dir contains multiple .sdr/ folders
+    valid_sidecars = []
     count = 0
     for root, dirs, files in os.walk(documents_dir):
         for d in dirs:
-            if ".sdr" in d.lower():
-                sdr_dir = os.path.join(root, d)
-                if max_books and count >= max_books:
-                    break
-                count += 1
-                book_title = _clean_title(sdr_dir)
-                # Collect all binary sidecar files
-                for ext in READER_EXTS:
-                    for filepath in glob.glob(os.path.join(sdr_dir, "*" + ext)):
-                        try:
-                            with open(filepath, 'rb') as f:
-                                binary_data = f.read()
-                            sidecar_data = _decode_krds(binary_data)
-                            entries = _extract_krs_pairs_from_sidecar(sidecar_data, book_title)
-                            if entries:
-                                if sdr_dir not in valid_sidecars:
-                                    valid_sidecars.append(sdr_dir)
-                            break
-                        except Exception as e:
-                            print(f"Error decoding {filepath}: {e}")
-                            continue
-        if max_books and count >= max_books:
-            break
+            if ".sdr" not in d.lower():
+                continue
+            if max_books and count >= max_books:
+                return valid_sidecars
+            count += 1
+            sdr_dir = os.path.join(root, d)
+            if _extract_from_sdr_directory(sdr_dir) and sdr_dir not in valid_sidecars:
+                valid_sidecars.append(sdr_dir)
 
     return valid_sidecars

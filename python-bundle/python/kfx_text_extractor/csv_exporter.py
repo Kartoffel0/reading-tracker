@@ -1,6 +1,7 @@
 """Export reading sessions to CSV format."""
 
 import csv
+import re
 import zoneinfo
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -37,19 +38,39 @@ DATE_ONLY_FORMAT = '%Y-%m-%d'
 SESSION_ADJUSTMENT_HOURS = 4
 
 
+# The app's timezone setting is a UTC offset ("-3", "+5:30"), which ZoneInfo
+# rejects; parse those as fixed offsets.
+_UTC_OFFSET_RE = re.compile(
+    r'^(?:UTC)?(?P<sign>[+-])(?P<hours>\d{1,2})(?::?(?P<minutes>\d{2}))?$',
+    re.IGNORECASE,
+)
+
+
 def _load_timezone(tz_str: str):
-    """Load a timezone by name, with fallback to UTC.
-    
-    Handles special cases like 'UTC' on Windows where tzdata may not be installed.
+    """Load a timezone from an IANA name or a UTC offset like '-3' / '+5:30'.
+
+    Handles special cases like 'UTC' on Windows where tzdata may be missing.
+    Unusable values fall back to UTC.
     """
-    if tz_str.upper() == 'UTC':
+    value = str(tz_str).strip()
+    if value.upper() == 'UTC':
         return timezone.utc
-    
+
     try:
-        return zoneinfo.ZoneInfo(tz_str)
+        return zoneinfo.ZoneInfo(value)
     except Exception:
-        # Fallback for unknown timezones or missing tzdata on any platform
-        return timezone.utc
+        pass
+
+    match = _UTC_OFFSET_RE.match(value)
+    if match:
+        hours = int(match.group('hours'))
+        minutes = int(match.group('minutes') or 0)
+        if hours <= 23 and minutes <= 59:
+            offset = timedelta(hours=hours, minutes=minutes)
+            return timezone(-offset if match.group('sign') == '-' else offset)
+
+    # Fallback for unknown timezones or missing tzdata on any platform
+    return timezone.utc
 
 
 def _format_datetime(dt: datetime, include_time: bool = True) -> str:
@@ -195,28 +216,29 @@ def export_sessions(
 
 def _parse_date_to_aware(date_str: Optional[str], tz) -> Optional[datetime]:
     """Parse a date string from sidecar annotations to a timezone-aware datetime.
-    
-    Sidecar dates come as ISO format strings that represent UTC timestamps
-    converted via datetime.fromtimestamp() (local time of the machine that created them).
-    
+
+    Kindle KRDS timestamps are absolute epoch values and arrive with a UTC
+    offset. KOReader writes device-local wall-clock times (no offset), so naive
+    strings are interpreted in the configured timezone - which is the device
+    offset - instead of being mislabelled as UTC.
+
     Args:
         date_str: ISO format date string (may include time, may be None)
         tz: target timezone
-    
+
     Returns:
         Timezone-aware datetime or None
     """
     if date_str is None:
         return None
-    
+
     try:
         dt = datetime.fromisoformat(date_str)
-        
-        # If the parsed datetime has no timezone info, assume it was in UTC
+
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        
-        # Convert to target timezone
+            dt = dt.replace(tzinfo=tz)
+
+        # Convert to target timezone (no-op for naive local times)
         dt = dt.astimezone(tz)
         return dt
     except (ValueError, TypeError, OSError):

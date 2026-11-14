@@ -13,6 +13,9 @@ def __getattr__(name):
     if name == "build_pid_index":
         from .kfx_index import build_pid_index
         return build_pid_index
+    if name == "build_epub_index":
+        from .epub_extractor import build_epub_index
+        return build_epub_index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Public CLI functions (importable from top-level package)
@@ -26,6 +29,7 @@ __all__ = [
     "extract_from_sidecars",
     "list_valid_sidecars",
     "build_pid_index",
+    "build_epub_index",
     "extract_text",
     "export_sessions",
     "export_sessions_to_dicts",

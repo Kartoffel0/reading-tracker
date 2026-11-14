@@ -28,14 +28,34 @@ DEFAULT_CACHE_DIR = os.path.join(os.environ.get("APPDATA", ""), "reading-tracker
 # wall-clock time is attributed to the previous day. "00:00" disables it.
 DEFAULT_SESSION_DAY_END = "04:00"
 
+# User-visible partition. Kindle's own library lives in KINDLE_DOC_PATH, but
+# KOReader opens books from anywhere under KINDLE_ROOT (and keeps the sidecar
+# next to the book), so discovery scans the whole partition.
+KINDLE_ROOT = "/mnt/us"
 KINDLE_DOC_PATH = "/mnt/us/documents"
+
+# KOReader's install and central metadata dirs never hold sidecars that sit
+# next to their book, and hash-named ones can't be mapped back to a book.
+SKIPPED_REMOTE_PREFIXES = ("/mnt/us/koreader/", "/mnt/us/system/")
+
+# Remote prefix -> local cache prefix. Documents keep the historical layout
+# (no cache migration); everything else is namespaced so the two can't collide.
+CACHE_ROOT_MAP = (
+    (KINDLE_DOC_PATH + "/", ""),
+    (KINDLE_ROOT + "/", "_user/"),
+)
 
 # KRDS sidecar extensions — the file suffixes we look for on the Kindle
 METRICS_EXTS = (".azw3f", ".yjf", ".mbs")
 READER_EXTS = (".azw3r", ".yjr", ".mbp1")
 SIDECAR_EXTS = METRICS_EXTS + READER_EXTS
 
-BOOK_EXTS = (".azw3", ".azw", ".mobi", ".kfx")
+# KOReader strips the book's last suffix for the sidecar folder:
+# `Book.epub` -> `Book.sdr/metadata.epub.lua`
+KOREADER_METADATA_PATTERN = "metadata.*.lua"
+
+# Book formats the extractor can index (KFX family + EPUB, KOReader's usual format)
+BOOK_EXTS = (".azw3", ".azw", ".mobi", ".kfx", ".epub")
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -43,6 +63,20 @@ BOOK_EXTS = (".azw3", ".azw", ".mobi", ".kfx")
 def status(msg: str) -> None:
     """Print a status message flushed to stdout."""
     print(msg, flush=True)
+
+
+def _local_path(remote_path: str, cache_dir: str) -> str:
+    """Map a remote device path into the local cache directory.
+
+    Files under KINDLE_DOC_PATH keep the historical cache layout; files
+    elsewhere on the partition live under ``_user/`` so the two roots can
+    never shadow each other.
+    """
+    for prefix, local_prefix in CACHE_ROOT_MAP:
+        if remote_path.startswith(prefix):
+            rel = local_prefix + remote_path[len(prefix):]
+            return os.path.join(cache_dir, *rel.split("/"))
+    return os.path.join(cache_dir, *posixpath.basename(remote_path).split("/"))
 
 
 def parse_session_day_end_hour(value: str) -> int:
@@ -133,45 +167,51 @@ def connect(settings: dict) -> paramiko.SSHClient:
 
 
 # ─── Sidecar Discovery ───────────────────────────────────────────────────────
-def discover_sidecars(client: paramiko.SSHClient) -> list[str]:
-    """Find all sidecar files on Kindle using `find` with known extensions.
+def _remote_find(
+    client: paramiko.SSHClient,
+    patterns: list[str],
+    timeout: int = 120,
+) -> list[str]:
+    """Run `find` over the user partition and return matching remote paths."""
+    find_expr = " -o ".join("-name '%s'" % pattern for pattern in patterns)
+    cmd = "find '%s' \\( %s \\)" % (KINDLE_ROOT, find_expr)
+    _in, out, _err = client.exec_command(cmd, timeout=timeout)
+    return [
+        path
+        for path in out.read().decode("utf-8", "replace").splitlines()
+        if path.strip() and not path.startswith(SKIPPED_REMOTE_PREFIXES)
+    ]
 
-    Uses the same `find` pattern as krd-dashboard.py for reliability.
+
+def discover_sidecars(client: paramiko.SSHClient) -> list[str]:
+    """Find Kindle KRDS sidecars and KOReader metadata files using `find`.
+
+    Scans the whole user partition, because KOReader opens books from anywhere
+    on it: Kindle sidecars are extension-named files (optionally inside a
+    `<title>.sdr` folder), KOReader sidecars are
+    `<book-without-ext>.sdr/metadata.<ext>.lua` next to the book.
     """
     status("Discovering sidecars...")
     # Build find expression: -name '*.azw3f' -o -name '*.yjf' -o ...
-    find_expr = " -o ".join("-name '*%s'" % ext for ext in SIDECAR_EXTS)
-    cmd = "find '%s' \\( %s \\)" % (KINDLE_DOC_PATH, find_expr)
-    _in, out, _err = client.exec_command(cmd, timeout=30)
-    files = [
-        l for l in out.read().decode("utf-8", "replace").splitlines()
-        if l.strip()
-    ]
-    status("Found %d sidecars" % len(files))
-    print(files)
-    return files
+    patterns = ["*.%s" % ext.lstrip(".") for ext in SIDECAR_EXTS]
+    patterns.append(KOREADER_METADATA_PATTERN)
+    files = _remote_find(client, patterns)
 
-
-def discover_sdr_folders(client: paramiko.SSHClient) -> list[str]:
-    """Find all .sdr folders on Kindle (legacy compatibility)."""
-    status("Discovering .sdr folders...")
-    stdin, stdout, stderr = client.exec_command(
-        "find '%s' -name '*.sdr' -type d 2>/dev/null" % _shq(KINDLE_DOC_PATH),
-        timeout=30
+    koreader_count = sum(
+        1 for path in files
+        if posixpath.basename(path).startswith("metadata.") and path.endswith(".lua")
     )
-    output = stdout.read().decode("utf-8", "replace").strip()
-    if not output:
-        return []
-    return [l for l in output.split("\n") if l.strip()]
+    status("Found %d sidecars (%d Kindle, %d KOReader)" % (
+        len(files), len(files) - koreader_count, koreader_count,
+    ))
+    return files
 
 
 # ─── File Pulling ────────────────────────────────────────────────────────────
 
 def pull_sidecar(client: paramiko.SSHClient, remote_path: str, docs_cache: str) -> None:
     """Pull a single sidecar file from Kindle using proven _ssh_read pattern."""
-    # Compute local path relative to docs_cache
-    rel = posixpath.relpath(remote_path, KINDLE_DOC_PATH)
-    local = os.path.join(docs_cache, *rel.split("/"))
+    local = _local_path(remote_path, docs_cache)
     os.makedirs(os.path.dirname(local), exist_ok=True)
 
     # Use proven _ssh_read for reliable binary transfer
@@ -180,31 +220,9 @@ def pull_sidecar(client: paramiko.SSHClient, remote_path: str, docs_cache: str) 
         f.write(data)
 
 
-def pull_sidecar_folder(client: paramiko.SSHClient, remote_dir: str, local_dir: str) -> None:
-    """Pull all files from a .sdr folder on Kindle."""
-    # List files in the remote folder
-    stdin, stdout, stderr = client.exec_command(
-        "ls '%s'" % _shq(remote_dir), timeout=10
-    )
-    files = stdout.read().decode("utf-8", "replace").strip().split("\n")
-
-    for fname in files:
-        if not fname:
-            continue
-        remote_file = posixpath.join(remote_dir, fname)
-        local_file = os.path.join(local_dir, fname)
-
-        # Use proven _ssh_read for reliable binary transfer
-        data = _ssh_read(client, remote_file)
-        if data:
-            with open(local_file, "wb") as f:
-                f.write(data)
-
-
 def pull_book(client: paramiko.SSHClient, remote_path: str, cache_dir: str) -> None:
     """Pull a single book file from Kindle using proven _ssh_read pattern."""
-    rel = posixpath.relpath(remote_path, KINDLE_DOC_PATH)
-    local = os.path.join(cache_dir, rel)
+    local = _local_path(remote_path, cache_dir)
     os.makedirs(os.path.dirname(local), exist_ok=True)
 
     data = _ssh_read(client, remote_path)
@@ -212,12 +230,26 @@ def pull_book(client: paramiko.SSHClient, remote_path: str, cache_dir: str) -> N
         f.write(data)
 
 
-def find_books_to_pull(
-    client: paramiko.SSHClient,
-    all_sidecar_paths: list[str],
-    cache_dir: str,
-) -> list[str]:
-    """Find book files (.kfx, .azw3, .azw, .mobi) that need to be pulled.
+def _book_stem(name: str) -> str:
+    """Reduce a book or sidecar file name to its book stem.
+
+    Kindle sidecars are ``Book.sdr/Book.yjr``. KOReader strips the book's last
+    suffix for the folder (``Book.epub`` -> ``Book.sdr/metadata.epub.lua``),
+    but some layouts keep it (``Book.epub.sdr``), so strip ``.sdr`` and every
+    known book/sidecar extension rather than exactly one.
+    """
+    while True:
+        lowered = name.lower()
+        for ext in (".sdr",) + BOOK_EXTS + SIDECAR_EXTS:
+            if lowered.endswith(ext):
+                name = name[:-len(ext)]
+                break
+        else:
+            return name
+
+
+def find_books_to_pull(client: paramiko.SSHClient, cache_dir: str) -> list[str]:
+    """Find book files that have valid reading data and are missing from the cache.
 
     Uses the same `find` pattern as discover_sidecars for book extensions,
     then filters against valid sidecars from run_scan_only.
@@ -228,49 +260,19 @@ def find_books_to_pull(
 
     # Get valid sidecar paths from local cache
     valid_sidecar_paths = run_scan_only(str(cache_dir))
-
-    # Build set of valid book base names from sidecar paths
-    # Strip sidecar extensions (or .sdr) to get the base book name
-    valid_bases = set()
-    for path in valid_sidecar_paths:
-        path_name = Path(path).name
-        # Try stripping sidecar extensions first
-        for ext in SIDECAR_EXTS:
-            if path_name.endswith(ext):
-                valid_bases.add(path_name[:-len(ext)])
-                break
-            else:
-                # If not a sidecar extension, check for .sdr
-                if path_name.endswith('.sdr'):
-                    valid_bases.add(path_name[:-4])
+    valid_stems = {_book_stem(Path(path).name) for path in valid_sidecar_paths}
 
     # Find all book files on Kindle using `find` (same pattern as discover_sidecars)
-    find_expr = " -o ".join("-name '*%s'" % ext for ext in BOOK_EXTS)
-    cmd = "find '%s' \\( %s \\)" % (KINDLE_DOC_PATH, find_expr)
-    _in, out, _err = client.exec_command(cmd, timeout=30)
-    book_files = [
-        l for l in out.read().decode("utf-8", "replace").splitlines()
-        if l.strip()
-    ]
+    book_files = _remote_find(client, ["*" + ext for ext in BOOK_EXTS])
 
-    # Filter books: only pull if the book base name is in valid_bases
-    # and the book doesn't already exist in the local cache
+    # Filter books: only pull if the book has a valid sidecar and
+    # the book doesn't already exist in the local cache
     books_to_pull = []
     for book_remote in book_files:
-        book_filename = Path(book_remote).name
-        # Strip book extension to get base name
-        book_base = book_filename
-        for ext in BOOK_EXTS:
-            if book_filename.endswith(ext):
-                book_base = book_filename[:-len(ext)]
-                break
-
-        if book_base not in valid_bases:
+        if _book_stem(Path(book_remote).name) not in valid_stems:
             continue
 
-        # Check if book already exists locally
-        book_rel = book_filename
-        local_book = os.path.join(cache_dir, book_rel).replace("/", os.sep)
+        local_book = _local_path(book_remote, cache_dir)
         if not os.path.exists(local_book):
             books_to_pull.append(book_remote)
 
@@ -338,8 +340,7 @@ def run_sync(from_cache: bool = False) -> dict:
 
         # Phase 3: Find and pull books (only for sidecars with valid reading data)
         status("Analyzing sidecars...")
-        books_to_pull = find_books_to_pull(client, sidecar_paths, str(cache_dir))
-        print(books_to_pull)
+        books_to_pull = find_books_to_pull(client, str(cache_dir))
         books_pulled = 0
         if books_to_pull:
             status("Pulling book files... (%d books)" % len(books_to_pull))
