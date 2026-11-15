@@ -230,11 +230,18 @@ async function resolveCover(title, language) {
   const key = coverKey(title);
   const index = loadCoverIndex();
   const entry = index[key];
-  const file = coverPathFor(key);
 
-  if (entry && entry.file && fs.existsSync(file)) {
-    return { key, status: entry.status, url: pathToFileURL(file).href };
+  // A stored entry names its own file: manual uploads keep the picked
+  // extension (.png/.jpeg/...), so building a hard-coded .jpg path here would
+  // miss them and re-download the original cover over the user's replacement.
+  if (entry && entry.file) {
+    const stored = path.join(COVERS_DIR, path.basename(entry.file));
+    if (fs.existsSync(stored)) {
+      return { key, status: entry.status, url: pathToFileURL(stored).href };
+    }
   }
+
+  const file = coverPathFor(key);
 
   const normalized = normalizeTitle(title);
   if (!normalized) {
