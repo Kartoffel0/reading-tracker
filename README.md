@@ -41,22 +41,18 @@ Kindle sidecar parsing and sync scripts are heavily inspired by [kindle-reading-
 
 #### Kindle Sync Settings
 
-| Field             | Default          | Description                                             |
-| ----------------- | ---------------- | ------------------------------------------------------- |
-| Kindle Host       | `192.168.15.244` | Kindle's local IP address                               |
-| Kindle User       | `root`           | SSH username                                            |
-| Password          | `kindle`         | SSH password                                            |
-| Session Day Ends At | `04:00`        | Sessions ending after midnight before this time are counted as the previous day; `00:00` disables that |
+| Field               | Default          | Description                                                                                            |
+| ------------------- | ---------------- | ------------------------------------------------------------------------------------------------------ |
+| Kindle Host         | `192.168.15.244` | Kindle's local IP address                                                                              |
+| Kindle User         | `root`           | SSH username                                                                                           |
+| Password            | `kindle`         | SSH password                                                                                           |
+| Session Day Ends At | `04:00`          | Sessions ending after midnight before this time are counted as the previous day; `00:00` disables that |
 
-`Session Day Ends At` is app-wide, not just Kindle Sync: during the hours after
-midnight that come before that boundary, the app treats the previous day as today.
-The Log Session date field, the activity map, the daily goal card and the reading
-stats card all anchor on that day, which is the day such sessions are filed under.
-`00:00` keeps the ordinary midnight boundary.
+`Session Day Ends At` is app-wide, not just Kindle Sync. `00:00` keeps the normal midnight boundary.
 
 ## Database Backup & Restore
 
-The ⚙ menu buttons are manual: export writes the entire SQLite file to the place you choose, and restore swaps the live database for the file you pick (the app reads the file first and refuses anything without a `sessions` table). A restore replaces the current database, it does not merge.
+The ⚙ menu buttons are manual: export writes the entire SQLite file to the place you choose, and restore swaps the live database for the file you pick. A restore replaces the current database, it does not merge.
 
 Automatic backups:
 
@@ -64,7 +60,6 @@ Automatic backups:
 - Snapshots live in `backups/` next to `data.db` inside the app-data folder (`%APPDATA%\reading-tracker` on Windows), named `data-YYYY-MM-DD-HH-MM-SS.db` so the folder lists as a timeline.
 - Only the 10 newest snapshots are kept; older ones are deleted. Files you put in that folder yourself are never touched.
 - A snapshot is `data.db` only. Cover images under `covers/` and `settings.json` (Kindle credentials, CSV import settings) are not part of it; manual export of the database file is the way to move everything you chose.
-- SQLite journaling does leave `data.db-wal` and `data.db-shm` beside the **live** database — the write-ahead log (pages waiting to be folded in) and its fixed-size index. They are transient bookkeeping, hold no reading data on their own, and the app never leaves such a pair beside a snapshot.
 
 ## Setup
 

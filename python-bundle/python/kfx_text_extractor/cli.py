@@ -2,7 +2,6 @@
 
 import argparse
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -119,6 +118,7 @@ def run_sidecar_mode(
     include_time: bool = True,
     book_folder: str | None = None,
     session_adjustment_hours: int = SESSION_ADJUSTMENT_HOURS,
+    sidecars: list[str] | None = None,
 ) -> list | dict:
     """Run the full sidecar extraction pipeline.
 
@@ -133,6 +133,8 @@ def run_sidecar_mode(
         include_time: Whether to include time component in dates.
         book_folder: Optional directory to search for book files first.
         session_adjustment_hours: Hour-of-day boundary for the session_date adjustment.
+        sidecars: Optional explicit .sdr directory list to parse instead of walking
+            ``sidecar_dir``. Book matching still uses ``sidecar_dir``.
 
     Returns:
         If output is None: a dict with 'sessions' (list[dict]) and 'stats' (dict).
@@ -140,12 +142,14 @@ def run_sidecar_mode(
     """
     # Extract from sidecars
     print(f"Scanning sidecars in: {sidecar_dir}")
-    sessions = extract_from_sidecars(sidecar_dir, max_books=max_books)
+    sessions = extract_from_sidecars(sidecar_dir, max_books=max_books, sidecars=sidecars)
     print(f"Found {len(sessions)} Krs.start/Krs.end pairs from sidecar annotations")
 
     if not sessions:
-        print("No Krs.start/Krs.end pairs found in sidecar annotations. Exiting.")
-        sys.exit(0)
+        print("No Krs.start/Krs.end pairs found in sidecar annotations.")
+        if output is None:
+            return {"sessions": [], "stats": {"sidecarsPulled": 0, "sessionsExtracted": 0}}
+        return []
 
     # Build annotation notes dict for export
     annotation_notes = {}

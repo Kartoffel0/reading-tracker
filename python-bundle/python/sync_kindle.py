@@ -57,6 +57,12 @@ KOREADER_METADATA_PATTERN = "metadata.*.lua"
 # Book formats the extractor can index (KFX family + EPUB, KOReader's usual format)
 BOOK_EXTS = (".azw3", ".azw", ".mobi", ".kfx", ".epub")
 
+# Incremental sync bookkeeping: remote sidecar path -> mtime reported by the
+# device at the last successful pull. A sidecar whose mtime did not move holds
+# no new reading data, so re-reading it over SSH every sync is pure waste.
+# The extractor still re-parses every cached sidecar, which is local and cheap.
+SIDECAR_MTIME_MANIFEST = ".sidecar-mtimes.json"
+
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,6 +83,44 @@ def _local_path(remote_path: str, cache_dir: str) -> str:
             rel = local_prefix + remote_path[len(prefix):]
             return os.path.join(cache_dir, *rel.split("/"))
     return os.path.join(cache_dir, *posixpath.basename(remote_path).split("/"))
+
+
+def load_sidecar_mtimes(cache_dir: str) -> dict:
+    """Load the remote-path -> mtime map from the cache directory.
+
+    A missing, unreadable or malformed manifest means "unknown", so the next
+    sync pulls everything once and rewrites it.
+    """
+    try:
+        with open(os.path.join(cache_dir, SIDECAR_MTIME_MANIFEST), "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(path): str(mtime) for path, mtime in data.items()}
+
+
+def save_sidecar_mtimes(cache_dir: str, mtimes: dict) -> None:
+    """Write the mtime map atomically so a crash never leaves it half-written."""
+    path = os.path.join(cache_dir, SIDECAR_MTIME_MANIFEST)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(mtimes, f, indent=0, sort_keys=True)
+    os.replace(tmp, path)
+
+
+def sidecar_dirs(local_paths: list[str]) -> list[str]:
+    """Collapse cached sidecar file paths to the .sdr folders the extractor scans."""
+    dirs = set()
+    for path in local_paths:
+        parent = Path(path).parent
+        while parent != parent.parent:
+            if parent.name.lower().endswith(".sdr"):
+                dirs.add(str(parent))
+                break
+            parent = parent.parent
+    return sorted(dirs)
 
 
 def parse_session_day_end_hour(value: str) -> int:
@@ -167,14 +211,18 @@ def connect(settings: dict) -> paramiko.SSHClient:
 
 
 # ─── Sidecar Discovery ───────────────────────────────────────────────────────
+def _find_expression(patterns: list[str]) -> str:
+    """Build the `-name ... -o -name ...` half of a remote find command."""
+    return " -o ".join("-name '%s'" % pattern for pattern in patterns)
+
+
 def _remote_find(
     client: paramiko.SSHClient,
     patterns: list[str],
     timeout: int = 120,
 ) -> list[str]:
     """Run `find` over the user partition and return matching remote paths."""
-    find_expr = " -o ".join("-name '%s'" % pattern for pattern in patterns)
-    cmd = "find '%s' \\( %s \\)" % (KINDLE_ROOT, find_expr)
+    cmd = "find '%s' \\( %s \\)" % (KINDLE_ROOT, _find_expression(patterns))
     _in, out, _err = client.exec_command(cmd, timeout=timeout)
     return [
         path
@@ -183,22 +231,103 @@ def _remote_find(
     ]
 
 
-def discover_sidecars(client: paramiko.SSHClient) -> list[str]:
+def _mtime_find_command(patterns: list[str], style: str) -> str:
+    """Build a remote find command that prints "<epoch seconds> <path>" lines.
+
+    ``printf`` is the GNU extension (one process); ``stat`` is the busybox-safe
+    fallback that execs `stat` per match.
+    """
+    body = "find '%s' \\( %s \\)" % (KINDLE_ROOT, _find_expression(patterns))
+    if style == "printf":
+        return body + " -printf '%%T@ %%p\\n'"
+    return body + " -exec stat -c '%Y %n' {} \\;"
+
+
+def _run_mtime_find(client: paramiko.SSHClient, cmd: str, timeout: int) -> dict[str, str] | None:
+    """Run an mtime find; None when the device lacks the flag or prints garbage."""
+    _in, out, _err = client.exec_command(cmd, timeout=timeout)
+    data = out.read().decode("utf-8", "replace")
+    if out.channel.recv_exit_status() != 0:
+        return None
+
+    mtimes = {}
+    for line in data.splitlines():
+        mtime, _, path = line.partition(" ")
+        if not path or not mtime.replace(".", "", 1).isdigit():
+            return None
+        if path.startswith(SKIPPED_REMOTE_PREFIXES):
+            continue
+        mtimes[path] = mtime
+    return mtimes
+
+
+def _detect_mtime_style(client: paramiko.SSHClient) -> str | None:
+    """Probe which find action reports mtimes, cheaply.
+
+    Each probe runs on KINDLE_ROOT alone (`-maxdepth 0`), so unsupported flags
+    cost one round trip instead of a full-partition scan. Busybox builds often
+    ship `stat` without GNU `find -printf`, and vice versa.
+    """
+    actions = (
+        ("printf", "-printf '%%T@ %%p\\n'"),
+        ("stat", "-exec stat -c '%Y %n' {} \\;"),
+    )
+    for style, action in actions:
+        cmd = "find '%s' -maxdepth 0 %s" % (KINDLE_ROOT, action)
+        _in, out, _err = client.exec_command(cmd, timeout=20)
+        data = out.read().decode("utf-8", "replace").strip()
+        if out.channel.recv_exit_status() == 0 and data:
+            return style
+    return None
+
+
+def _remote_find_mtimes(
+    client: paramiko.SSHClient,
+    patterns: list[str],
+    timeout: int = 120,
+) -> dict[str, str] | None:
+    """Map matching remote paths to their device mtime (epoch seconds).
+
+    Tries GNU ``-printf`` first, then ``-exec stat`` (busybox usually ships
+    ``stat`` even when ``find`` has no ``-printf``). Returns None when neither
+    works, so callers fall back to a full pull instead of silently skipping
+    sidecars.
+    """
+    style = _detect_mtime_style(client)
+    if style is None:
+        return None
+    mtimes = _run_mtime_find(client, _mtime_find_command(patterns, style), timeout)
+    if mtimes is None:
+        return None
+    status("Reading device mtimes via find %s." % ("-printf" if style == "printf" else "-exec stat"))
+    return mtimes
+
+
+def discover_sidecars(client: paramiko.SSHClient) -> list[tuple[str, str | None]]:
     """Find Kindle KRDS sidecars and KOReader metadata files using `find`.
 
     Scans the whole user partition, because KOReader opens books from anywhere
     on it: Kindle sidecars are extension-named files (optionally inside a
     `<title>.sdr` folder), KOReader sidecars are
     `<book-without-ext>.sdr/metadata.<ext>.lua` next to the book.
+
+    Returns ``(remote path, mtime)`` pairs, with ``mtime`` None when the device
+    cannot report timestamps.
     """
     status("Discovering sidecars...")
     # Build find expression: -name '*.azw3f' -o -name '*.yjf' -o ...
     patterns = ["*.%s" % ext.lstrip(".") for ext in SIDECAR_EXTS]
     patterns.append(KOREADER_METADATA_PATTERN)
-    files = _remote_find(client, patterns)
+
+    mtimes = _remote_find_mtimes(client, patterns)
+    if mtimes is None:
+        status("Device cannot report sidecar mtimes; pulling every sidecar.")
+        files = [(path, None) for path in _remote_find(client, patterns)]
+    else:
+        files = sorted(mtimes.items())
 
     koreader_count = sum(
-        1 for path in files
+        1 for path, _mtime in files
         if posixpath.basename(path).startswith("metadata.") and path.endswith(".lua")
     )
     status("Found %d sidecars (%d Kindle, %d KOReader)" % (
@@ -314,8 +443,12 @@ def test_ssh_connection() -> bool:
 
 # ─── Main Sync Logic ─────────────────────────────────────────────────────────
 
-def run_sync(from_cache: bool = False) -> dict:
-    """Run the full Kindle sync pipeline."""
+def run_sync(from_cache: bool = False, force: bool = False) -> dict:
+    """Run the full Kindle sync pipeline.
+
+    ``force`` ignores the cached sidecar mtimes and re-pulls/re-extracts every
+    sidecar, which is what the "Force Full Sync" button needs.
+    """
     settings = load_settings()
     cache_dir = Path(settings["cache_dir"])
     os.makedirs(cache_dir, exist_ok=True)
@@ -328,43 +461,97 @@ def run_sync(from_cache: bool = False) -> dict:
         if not sidecar_paths:
             return {
                 "sessions": [],
-                "stats": {"sidecarsPulled": 0, "booksPulled": 0, "sessionsExtracted": 0},
+                "stats": {
+                    "sidecarsPulled": 0,
+                    "sidecarsSkipped": 0,
+                    "booksPulled": 0,
+                    "sessionsExtracted": 0,
+                },
             }
 
-        # Phase 2: Pull ALL sidecars (always, no filtering)
-        status("Pulling sidecars... (%d files)" % len(sidecar_paths))
-        for i, remote in enumerate(sidecar_paths, 1):
+        # Phase 2: Pull sidecars the device reports as changed. Re-reading an
+        # unchanged sidecar only re-fetches bytes the cache already has.
+        known_mtimes = load_sidecar_mtimes(str(cache_dir))
+        if force:
+            status("Force scan: ignoring cached sidecar mtimes.")
+            known_mtimes = {}
+        pending = []
+        sidecars_skipped = 0
+        for remote, mtime in sidecar_paths:
+            local = _local_path(remote, str(cache_dir))
+            if mtime is not None and known_mtimes.get(remote) == mtime and os.path.exists(local):
+                sidecars_skipped += 1
+                continue
+            pending.append((remote, mtime))
+
+        status("Pulling sidecars... (%d files, %d unchanged)" % (len(pending), sidecars_skipped))
+        for i, (remote, mtime) in enumerate(pending, 1):
             pull_sidecar(client, remote, cache_dir)
-            if i % 10 == 0 or i == len(sidecar_paths):
-                status("  %d/%d" % (i, len(sidecar_paths)))
+            if mtime is not None:
+                known_mtimes[remote] = mtime
+            if i % 10 == 0 or i == len(pending):
+                status("  %d/%d" % (i, len(pending)))
 
-        # Phase 3: Find and pull books (only for sidecars with valid reading data)
-        status("Analyzing sidecars...")
-        books_to_pull = find_books_to_pull(client, str(cache_dir))
+        # Device-side deletions drop out of the manifest; if the device cannot
+        # report mtimes, leave the previous manifest untouched.
+        mtimes_reported = any(mtime is not None for _remote, mtime in sidecar_paths)
+        if mtimes_reported:
+            discovered = {remote for remote, _mtime in sidecar_paths}
+            known_mtimes = {path: mtime for path, mtime in known_mtimes.items() if path in discovered}
+
         books_pulled = 0
-        if books_to_pull:
-            status("Pulling book files... (%d books)" % len(books_to_pull))
-            for i, book_path in enumerate(books_to_pull, 1):
-                pull_book(client, book_path, str(cache_dir))
-                books_pulled += 1
-                status("  %d/%d" % (i, len(books_to_pull)))
+        sessions = []
+        if not pending:
+            # Nothing was pulled, so there is nothing to extract and no new
+            # book can be needed yet: book analysis runs alongside a pull.
+            status("Nothing new on the device; skipping book analysis and extraction.")
+        else:
+            # Phase 3: Find and pull books (only for sidecars with valid reading data)
+            status("Analyzing sidecars...")
+            books_to_pull = find_books_to_pull(client, str(cache_dir))
+            if books_to_pull:
+                status("Pulling book files... (%d books)" % len(books_to_pull))
+                for i, book_path in enumerate(books_to_pull, 1):
+                    pull_book(client, book_path, str(cache_dir))
+                    books_pulled += 1
+                    status("  %d/%d" % (i, len(books_to_pull)))
 
-        # Phase 4: Run kfx_text_extractor run_sidecar_mode on the local cache
-        status("Extracting reading data...")
-        sys.path.insert(0, str(Path(__file__).parent))
-        from kfx_text_extractor import run_sidecar_mode
+            # Phase 4: Extract only the sidecars this sync pulled. Books sit next
+            # to their .sdr in the cache, so matching works without a second copy.
+            pending_dirs = sidecar_dirs(
+                [_local_path(remote, str(cache_dir)) for remote, _mtime in pending]
+            )
+            if pending_dirs:
+                status("Extracting reading data... (%d sidecar folders)" % len(pending_dirs))
+                sys.path.insert(0, str(Path(__file__).parent))
+                from kfx_text_extractor import run_sidecar_mode
 
-        timezone = settings.get("timezone", "-3")
-        day_end_hour = parse_session_day_end_hour(settings["session_day_end"])
-        status("Session day ends at %02d:00" % day_end_hour)
-        result = run_sidecar_mode(sidecar_dir=str(cache_dir), columns=['session_date', 'book_title', 'language', 'char_count', 'session_duration'], timezone=timezone, session_adjustment_hours=day_end_hour)
-        sessions = result.get("sessions", [])
+                timezone = settings.get("timezone", "-3")
+                day_end_hour = parse_session_day_end_hour(settings["session_day_end"])
+                status("Session day ends at %02d:00" % day_end_hour)
+                result = run_sidecar_mode(
+                    sidecar_dir=str(cache_dir),
+                    columns=['session_date', 'book_title', 'language', 'char_count', 'session_duration'],
+                    timezone=timezone,
+                    session_adjustment_hours=day_end_hour,
+                    sidecars=pending_dirs,
+                )
+                sessions = result.get("sessions", [])
+            else:
+                status("No new sidecar folders; skipping extraction.")
+
+        # The manifest advances only after the pulled sidecars are extracted, so
+        # a crash mid-extraction retries them next sync instead of dropping
+        # their sessions forever.
+        if mtimes_reported:
+            save_sidecar_mtimes(str(cache_dir), known_mtimes)
 
         # Phase 5: Output result
         output = {
             "sessions": sessions,
             "stats": {
-                "sidecarsPulled": len(sidecar_paths),
+                "sidecarsPulled": len(pending),
+                "sidecarsSkipped": sidecars_skipped,
                 "booksPulled": books_pulled,
                 "sessionsExtracted": len(sessions),
             },
@@ -386,4 +573,4 @@ if __name__ == "__main__":
     if "--test-ssh" in _sys.argv[1:]:
         test_ssh_connection()
     else:
-        run_sync()
+        run_sync(force="--force" in _sys.argv[1:])

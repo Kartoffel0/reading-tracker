@@ -764,8 +764,9 @@ app.whenReady().then(() => {
     return path.join(app.getPath('appData'), 'reading-tracker', 'kindle-cache');
   }
 
-  ipcMain.handle('sync-kindle', async () => {
+  ipcMain.handle('sync-kindle', async (_event, options = {}) => {
     return new Promise((resolve) => {
+      const force = Boolean(options?.force);
       const resourcesDir = getPythonResourcesDir();
       const syncScript = path.join(resourcesDir, 'sync_kindle.py');
       const sitePackages = path.join(resourcesDir, 'Lib', 'site-packages');
@@ -796,7 +797,11 @@ app.whenReady().then(() => {
       env.KINDLE_TIMEZONE = settings.timezone || '-3';
       env.KINDLE_SESSION_DAY_END = settings.kindle?.sessionDayEnd || '04:00';
 
-      const child = spawn(pythonCmd, [syncScript], { env });
+      const child = spawn(
+        pythonCmd,
+        force ? [syncScript, '--force'] : [syncScript],
+        { env },
+      );
       let resultJson = '';
       let resultParsed = false;
       let statusLines = [];

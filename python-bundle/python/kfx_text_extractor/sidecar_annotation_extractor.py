@@ -550,17 +550,26 @@ def _position_distance(start1, end1, start2, end2):
     return max(0, max(a_start - b_end, b_start - a_end))
 
 
-def extract_from_sidecars(documents_dir, max_books=None):
+def extract_from_sidecars(documents_dir, max_books=None, sidecars=None):
     """Extract Krs.start/Krs.end paired entries from sidecar files.
 
     Args:
         documents_dir: Path to the directory containing .sdr/ folders or sidecar files.
         max_books: Optional limit on number of books to process (for testing).
+        sidecars: Optional explicit list of .sdr directory paths to parse instead
+            of walking ``documents_dir``. Used for incremental syncs.
 
     Returns:
         List of ClippingEntry for all valid Krs.start/Krs.end pairs found.
     """
     all_entries = []
+
+    if sidecars is not None:
+        for sdr_dir in sidecars:
+            if max_books and len(all_entries) >= max_books:
+                break
+            all_entries.extend(_extract_from_sdr_directory(sdr_dir))
+        return all_entries
 
     # Check if documents_dir contains .sdr/ folders directly (sidecar directory mode)
     if ".sdr" in os.path.basename(documents_dir).lower():

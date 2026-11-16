@@ -55,7 +55,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('update-settings', key, value),
 
   // Kindle Sync
-  triggerKindleSync: () => ipcRenderer.invoke('sync-kindle'),
+  triggerKindleSync: (options) => ipcRenderer.invoke('sync-kindle', options),
   testKindleSshConnection: () => ipcRenderer.invoke('test-ssh-connection'),
   onSyncStatus: (callback) => {
     const subscription = (_event, data) => callback(data);

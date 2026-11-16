@@ -2205,6 +2205,12 @@ body.theme-sakura-light .legend-cell {
     display: none;
 }
 
+.sync-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .sync-footer-btn {
     padding: 10px 24px;
     background: var(--accent-primary);

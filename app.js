@@ -2565,8 +2565,18 @@ const syncModalBody = document.getElementById('syncModalBody');
 const syncModalWaiting = document.getElementById('syncModalWaiting');
 const syncModalStatus = document.getElementById('syncModalStatus');
 const syncModalStartBtn = document.getElementById('syncModalStartBtn');
+const syncModalForceBtn = document.getElementById('syncModalForceBtn');
 
 let isSyncing = false;
+
+function resetSyncButtons() {
+  isSyncing = false;
+  for (const btn of [syncModalStartBtn, syncModalForceBtn]) {
+    btn?.removeAttribute('disabled');
+  }
+  syncModalStartBtn.textContent = 'Start Sync';
+  syncModalForceBtn.textContent = 'Force Full Sync';
+}
 
 async function openKindleSyncModal() {
   if (isSyncing) return;
@@ -2574,8 +2584,7 @@ async function openKindleSyncModal() {
   syncModalWaiting.classList.remove('hidden');
   syncModalStatus?.classList.add('hidden');
   syncModalStartBtn?.classList.remove('hidden');
-  syncModalStartBtn?.removeAttribute('disabled');
-  syncModalStartBtn.textContent = 'Start Sync';
+  resetSyncButtons();
 }
 
 function closeKindleSyncModal(event) {
@@ -2647,15 +2656,22 @@ async function insertSessionsIntoDB(sessions) {
   return inserted;
 }
 
-async function startKindleSync() {
+async function startKindleSync(force = false) {
   if (isSyncing) return;
   isSyncing = true;
 
-  syncModalStartBtn?.setAttribute('disabled', '');
-  syncModalStartBtn.textContent = 'Syncing...';
+  for (const btn of [syncModalStartBtn, syncModalForceBtn]) {
+    btn?.setAttribute('disabled', '');
+  }
+  syncModalStartBtn.textContent = force ? 'Forcing...' : 'Syncing...';
   syncModalWaiting?.classList.add('hidden');
   clearSyncLog();
-  addSyncLogMessage('⏳ Initializing Kindle sync...', 'status');
+  addSyncLogMessage(
+    force
+      ? '⏳ Force full sync: ignoring cached sidecar times...'
+      : '⏳ Initializing Kindle sync...',
+    'status',
+  );
 
   try {
     // Listen for status updates
@@ -2666,9 +2682,7 @@ async function startKindleSync() {
     // Listen for completion
     const completeUnsub = window.electronAPI?.onSyncComplete?.((data) => {
       try {
-        isSyncing = false;
-        syncModalStartBtn?.removeAttribute('disabled');
-        syncModalStartBtn.textContent = 'Start Sync';
+        resetSyncButtons();
 
         // Clean up subscriptions immediately - backend sends only ONE event now
         statusUnsub?.();
@@ -2708,11 +2722,9 @@ async function startKindleSync() {
     });
 
     // Trigger sync
-    await window.electronAPI?.triggerKindleSync?.();
+    await window.electronAPI?.triggerKindleSync?.({ force });
   } catch (err) {
-    isSyncing = false;
-    syncModalStartBtn?.removeAttribute('disabled');
-    syncModalStartBtn.textContent = 'Start Sync';
+    resetSyncButtons();
     addSyncLogMessage(`✗ Sync error: ${err.message}`, 'error');
   }
 }
