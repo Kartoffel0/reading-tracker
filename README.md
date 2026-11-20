@@ -2,8 +2,8 @@
 
 <table>
   <tr>
-    <td><img src="img/Reading_Tracker_1.png" width="100%"></td>
-    <td><img src="img/Reading_Tracker_2.png" width="100%"></td>
+    <td><img src="resources/img/Reading_Tracker_1.png" width="100%"></td>
+    <td><img src="resources/img/Reading_Tracker_2.png" width="100%"></td>
   </tr>
 </table>
 
@@ -70,7 +70,7 @@ Install Python 3.8+ for your platform: https://www.python.org/downloads/
 install the dependencies:
 
 ```bash
-pip install -r python-bundle/requirements.txt --target python-bundle/python/Lib/site-packages
+pip install -r resources/python/requirements.txt --target resources/python/Lib/site-packages
 ```
 
 #### Electron App
@@ -83,6 +83,16 @@ npm start
 ```bash
 npm install
 npm run build:nsis
+```
+
+### Project layout
+
+```text
+src/main/index.js       Electron main process: window, SQLite, IPC, Kindle sync
+src/preload/index.js    contextBridge API exposed to the renderer
+src/renderer/           index.html + app.js + styles.css (isolated, no Node access)
+resources/              shipped verbatim: icon, screenshots, Python payload
+resources/python/       sync_kindle.py + kfx_text_extractor/ + Lib/site-packages
 ```
 
 ### Database Location

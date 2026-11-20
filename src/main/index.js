@@ -438,7 +438,7 @@ function createWindow() {
     minHeight: 800,
     backgroundColor: '#0a0a0f',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -447,7 +447,7 @@ function createWindow() {
 
   Menu.setApplicationMenu(null);
 
-  mainWindow.loadFile('index.html');
+  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   // Open DevTools in development for debugging
   // Triggered by: npm run dev (passes --dev flag)
@@ -730,29 +730,18 @@ app.whenReady().then(() => {
   const DEFAULT_USER = 'root';
   const DEFAULT_PASSWORD = 'kindle';
 
+  // Packaged: extraFiles copies resources/python to <install>/resources/python,
+  // which is exactly process.resourcesPath. Dev: the same source directory,
+  // reached from src/main up to the project root.
   function getPythonResourcesDir() {
-    // Production: extraFiles extracts to resources/python/ relative to the executable
-    // Check this FIRST — it's the canonical location in built apps
-    const extraResourcesPath = path.join(
-      path.dirname(process.execPath),
-      'resources',
-      'python',
-    );
-    if (fs.existsSync(path.join(extraResourcesPath, 'Lib', 'site-packages'))) {
-      return extraResourcesPath;
-    }
-    // Development: python-bundle/python/
-    const devPath = path.join(__dirname, 'python-bundle', 'python');
-    if (fs.existsSync(path.join(devPath, 'Lib', 'site-packages'))) {
-      return devPath;
-    }
-    // Fallback: resources/ relative to asar
-    return path.join(__dirname, 'resources', 'python');
+    return app.isPackaged
+      ? path.join(process.resourcesPath, 'python')
+      : path.join(__dirname, '..', '..', 'resources', 'python');
   }
 
   function buildPythonEnv(pythonCmd, resourcesDir) {
     const env = { ...process.env };
-    // Always use Lib/site-packages/ since extraFiles copies python-bundle/python/Lib
+    // Always use Lib/site-packages/ since extraFiles copies resources/python/Lib
     const sitePackages = path.join(resourcesDir, 'Lib', 'site-packages');
     if (fs.existsSync(sitePackages)) {
       env.PYTHONPATH = sitePackages;
@@ -776,7 +765,7 @@ app.whenReady().then(() => {
         mainWindow?.webContents.send('sync-complete', {
           success: false,
           error:
-            'Python site-packages not found — reinstall app or run: pip install -r python-bundle/requirements.txt --target <site-packages-dir>',
+            'Python site-packages not found — reinstall app or run: pip install -r resources/python/requirements.txt --target <site-packages-dir>',
           sessions: [],
           stats: {},
         });

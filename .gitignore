@@ -1,6 +1,6 @@
 node_modules/
 dist/
 __pycache__/
-python-bundle/python/Lib/
+resources/python/Lib/
 .llm-wiki/
 docs/

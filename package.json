@@ -2,7 +2,7 @@
   "name": "reading-tracker",
   "version": "1.1.6767",
   "description": "Japanese reading tracker",
-  "main": "main.js",
+  "main": "src/main/index.js",
   "author": "Reading Tracker",
   "license": "MIT",
   "scripts": {
@@ -29,41 +29,33 @@
       "output": "dist"
     },
     "files": [
-      "main.js",
-      "preload.js",
-      "app.js",
-      "index.html",
-      "styles.css",
+      "src/**/*",
       "README.md",
       "package.json",
-      "node_modules/**/*",
-      "python-bundle/python/Lib",
-      "python-bundle/python/Lib/site-packages",
-      "python-bundle/python/sync_kindle.py",
-      "python-bundle/python/kfx_text_extractor"
+      "node_modules/**/*"
     ],
     "asarUnpack": [
       "**/*.node"
     ],
     "extraFiles": [
       {
-        "from": "python-bundle/python/Lib",
+        "from": "resources/python/Lib",
         "to": "resources/python/Lib",
         "filter": [
           "**/*"
         ]
       },
       {
-        "from": "python-bundle/python/sync_kindle.py",
+        "from": "resources/python/sync_kindle.py",
         "to": "resources/python/sync_kindle.py"
       },
       {
-        "from": "python-bundle/python/kfx_text_extractor",
+        "from": "resources/python/kfx_text_extractor",
         "to": "resources/python/kfx_text_extractor"
       }
     ],
     "win": {
-      "icon": "icon.ico",
+      "icon": "resources/icon.ico",
       "target": [
         {
           "target": "nsis",
