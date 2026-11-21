@@ -510,8 +510,8 @@ button.theme-select {
 
 /* Clock card (400 × 336) */
 .clock-card {
-    flex: 0 0 336px;
-    height: 336px;
+    flex: 0 0 220px;
+    height: 220px;
     display: flex;
     flex-direction: column;
 }
@@ -535,6 +535,7 @@ button.theme-select {
     color: var(--text-primary);
     font-variant-numeric: tabular-nums;
     transition: color 0.2s ease;
+    padding-top: 16px;
 }
 
 /* Running: the number is the elapsed time, so it wears the accent. */
@@ -549,6 +550,7 @@ button.theme-select {
     text-transform: uppercase;
     letter-spacing: 0.14em;
     color: var(--text-muted);
+    margin-bottom: auto;
 }
 
 .clock-actions {
