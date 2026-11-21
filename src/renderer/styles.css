@@ -3024,13 +3024,14 @@ body.theme-wave .wave-bg {
     /* overflow-x: auto also makes overflow-y behave as auto, so the scroll box
        clips anything outside its box. The top padding grows that box upwards to
        give the tooltips room: the shared three-line tooltip is ~50px tall and
-       the hover scale makes it ~60px, so 64px is needed. The equal negative
-       margin keeps the cells exactly where they already are. pointer-events:
-       none stops the empty padding band from stealing hover/clicks from the
-       cards above; the cells restore it for themselves. */
-    padding: 64px 0;
-    margin-top: -46px;
-    padding-bottom: 8px;
+       the hover scale makes it ~60px, so 64px is needed. The side padding grows
+       it outwards for the hover scale (18px * 1.15 spills 1.35px per side); the
+       equal negative margins keep every cell exactly where it was, so the grid
+       neither moves nor loses alignment. pointer-events: none stops the empty
+       padding band from stealing hover/clicks from the cards above; the cells
+       restore it for themselves. */
+    padding: 64px 3px 8px;
+    margin: -46px -3px 0;
     overflow-x: auto;
     pointer-events: none;
     scrollbar-width: none;
