@@ -1727,10 +1727,9 @@ function rtSpeedSeries(buckets, period) {
 }
 
 // Catmull-Rom through the points, emitted as cubic Béziers. The trend is
-// decoration, so it curves rather than cornering on every bucket; control
-// points are clamped to the plot so a spike cannot bow outside the grid.
+// decoration, so it curves rather than cornering on every bucket.
 function rtSmoothPath(points) {
-  const clamp = (v) => Math.min(100, Math.max(0, v));
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const at = (p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
   let d = `M ${at(points[0])}`;
   for (let i = 0; i < points.length - 1; i++) {
@@ -1738,8 +1737,19 @@ function rtSmoothPath(points) {
     const p1 = points[i];
     const p2 = points[i + 1];
     const p3 = points[i + 2] || p2;
-    const c1 = { x: p1.x + (p2.x - p0.x) / 6, y: clamp(p1.y + (p2.y - p0.y) / 6) };
-    const c2 = { x: p2.x - (p3.x - p1.x) / 6, y: clamp(p2.y - (p3.y - p1.y) / 6) };
+    // Monotone: both control points stay inside the y-range of this segment,
+    // so a dense run of differing rates cannot make the spline dip below both
+    // endpoints and rise back — that reads as data that is not there.
+    const lo = Math.min(p1.y, p2.y);
+    const hi = Math.max(p1.y, p2.y);
+    const c1 = {
+      x: p1.x + (p2.x - p0.x) / 6,
+      y: clamp(p1.y + (p2.y - p0.y) / 6, lo, hi),
+    };
+    const c2 = {
+      x: p2.x - (p3.x - p1.x) / 6,
+      y: clamp(p2.y - (p3.y - p1.y) / 6, lo, hi),
+    };
     d += ` C ${at(c1)} ${at(c2)} ${at(p2)}`;
   }
   return d;
@@ -1953,27 +1963,42 @@ function buildStatsBody(model) {
 
   // One polyline per run of columns that actually have a rate: a gap in the
   // data is a gap in the line, never a straight interpolation across it.
-  // One continuous curve from the first reading day to the last: it arcs over
-  // the empty stretches instead of breaking at every gap. Only days that were
-  // read contribute a point, so nothing is invented for a day with no sessions
-  // — the curve simply passes over it.
+  // One curve, arcing over the short holes between reading days. Holes wider
+  // than maxGap break the stroke instead: dragging a straight slope across a
+  // week of nothing claims a slowdown (or a surge) that never happened, which
+  // is exactly what made a month with two clusters look wrong.
   const speedLine = (() => {
     if (!speed.hasData) return '';
-    const points = [];
+    const maxGap =
+      period === 'week' ? 2 : period === 'month' ? 6 : period === 'year' ? 2 : 1;
+    const runs = [];
+    let run = [];
+    let last = null;
     speed.points.forEach((value, i) => {
       if (value === null) return;
-      points.push({
+      if (last !== null && i - last > maxGap) {
+        runs.push(run);
+        run = [];
+      }
+      run.push({
         x: ((i + 0.5) / sorted.length) * 100,
         y: 100 - (value / speed.niceMax) * 100,
       });
+      last = i;
     });
-    // A lone reading day has no segment to curve through: a zero-length path
-    // with a round cap is a dot.
-    if (points.length === 1) {
-      const p = points[0];
-      return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
-    }
-    return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
+    if (run.length) runs.push(run);
+
+    return runs
+      .map((points) => {
+        // A lone reading day has no segment to curve through: a zero-length
+        // path with a round cap is a dot.
+        if (points.length === 1) {
+          const p = points[0];
+          return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
+        }
+        return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
+      })
+      .join('');
   })();
 
   const gridlines = [0, 25, 50, 75, 100]
