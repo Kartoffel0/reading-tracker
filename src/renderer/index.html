@@ -45,10 +45,17 @@
                     <button type="button" class="page-tab" data-page="library">LIBRARY</button>
                 </nav>
 
-                <!-- Clock (placeholder: stopwatch writes start/end into the form) -->
+                <!-- Clock / stopwatch -->
                 <div class="panel clock-card">
                     <div class="card-title">CLOCK</div>
-                    <div class="clock-placeholder" id="clockDisplay">00:00:00</div>
+                    <div class="clock-face">
+                        <div class="clock-time" id="clockTime">--:--</div>
+                        <div class="clock-caption" id="clockCaption">&nbsp;</div>
+                    </div>
+                    <div class="clock-actions">
+                        <button type="button" class="clock-btn clock-btn-start" id="clockStartBtn">Start</button>
+                        <button type="button" class="clock-btn clock-btn-stop" id="clockStopBtn" hidden>Stop</button>
+                    </div>
                 </div>
 
                 <!-- Log Session -->

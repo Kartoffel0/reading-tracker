@@ -398,6 +398,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await settingsReady;
   alignToSessionDay();
   await updateAll();
+  // A stopwatch restored from settings must start ticking with the app, not
+  // only after the first click.
+  initClock();
 });
 
 // Re-compute the square cell size whenever the window is resized.
@@ -2480,6 +2483,96 @@ function initSessionTimeFields() {
 }
 
 initSessionTimeFields();
+
+// ─── Clock / stopwatch ─────────────────────────────────────────────────────
+// Idle: the current time. Running: elapsed since Start. Stop hands the range to
+// the log form, which infers the duration from it. The start moment lives in
+// settings, so restarting the app mid-session does not lose it.
+const STALE_STOPWATCH_MS = 12 * 60 * 60 * 1000;
+let stopwatchStartedAt = null;
+let clockInterval = null;
+
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  return hours > 0
+    ? `${hours}:${pad2(minutes)}:${pad2(seconds)}`
+    : `${pad2(minutes)}:${pad2(seconds)}`;
+}
+
+function renderClock() {
+  const card = document.querySelector('.clock-card');
+  const timeEl = document.getElementById('clockTime');
+  const captionEl = document.getElementById('clockCaption');
+  const startBtn = document.getElementById('clockStartBtn');
+  const stopBtn = document.getElementById('clockStopBtn');
+  if (!card || !timeEl) return;
+
+  const now = new Date();
+  const running = stopwatchStartedAt !== null;
+  card.classList.toggle('is-running', running);
+
+  if (running) {
+    timeEl.textContent = formatElapsed(now.getTime() - stopwatchStartedAt);
+    captionEl.textContent = `since ${formatClock(new Date(stopwatchStartedAt))}`;
+  } else {
+    timeEl.textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+    captionEl.textContent = now.toLocaleDateString(undefined, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
+  }
+
+  if (startBtn) startBtn.hidden = running;
+  if (stopBtn) stopBtn.hidden = !running;
+}
+
+async function startStopwatch() {
+  stopwatchStartedAt = Date.now();
+  renderClock();
+  await window.electronAPI.updateSettings('stopwatch', {
+    startedAt: stopwatchStartedAt,
+  });
+}
+
+async function stopStopwatch() {
+  if (stopwatchStartedAt === null) return;
+  const startedAt = stopwatchStartedAt;
+  const endedAt = Date.now();
+  stopwatchStartedAt = null;
+  renderClock();
+  await window.electronAPI.updateSettings('stopwatch', { startedAt: null });
+
+  // Hand the range to the form; the duration follows as a suggestion.
+  setTimeValue('sessionStart', formatClock(new Date(startedAt)));
+  setTimeValue('sessionEnd', formatClock(new Date(endedAt)));
+  applyTimesToDuration();
+  showToast('Stopped — add title and characters');
+}
+
+async function initClock() {
+  try {
+    const settings = await window.electronAPI.getSettings();
+    const started = Number(settings?.stopwatchStartedAt);
+    stopwatchStartedAt = Number.isFinite(started) && started > 0 ? started : null;
+    // A stopwatch left running for half a day is almost certainly forgetfulness,
+    // and stopping it would log a session that never happened.
+    if (stopwatchStartedAt && Date.now() - stopwatchStartedAt > STALE_STOPWATCH_MS) {
+      stopwatchStartedAt = null;
+      await window.electronAPI.updateSettings('stopwatch', { startedAt: null });
+    }
+  } catch {
+    stopwatchStartedAt = null;
+  }
+
+  document.getElementById('clockStartBtn')?.addEventListener('click', startStopwatch);
+  document.getElementById('clockStopBtn')?.addEventListener('click', stopStopwatch);
+  renderClock();
+  if (clockInterval === null) clockInterval = setInterval(renderClock, 1000);
+}
 
 
 document.getElementById('sessionDuration').addEventListener('keypress', (e) => {

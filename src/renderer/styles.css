@@ -516,15 +516,78 @@ button.theme-select {
     flex-direction: column;
 }
 
-.clock-placeholder {
+.clock-face {
     flex: 1;
-    display: grid;
-    place-items: center;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.clock-time {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 2.25rem;
-    font-weight: 500;
+    font-size: 2.6rem;
+    font-weight: 600;
     letter-spacing: 0.06em;
-    color: var(--text-secondary);
+    line-height: 1;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    transition: color 0.2s ease;
+}
+
+/* Running: the number is the elapsed time, so it wears the accent. */
+.clock-card.is-running .clock-time {
+    color: var(--accent-primary);
+    text-shadow: 0 0 24px var(--accent-primary-glow);
+}
+
+.clock-caption {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-muted);
+}
+
+.clock-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.clock-btn {
+    flex: 1 1 0;
+    height: 40px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.clock-btn-start {
+    background: var(--accent-primary);
+    color: #fff;
+}
+
+.clock-btn-start:hover {
+    box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+.clock-btn-stop {
+    background: transparent;
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.clock-btn-stop:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
 }
 
 .panel {

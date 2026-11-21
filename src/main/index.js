@@ -58,6 +58,9 @@ ipcMain.handle('get-settings', () => {
     goalUnit: settings.goal?.unit || 'minutes',
     goalValue: settings.goal?.value || 60,
     sessionDayEnd: settings.kindle?.sessionDayEnd || '04:00',
+    // Epoch ms of a stopwatch that is still running, or null. Persisted so a
+    // restart doesn't lose a session in progress.
+    stopwatchStartedAt: settings.stopwatch?.startedAt ?? null,
   };
 });
 
@@ -94,9 +97,9 @@ ipcMain.handle('save-settings', async (event, data) => {
 ipcMain.handle('update-settings', async (event, key, value) => {
   try {
     const settings = loadSettings();
-    // `theme` and `timezone` are top-level settings; anything else belongs to
-    // the kindle block.
-    if (key === 'theme' || key === 'timezone') {
+    // `theme`, `timezone` and `stopwatch` are top-level settings; anything else
+    // belongs to the kindle block.
+    if (key === 'theme' || key === 'timezone' || key === 'stopwatch') {
       settings[key] = value;
     } else {
       if (!settings.kindle) settings.kindle = {};
