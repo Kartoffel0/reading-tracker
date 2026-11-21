@@ -2561,8 +2561,20 @@ body.theme-wave .wave-bg {
     font-weight: 700;
     line-height: 1.35;
     color: var(--text-primary);
-    /* A long Japanese title wraps here instead of running under the chart. */
-    overflow-wrap: anywhere;
+    min-width: 0;
+    /* One line, scrolled on hover like every other title in the app: a wrap
+       here would push the cover and the credits around instead. */
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.book-title-text {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.book-card:hover .book-title-text.marquee {
+    animation: marquee-scroll var(--marquee-duration, 6s) linear infinite;
 }
 
 .book-byline {
@@ -3283,7 +3295,8 @@ body.theme-wave .wave-bg {
     transition: opacity 0.2s ease, background 0.2s ease;
 }
 
-.recent-book:hover .cover-upload-btn {
+.recent-book:hover .cover-upload-btn,
+.book-card:hover .cover-upload-btn {
     opacity: 1;
 }
 

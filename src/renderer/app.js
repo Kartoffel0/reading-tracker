@@ -1434,20 +1434,33 @@ function coverMarkup(title, variant = 'row') {
 // title column look wider than it really is (so only the first row would
 // ever qualify). Suggestion rows have no covers, but keeping the
 // measurement at hover time is what lets them share this one code path.
+// Titles scroll only while their row is hovered, and only when the text is
+// actually wider than its column: the overflow is measured on hover, not at
+// render time, because cover images load asynchronously and would otherwise
+// make the title column look wider than it really is. The handler re-reads the
+// text each time, so a row whose title gets rewritten (the book sheet reuses
+// one node) stays in sync, and one row is only ever wired once.
+const marqueeRows = new WeakSet();
+
 function attachTitleMarquee(container) {
   for (const titleEl of container.querySelectorAll(
-    '.recent-title, .entry-title, .title-suggestion',
+    '.recent-title, .entry-title, .title-suggestion, .book-title',
   )) {
-    const inner = titleEl.querySelector(
-      '.recent-title-text, .entry-title-text, .title-suggestion-text',
+    const row = titleEl.closest(
+      '.recent-book, .entry-item, .title-suggestion, .book-card',
     );
-    const row = titleEl.closest('.recent-book, .entry-item, .title-suggestion');
+    if (!row || marqueeRows.has(row)) continue;
+    marqueeRows.add(row);
 
     row.addEventListener('mouseenter', () => {
-      if (inner.dataset.marqueeReady) return;
+      const inner = row.querySelector(
+        '.book-title-text, .recent-title-text, .entry-title-text, .title-suggestion-text',
+      );
+      const column = inner?.parentElement;
+      if (!inner || !column || inner.dataset.marqueeReady) return;
 
       const textWidth = inner.offsetWidth;
-      const visibleWidth = titleEl.offsetWidth;
+      const visibleWidth = column.offsetWidth;
       if (textWidth <= visibleWidth) return;
 
       // Duplicate the text so the cycle ends exactly where it started,
@@ -2349,7 +2362,7 @@ async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
       totalChars += session.characters || 0;
 
       return `
-                    <div class="recent-book session-row">
+                    <div class="recent-book session-row" data-book-title="${escapeHtml(title)}">
                         ${coverMarkup(title)}
                         <div class="recent-info">
                             <span class="session-title-row">
@@ -2481,7 +2494,8 @@ async function openBookModal(title) {
   const first = dayKeys[0] || null;
   const last = dayKeys[dayKeys.length - 1] || null;
 
-  document.getElementById('bookTitle').textContent = title;
+  document.getElementById('bookTitleText').textContent = title;
+  document.getElementById('bookModalHeader').textContent = `DETAILS - ${title}`;
   document.getElementById('bookSpan').textContent = first
     ? `${first.replaceAll('-', ' ')} — ${last.replaceAll('-', ' ')}`
     : 'Not started';
@@ -2538,6 +2552,7 @@ async function openBookModal(title) {
         .join('')
     : '<div class="empty-state"><p>No entries yet.</p></div>';
   attachTitleMarquee(list);
+  attachTitleMarquee(document.querySelector('.book-card'));
 
   document.getElementById('bookModalOverlay').classList.add('active');
 }
@@ -2644,16 +2659,29 @@ function editBookCredit(field) {
     });
   }
 
-  // A Recently Read row opens its book. The cover upload button stops
-  // propagation, so it keeps working inside the row.
-  document
-    .getElementById('recentlyReadList')
-    .addEventListener('click', (event) => {
-      const row = event.target.closest('.recent-book');
+  // Anything that names one book opens that book: a Recently Read row, a
+  // session row in the day modal, or an entry in the dashboard's list. The book
+  // sheet's own entries are excluded — a row there would open the sheet it is
+  // already sitting in — and the delete / cover buttons stop at their own
+  // handlers.
+  //
+  // Capture, because each modal's own wrapper carries an inline
+  // `onclick="event.stopPropagation()"` so clicks inside it do not close it:
+  // a bubble listener on document never sees a click made inside the session
+  // modal.
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (event.target.closest('.entry-del-btn, .cover-upload-btn')) return;
+      const row = event.target.closest(
+        '#recentlyReadList .recent-book, #modalBody .session-row, #entryList .entry-item',
+      );
       if (!row) return;
       const title = row.dataset.bookTitle;
       if (title) openBookModal(title);
-    });
+    },
+    true,
+  );
 })();
 
 function closeModal(event) {
@@ -2708,7 +2736,7 @@ function entryRowHtml({ dateKey, session }, deleteCall = null) {
       : '—';
 
   return `
-          <div class="entry-item">
+          <div class="entry-item" data-book-title="${escapeHtml(title)}">
             <span class="entry-date">${dateKey.replaceAll('-', ' ')}</span>
             <span class="entry-time">${timeRange}</span>
             <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>

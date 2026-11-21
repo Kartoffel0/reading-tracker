@@ -317,14 +317,14 @@
     <div class="modal-overlay" id="bookModalOverlay" onclick="closeBookModal(event)">
         <div class="modal book-modal" id="bookModal" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3>Book details</h3>
+                <h3 id="bookModalHeader">Details</h3>
                 <button class="modal-close-btn" type="button" onclick="closeBookModal()" aria-label="Close">&minus;</button>
             </div>
             <div class="book-sheet">
                 <aside class="panel book-card">
                     <div class="book-cover-slot" id="bookCoverSlot"></div>
                     <div class="book-identity">
-                        <h3 class="book-title" id="bookTitle"></h3>
+                        <h3 class="book-title" id="bookTitle"><span class="book-title-text" id="bookTitleText"></span></h3>
                         <div class="book-byline">
                             <span class="book-credit" id="bookAuthor" data-field="author" role="button" tabindex="0">Add author</span>
                             <span class="book-credit" id="bookSeries" data-field="series" role="button" tabindex="0">Add series</span>
