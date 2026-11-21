@@ -790,8 +790,13 @@ function computeGoalStats(data) {
     today.setDate(today.getDate() - 1);
   }
 
+  // Walk the run backwards; the first key is its end, the last one its start.
   let current = 0;
+  let currentStart = '';
+  let currentEnd = '';
   while (met.has(getDateKey(today))) {
+    if (!currentEnd) currentEnd = getDateKey(today);
+    currentStart = getDateKey(today);
     current++;
     today.setDate(today.getDate() - 1);
   }
@@ -814,25 +819,47 @@ function computeGoalStats(data) {
   const metDates = [...met].sort();
   let longest = 0;
   let runLength = 0;
+  let runStart = '';
+  let longestStart = '';
+  let longestEnd = '';
   let previousKey = null;
 
   for (const dateKey of metDates) {
-    runLength =
-      previousKey !== null && nextDayKey(previousKey) === dateKey
-        ? runLength + 1
-        : 1;
+    if (previousKey !== null && nextDayKey(previousKey) === dateKey) {
+      runLength++;
+    } else {
+      runLength = 1;
+      runStart = dateKey;
+    }
     previousKey = dateKey;
-    if (runLength > longest) longest = runLength;
+    if (runLength > longest) {
+      longest = runLength;
+      longestStart = runStart;
+      longestEnd = dateKey;
+    }
   }
+
+  const bestWeek = computeBestWeek(data, goalUnit);
+  const fastest = computeFastestDay(data);
 
   return {
     current,
+    currentStart,
+    currentEnd,
     longest,
+    longestStart,
+    longestEnd,
     daysMet,
+    // First and last day that reached the goal, for the tooltip range.
+    daysMetFirst: metDates[0] || '',
+    daysMetLast: metDates[metDates.length - 1] || '',
     bestValue,
     bestDate,
-    bestWeek: computeBestWeek(data, goalUnit),
-    fastestDay: computeFastestDay(data),
+    bestWeek: bestWeek.value,
+    bestWeekStart: bestWeek.key,
+    bestWeekEnd: bestWeek.end,
+    fastestDay: fastest.value,
+    fastestDate: fastest.key,
   };
 }
 
@@ -847,21 +874,35 @@ function computeBestWeek(data, goalUnit) {
     const weekKey = getDateKey(day);
     weeks.set(weekKey, (weeks.get(weekKey) || 0) + value);
   }
+  let bestKey = '';
   let best = 0;
-  for (const value of weeks.values()) best = Math.max(best, value);
-  return best;
+  for (const [key, value] of weeks.entries()) {
+    if (value > best) {
+      best = value;
+      bestKey = key;
+    }
+  }
+  // The Sunday that closes the winning week, for the tooltip range.
+  const end = new Date(bestKey + 'T00:00:00');
+  end.setDate(end.getDate() + 6);
+  return { value: best, key: bestKey, end: bestKey ? getDateKey(end) : '' };
 }
 
 // Characters per hour on the fastest day that had any time in it.
 function computeFastestDay(data) {
   let fastest = 0;
-  for (const sessions of Object.values(data)) {
+  let fastestKey = '';
+  for (const [dateKey, sessions] of Object.entries(data)) {
     const chars = sessions.reduce((sum, s) => sum + (s.characters || 0), 0);
     const minutes = sessions.reduce((sum, s) => sum + sessionMinutes(s), 0);
     if (minutes <= 0 || chars <= 0) continue;
-    fastest = Math.max(fastest, chars / (minutes / 60));
+    const speed = chars / (minutes / 60);
+    if (speed > fastest) {
+      fastest = speed;
+      fastestKey = dateKey;
+    }
   }
-  return fastest;
+  return { value: fastest, key: fastestKey };
 }
 
 function formatGoalValue(value, goalUnit) {
@@ -973,7 +1014,55 @@ async function renderGoalCard(data) {
     fastestDayEl.textContent = `${Math.round(stats.fastestDay).toLocaleString()}/h`;
   }
 
+  renderStatHints(stats, goalUnit);
   renderGoalCalendar(data);
+}
+
+// Each stat says which day (or week) its number came from. Hints are real
+// .tooltip elements, so they inherit the shared look; the card clips its top
+// edge, so the CSS anchors them below the stat.
+function renderStatHints(stats, goalUnit) {
+  const date = (key) => formatTooltipDate(key);
+  const range = (start, end) =>
+    start === end ? date(start) : `${date(start)} \u2192 ${date(end)}`;
+  const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
+  const value = (n) => formatGoalValue(n, goalUnit);
+  const unit = goalUnit === 'characters' ? 'chars' : 'hrs';
+
+  const hints = {
+    goalStatStreak:
+      stats.current > 0
+        ? `${range(stats.currentStart, stats.currentEnd)} \u00b7 ${days(stats.current)}`
+        : '',
+    goalStatLongest:
+      stats.longest > 0
+        ? `${range(stats.longestStart, stats.longestEnd)} \u00b7 ${days(stats.longest)}`
+        : '',
+    goalStatDays:
+      stats.daysMet > 0
+        ? `${range(stats.daysMetFirst, stats.daysMetLast)} \u00b7 ${days(stats.daysMet)}`
+        : '',
+    goalStatBestDay: stats.bestDate
+      ? `${date(stats.bestDate)} \u00b7 ${value(stats.bestValue)} ${unit}`
+      : '',
+    goalStatBestWeek: stats.bestWeekStart
+      ? `${range(stats.bestWeekStart, stats.bestWeekEnd)} \u00b7 ${value(stats.bestWeek)} ${unit}`
+      : '',
+    goalStatFastest: stats.fastestDate
+      ? `${date(stats.fastestDate)} \u00b7 ${Math.round(stats.fastestDay).toLocaleString()}/h`
+      : '',
+  };
+
+  for (const [id, text] of Object.entries(hints)) {
+    const stat = document.getElementById(id);
+    if (!stat) continue;
+    stat.querySelector('.tooltip')?.remove();
+    if (!text) continue;
+    const tip = document.createElement('div');
+    tip.className = 'tooltip';
+    tip.textContent = text;
+    stat.appendChild(tip);
+  }
 }
 
 // GitHub-style contribution calendar: 7 rows (Mon-Sun) x one column per week,
