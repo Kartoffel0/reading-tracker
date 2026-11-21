@@ -1499,7 +1499,7 @@ input[type="submit"]:focus-visible,
        theme the page colour and the card colour are near enough to white that
        the difference vanished. The floor is legibility: nothing below ~55%
        survives a dense chart. */
-    background-color: color-mix(in srgb, var(--bg-secondary) 62%, transparent);
+    background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 4px 8px;
@@ -1516,7 +1516,7 @@ input[type="submit"]:focus-visible,
 .goal-stat:hover .tooltip,
 .rt-bar-pair:hover::after,
 .rt-avg-tag:hover::after {
-    backdrop-filter: blur(6px);
+    backdrop-filter: blur(2px);
 }
 
 /* ===== ENTRIES SECTION ===== */
