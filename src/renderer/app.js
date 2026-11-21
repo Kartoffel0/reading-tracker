@@ -1399,26 +1399,28 @@ async function uploadCoverFor(title) {
   }
 }
 
-function coverMarkup(title) {
+// `variant` picks the box the art goes in: the 68x90 chip the cards use, or the
+// tall frame of the book sheet. Both keep the upload button in the same corner.
+function coverMarkup(title, variant = 'row') {
   const cover = coverCache.get(title);
+  const large = variant === 'large';
   // The upload button is shared by both branches: books that already have a
   // cover (found or manual) can replace it by picking a new image.
   const uploadBtn = `<button class="cover-upload-btn" data-cover-title="${escapeHtml(title)}" title="Upload a cover image" aria-label="Upload a cover image">+</button>`;
   if (cover?.url) {
-    // The button lives inside the fixed 68x90 box in both branches, pinned
-    // to its bottom-left corner. That corner IS the cover's left edge for
-    // every aspect ratio — only the right edge moves, so anchoring right
-    // would drift across covers.
+    // The button lives inside the fixed box in both branches, pinned to its
+    // bottom-left corner. That corner IS the cover's left edge for every aspect
+    // ratio — only the right edge moves, so anchoring right would drift.
     return `
-      <div class="recent-cover-wrap">
-        <img class="recent-cover" src="${cover.url}" alt="${escapeHtml(title)} cover" />
+      <div class="${large ? 'book-cover-wrap' : 'recent-cover-wrap'}">
+        <img class="${large ? 'book-cover-img' : 'recent-cover'}" src="${cover.url}" alt="${escapeHtml(title)} cover" />
         ${uploadBtn}
       </div>
     `;
   }
   const initial = escapeHtml((title.trim() || '?')[0]);
   return `
-    <div class="recent-cover-placeholder">
+    <div class="${large ? 'book-cover-placeholder' : 'recent-cover-placeholder'}">
       <span class="cover-initial">${initial}</span>
       ${uploadBtn}
     </div>
@@ -1528,7 +1530,7 @@ async function renderRecentlyRead(data) {
       const charsClass = goalIsChars ? ' recent-stat-chars' : '';
       const timeClass = goalIsChars ? '' : ' recent-stat-time';
       return `
-        <div class="recent-book">
+        <div class="recent-book" data-book-title="${escapeHtml(title)}">
           ${coverMarkup(title)}
           <div class="recent-info">
             <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
@@ -1662,38 +1664,96 @@ function rtPeriodRange(period = rtActivePeriod, offset = rtPeriodOffset) {
   return { start: null, end: null };
 }
 
-// Which column a date falls into for a period, and the label that column
-// carries on the x axis.
-function rtBucketKey(period, date) {
-  if (period === 'week') return date.getDay();
-  if (period === 'month') return date.getDate();
-  if (period === 'year') return date.getMonth();
-  return date.getFullYear();
+// ---- Columns ---------------------------------------------------------------
+// A chart draws one range as an ordered list of columns. The range decides how
+// wide a column is: a week is seven days, a month is its own dates, a year is
+// twelve months, all-time is one column per year. A book has no calendar to
+// borrow, so it takes the widest column that still shows its shape.
+const RT_DAY_MS = 86400000;
+
+function rtGranularityOf(period) {
+  if (period === 'week' || period === 'month') return 'day';
+  if (period === 'year') return 'month';
+  return 'year';
 }
 
-function rtBucketLabel(period, key) {
-  if (period === 'week') return 'SMTWTFS'[key];
-  if (period === 'month') return rtMonthTickLabel(key);
-  if (period === 'year') return 'JFMAMJJASOND'[key];
-  return String(key);
+function rtBookGranularity(start, end) {
+  const days = Math.round((end - start) / RT_DAY_MS) + 1;
+  if (days <= 92) return 'day';
+  if (days <= 1826) return 'month';
+  return 'year';
 }
 
-// Tooltip date labels follow the shared "YYYY MM DD" convention. The year and
-// all-time tabs bucket by month and year, so they use the shortened period
-// label ("2026 10" / "2026") instead of a single day.
-function rtTooltipLabel(period, start, bucketKey) {
-  if (period === 'week') {
-    const d = new Date(start);
-    d.setDate(start.getDate() + bucketKey);
-    return formatTooltipDate(getDateKey(d));
+// Every column carries what it needs to draw AND what it needs to be clicked:
+// `key` groups sessions (a date key, a month key, a year), `label` is the axis
+// tick, `tooltip` the date line the tooltip opens with, `scope` + `clickKey` the
+// range its click-through opens.
+function rtColumns(start, end, granularity) {
+  const columns = [];
+  if (granularity === 'day') {
+    const days = Math.round((end - start) / RT_DAY_MS) + 1;
+    // One calendar week keeps the weekday letters the W tab uses; a longer span
+    // is labelled by day of month, and the tooltip carries the whole date.
+    const weekLetters = days === 7 && start.getDay() === 0;
+    const cursor = new Date(start);
+    for (let i = 0; i < days; i++) {
+      const key = getDateKey(cursor);
+      columns.push({
+        key,
+        label: weekLetters
+          ? 'SMTWTFS'[cursor.getDay()]
+          : rtMonthTickLabel(cursor.getDate()),
+        tooltip: formatTooltipDate(key),
+        scope: 'day',
+        clickKey: key,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return columns;
   }
-  if (period === 'month') {
-    return `${start.getFullYear()} ${String(start.getMonth() + 1).padStart(2, '0')} ${String(bucketKey).padStart(2, '0')}`;
+  if (granularity === 'month') {
+    // One year of months is the JFMA letters the Y tab already uses. A span
+    // across years would repeat those letters, so each January carries its year
+    // and the rest stay bare.
+    const sameYear = start.getFullYear() === end.getFullYear();
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const last = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (cursor <= last) {
+      const month = cursor.getMonth();
+      const key = `${cursor.getFullYear()}-${String(month + 1).padStart(2, '0')}`;
+      columns.push({
+        key,
+        label:
+          sameYear || month !== 0
+            ? 'JFMAMJJASOND'[month]
+            : `J ${String(cursor.getFullYear()).slice(2)}`,
+        tooltip: key.replace('-', ' '),
+        scope: 'month',
+        clickKey: key,
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return columns;
   }
-  if (period === 'year') {
-    return `${start.getFullYear()} ${String(bucketKey + 1).padStart(2, '0')}`;
+  for (let year = start.getFullYear(); year <= end.getFullYear(); year++) {
+    columns.push({
+      key: String(year),
+      label: String(year),
+      tooltip: String(year),
+      scope: 'year',
+      clickKey: String(year),
+    });
   }
-  return String(bucketKey);
+  return columns;
+}
+
+// Which column a date falls into. Only all-time needs this on its own: it has no
+// range to enumerate, so its columns arrive with the data.
+function rtColumnKeyFor(granularity, date) {
+  if (granularity === 'day') return getDateKey(date);
+  if (granularity === 'month')
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  return String(date.getFullYear());
 }
 
 // chars/hour around one column. `half` is the rolling window: 0 reads the
@@ -1716,11 +1776,9 @@ function rtSpeedAt(buckets, index, half) {
   return minutes > 0 ? chars / (minutes / 60) : null;
 }
 
-// The window widens with the period so a month does not turn into a spray of
-// single-day dots: a week is a daily rate, a month a rolling week, a year a
-// rolling quarter.
-function rtSpeedSeries(buckets, period) {
-  const half = period === 'week' ? 0 : period === 'month' ? 3 : period === 'year' ? 1 : 0;
+// `half` is the rolling window the caller picked for its column width, so a
+// month does not turn into a spray of single-day dots.
+function rtSpeedSeries(buckets, half) {
   const points = buckets.map((_, i) => rtSpeedAt(buckets, i, half));
   const values = points.filter((v) => v !== null);
   const peak = values.length ? Math.max(...values) : 0;
@@ -1767,16 +1825,30 @@ function rtAxisGutter(label) {
   return `${Math.max(12, Math.ceil(label.length * 5.2) + 6)}px`;
 }
 
-function buildStatsModel({ dataByDate, period, offset = 0, unit = 'minutes' }) {
-  const { start, end } = rtPeriodRange(period, offset);
+function buildStatsModel({
+  dataByDate,
+  period,
+  offset = 0,
+  unit = 'minutes',
+  range = null,
+}) {
+  const { start, end } = range || rtPeriodRange(period, offset);
   const useChars = unit === 'characters';
+  // A book chart has nothing to step through: its columns span the book itself.
+  const granularity =
+    start === null
+      ? 'year'
+      : range
+        ? rtBookGranularity(start, end)
+        : rtGranularityOf(period);
   const startKey = start === null ? null : getDateKey(start);
   const endKey = end === null ? null : getDateKey(end);
 
-  // The period before this one, for the delta line.
+  // The period before this one, for the delta line. A book has no previous
+  // book to compare against, so a range never asks for one.
   let prevStart = null;
   let prevEnd = null;
-  if (start !== null) {
+  if (start !== null && !range) {
     prevEnd = new Date(start);
     prevEnd.setDate(prevEnd.getDate() - 1);
     if (period === 'week') {
@@ -1791,7 +1863,16 @@ function buildStatsModel({ dataByDate, period, offset = 0, unit = 'minutes' }) {
   const prevStartKey = prevStart === null ? null : getDateKey(prevStart);
   const prevEndKey = prevEnd === null ? null : getDateKey(prevEnd);
 
-  const buckets = new Map();
+  // Every column of the range exists before any data lands, so a day nobody read
+  // still holds its place on the axis. All-time has no range to enumerate and
+  // grows its columns from the data.
+  const byKey = new Map();
+  if (start !== null) {
+    for (const column of rtColumns(start, end, granularity)) {
+      byKey.set(column.key, { ...column, minutes: 0, chars: 0, sessions: 0 });
+    }
+  }
+
   let totalMinutes = 0;
   let totalChars = 0;
   let totalSessions = 0;
@@ -1800,17 +1881,20 @@ function buildStatsModel({ dataByDate, period, offset = 0, unit = 'minutes' }) {
   for (const [dateKey, sessions] of Object.entries(dataByDate)) {
     if (!Array.isArray(sessions)) continue;
     if (startKey === null || (dateKey >= startKey && dateKey <= endKey)) {
-      const key = rtBucketKey(period, new Date(dateKey + 'T00:00:00'));
-      let bucket = buckets.get(key);
+      const key = rtColumnKeyFor(granularity, new Date(dateKey + 'T00:00:00'));
+      let bucket = byKey.get(key);
       if (!bucket) {
         bucket = {
           key,
-          label: rtBucketLabel(period, key),
+          label: key,
+          tooltip: key.replace(/-/g, ' '),
+          scope: 'year',
+          clickKey: key,
           minutes: 0,
           chars: 0,
           sessions: 0,
         };
-        buckets.set(key, bucket);
+        byKey.set(key, bucket);
       }
       for (const s of sessions) {
         const minutes = sessionMinutes(s);
@@ -1833,29 +1917,7 @@ function buildStatsModel({ dataByDate, period, offset = 0, unit = 'minutes' }) {
     }
   }
 
-  // Empty columns keep the axis continuous.
-  const filled = [...buckets.values()];
-  if (period === 'week') {
-    for (let i = 0; i < 7; i++) {
-      if (!buckets.has(i)) {
-        filled.push({ key: i, label: 'SMTWTFS'[i], minutes: 0, chars: 0, sessions: 0 });
-      }
-    }
-  } else if (period === 'month') {
-    const days = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
-    for (let d = 1; d <= days; d++) {
-      if (!buckets.has(d)) {
-        filled.push({ key: d, label: rtMonthTickLabel(d), minutes: 0, chars: 0, sessions: 0 });
-      }
-    }
-  } else if (period === 'year') {
-    for (let m = 0; m < 12; m++) {
-      if (!buckets.has(m)) {
-        filled.push({ key: m, label: 'JFMAMJJASOND'[m], minutes: 0, chars: 0, sessions: 0 });
-      }
-    }
-  }
-  const sorted = filled.sort((a, b) => a.key - b.key);
+  const sorted = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
 
   const peakChars = sorted.reduce((m, b) => Math.max(m, b.chars), 0);
   const peakMinutes = sorted.reduce((m, b) => Math.max(m, b.minutes), 0);
@@ -1874,9 +1936,9 @@ function buildStatsModel({ dataByDate, period, offset = 0, unit = 'minutes' }) {
   const avgMinutes = avgOf((b) => b.minutes);
 
   const totalMetric = useChars ? totalChars : totalMinutes;
-  const periodWord = RT_TABS.find((t) => t.key === period).word;
   let deltaText = '';
   if (prevStartKey !== null && prevMetric > 0) {
+    const periodWord = RT_TABS.find((t) => t.key === period)?.word || 'period';
     const pct = Math.round(((totalMetric - prevMetric) / prevMetric) * 100);
     deltaText = `${pct >= 0 ? '↗' : '↘'} ${Math.abs(pct)}% from previous ${periodWord}`;
   }
@@ -1885,11 +1947,33 @@ function buildStatsModel({ dataByDate, period, offset = 0, unit = 'minutes' }) {
   const todayInRange =
     startKey === null || (startKey <= todayKey && todayKey <= endKey);
 
+  // The rate line widens its window with the column width: a daily column reads
+  // itself across a week, a rolling week across a long daily span, a rolling
+  // quarter on monthly columns.
+  const speedHalf = range
+    ? sorted.length > 21
+      ? 3
+      : 0
+    : period === 'week'
+      ? 0
+      : period === 'month'
+        ? 3
+        : period === 'year'
+          ? 1
+          : 0;
+
   return {
     period,
+    granularity,
     useChars,
     start,
     sorted,
+    // Charts past twenty columns need a tighter gap to fit the card.
+    dense: sorted.length > 20,
+    // Only a calendar period has older and newer to step to.
+    steppers: !range,
+    // When the chart belongs to one book, its click-through must stay in it.
+    scopedTitle: range?.scopedTitle || null,
     totalMinutes,
     totalChars,
     totalSessions,
@@ -1902,9 +1986,9 @@ function buildStatsModel({ dataByDate, period, offset = 0, unit = 'minutes' }) {
     rangeLabel:
       start === null ? 'All time' : `${rtShortDate(start)} – ${rtShortDate(end)}`,
     todayBucketKey: todayInRange
-      ? rtBucketKey(period, sessionDayDate())
+      ? rtColumnKeyFor(granularity, sessionDayDate())
       : null,
-    speed: rtSpeedSeries(sorted, period),
+    speed: rtSpeedSeries(sorted, speedHalf),
   };
 }
 
@@ -1916,9 +2000,13 @@ function buildStatsBody(model) {
 
   const {
     period,
+    granularity,
     useChars,
     start,
     sorted,
+    dense,
+    steppers,
+    scopedTitle,
     totalMinutes,
     totalChars,
     totalSessions,
@@ -1933,25 +2021,6 @@ function buildStatsBody(model) {
     speed,
   } = model;
 
-  // Which keys a column covers, for the click-through modal: a day on W / M, a
-  // month on the year tab, a year on all-time. The dash form matches the date
-  // keys getStatsData() uses, so the modal can filter by prefix.
-  const bucketScope =
-    period === 'week' || period === 'month'
-      ? 'day'
-      : period === 'year'
-        ? 'month'
-        : 'year';
-  const bucketKeyOf = (key) => {
-    if (period === 'week') return shiftDateKey(getDateKey(start), key);
-    // All-time buckets are years and carry no start date to derive from.
-    if (period === 'all') return String(key);
-    const year = start.getFullYear();
-    const month = String(start.getMonth() + 1).padStart(2, '0');
-    if (period === 'month') return `${year}-${month}-${String(key).padStart(2, '0')}`;
-    return `${year}-${String(key + 1).padStart(2, '0')}`;
-  };
-
   const topOf = (value, nice) => (nice > 0 ? 100 - (value / nice) * 100 : 100);
   // A column with nothing in it draws nothing: thirty empty days should not
   // read as thirty tiny bars along the baseline.
@@ -1960,8 +2029,7 @@ function buildStatsBody(model) {
 
   const bars = sorted
     .map((b, i) => {
-      const bucketLabel = rtTooltipLabel(period, start, b.key);
-      const lines = tooltipLines(bucketLabel, b.minutes, b.chars, b.sessions);
+      const lines = tooltipLines(b.tooltip, b.minutes, b.chars, b.sessions);
       const rate = speed.points[i];
       if (rate !== null) lines.push(`${formatSpeed(rate)} chars/h`);
       const today = b.key === todayBucketKey ? ' today' : '';
@@ -1973,7 +2041,7 @@ function buildStatsBody(model) {
       const tall = Math.max(charsHeight, timeHeight);
       const tipClass = tall > 72 ? ' rt-tip-down' : '';
       return `
-        <div class="rt-bar-pair${tipClass}" data-tooltip="${lines.join('\n')}" style="--tip-y: ${tall.toFixed(1)}%" data-scope="${bucketScope}" data-key="${bucketKeyOf(b.key)}" data-label="${bucketLabel}" title="Open these sessions">
+        <div class="rt-bar-pair${tipClass}" data-tooltip="${lines.join('\n')}" style="--tip-y: ${tall.toFixed(1)}%" data-scope="${b.scope}" data-key="${b.clickKey}" data-label="${b.tooltip}" title="Open these sessions">
           <div class="rt-bar rt-bar-chars${today}" style="height: ${charsHeight}%"></div>
           <div class="rt-bar rt-bar-time${today}" style="height: ${timeHeight}%"></div>
         </div>
@@ -2038,19 +2106,23 @@ function buildStatsBody(model) {
         <span class="rt-y-label rt-y-left" style="top: 100%">0</span>
         <span class="rt-y-label rt-y-right" style="top: 0%">${rtFormatAxis(niceMinutes)}</span>
         <span class="rt-y-label rt-y-right" style="top: 100%">0</span>
-        <div class="rt-bars" data-period="${period}">${bars}</div>
+        <div class="rt-bars"${dense ? ' data-dense' : ''}>${bars}</div>
         <svg class="rt-trend-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${speedLine}</svg>
       </div>
-      <div class="rt-x-axis" data-period="${period}">${xLabels}</div>
+      <div class="rt-x-axis"${dense ? ' data-dense' : ''}>${xLabels}</div>
     </div>
     <div class="rt-footer">
       <div class="rt-summary">
         <div class="rt-caption">
           <span class="rt-range">${rangeLabel} Average</span>
-          <div class="rt-period-step">
+          ${
+            steppers
+              ? `<div class="rt-period-step">
             <button type="button" class="rt-step" data-step="-1" title="Older period">‹</button>
             <button type="button" class="rt-step" data-step="1" title="Newer period">›</button>
-          </div>
+          </div>`
+              : ''
+          }
         </div>
         <div class="rt-headline">
           <span class="rt-big">${
@@ -2092,7 +2164,12 @@ function buildStatsBody(model) {
     if (rtDragCycled) return;
     const pair = event.target.closest('.rt-bar-pair');
     if (!pair) return;
-    openStatsBucket(pair.dataset.scope, pair.dataset.key, pair.dataset.label);
+    openStatsBucket(
+      pair.dataset.scope,
+      pair.dataset.key,
+      pair.dataset.label,
+      scopedTitle,
+    );
   });
 
   return root;
@@ -2193,13 +2270,16 @@ function shiftReadingPeriod(direction) {
 // Lists the sessions behind a date or a span of dates. The goal calendar
 // passes one day; the stats card passes every key inside the clicked column,
 // which is a month or a year when the card is on Y / A.
-async function openSessionsFor(title, dateKeys, preloaded) {
+async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
   const data = preloaded || (await getStatsData());
   const entries = [];
   for (const dateKey of dateKeys) {
     const list = data[dateKey];
     if (!Array.isArray(list)) continue;
-    for (const session of list) entries.push({ dateKey, session });
+    for (const session of list) {
+      if (scopedTitle && session.title !== scopedTitle) continue;
+      entries.push({ dateKey, session });
+    }
   }
   // Newest first, the order the entries card uses.
   entries.sort(
@@ -2346,15 +2426,235 @@ async function openDaySessions(dateKey) {
 
 // A stats column is a whole bucket: one day on W / M, a month on the year tab,
 // a year on all-time.
-async function openStatsBucket(scope, dataKey, label) {
+// `scopedTitle` keeps a book's chart inside its own book: the same day holds
+// other books' sessions, and showing those would answer a question nobody asked.
+async function openStatsBucket(scope, dataKey, label, scopedTitle = null) {
+  // A scoped chart lives inside the book sheet, which is later in the DOM and
+  // would paint over the session modal this click opens.
+  if (scopedTitle) closeBookModal();
   if (scope === 'day') {
-    await openSessionsFor(`Sessions - ${label}`, [dataKey]);
+    await openSessionsFor(`Sessions - ${label}`, [dataKey], null, scopedTitle);
     return;
   }
   const data = await getStatsData();
   const keys = Object.keys(data).filter((key) => key.startsWith(dataKey));
-  await openSessionsFor(`Sessions - ${label}`, keys, data);
+  await openSessionsFor(`Sessions - ${label}`, keys, data, scopedTitle);
 }
+
+// ===== Book sheet ==========================================================
+// One book, end to end: cover and credits on the left, its whole reading
+// history on the right. Unlike the dashboard's stats card this one has no tabs
+// and no steppers — a book has a first day and a last day, and the chart spans
+// exactly that, in day columns for a normal read-through and months or years
+// for a long one.
+const BOOK_STATUSES = ['reading', 'read', 'dropped'];
+
+function closeBookModal(event) {
+  if (!event || event.target.id === 'bookModalOverlay') {
+    document.getElementById('bookModalOverlay').classList.remove('active');
+  }
+}
+
+async function openBookModal(title) {
+  const [statsByDay, raw] = await Promise.all([getStatsData(), getData()]);
+
+  // Stats read the session day (a session stopped after midnight counts for the
+  // day before); the entries read the day it was recorded under. Both are used.
+  const stats = {};
+  for (const [dayKey, sessions] of Object.entries(statsByDay)) {
+    const mine = sessions.filter((s) => s.title === title);
+    if (mine.length) stats[dayKey] = mine;
+  }
+  const entries = [];
+  for (const [dateKey, sessions] of Object.entries(raw)) {
+    for (const s of sessions) {
+      if (s.title === title) entries.push({ dateKey, session: s });
+    }
+  }
+  entries.sort(
+    (a, b) =>
+      b.dateKey.localeCompare(a.dateKey) ||
+      (b.session.id || 0) - (a.session.id || 0),
+  );
+
+  const dayKeys = Object.keys(stats).sort();
+  const first = dayKeys[0] || null;
+  const last = dayKeys[dayKeys.length - 1] || null;
+
+  document.getElementById('bookTitle').textContent = title;
+  document.getElementById('bookSpan').textContent = first
+    ? `${first.replaceAll('-', ' ')} — ${last.replaceAll('-', ' ')}`
+    : 'Not started';
+  document.getElementById('bookEntryCount').textContent =
+    `${entries.length} session${entries.length === 1 ? '' : 's'}`;
+  document.getElementById('bookStatus').dataset.title = title;
+
+  // Cover art comes from the same cache the cards use, in the sheet's frame.
+  await ensureCovers([{ title, language: entries[0]?.session.language }]);
+  const slot = document.getElementById('bookCoverSlot');
+  slot.innerHTML = coverMarkup(title, 'large');
+  attachCoverUploads(slot);
+
+  // Credits and status are the only columns a human can fill in; everything
+  // else on the row is derived from sessions.
+  const book = (await window.electronAPI.getBook(title)) || {
+    title,
+    status: 'reading',
+  };
+  setBookCredits(book);
+  setBookStatus(book.status);
+
+  const body = document.getElementById('bookStatsBody');
+  if (first) {
+    body.replaceChildren(
+      buildStatsBody(
+        buildStatsModel({
+          dataByDate: stats,
+          period: 'book',
+          unit: currentGoal.unit,
+          range: {
+            start: new Date(`${first}T00:00:00`),
+            end: new Date(`${last}T00:00:00`),
+            scopedTitle: title,
+          },
+        }),
+      ),
+    );
+  } else {
+    body.innerHTML =
+      '<div class="empty-state"><p>No sessions recorded for this book.</p></div>';
+  }
+
+  // Every session this book has, newest first, with no cap.
+  const list = document.getElementById('bookEntryList');
+  list.innerHTML = entries.length
+    ? entries
+        .map((entry) =>
+          entryRowHtml(
+            entry,
+            `deleteBookSession('${entry.dateKey}', ${entry.session.id})`,
+          ),
+        )
+        .join('')
+    : '<div class="empty-state"><p>No entries yet.</p></div>';
+  attachTitleMarquee(list);
+
+  document.getElementById('bookModalOverlay').classList.add('active');
+}
+
+// Deleting from inside the sheet keeps the sheet open and refreshes it.
+async function deleteBookSession(dateKey, sessionId) {
+  await removeSession(dateKey, sessionId);
+  await updateAll();
+  const title = document.getElementById('bookStatus').dataset.title;
+  if (title) await openBookModal(title);
+  showToast('Session deleted');
+}
+
+function setBookStatus(status) {
+  for (const btn of document.querySelectorAll('#bookStatus .book-status-btn')) {
+    btn.classList.toggle('active', btn.dataset.status === status);
+  }
+}
+
+function setBookCredits(book) {
+  const fields = [
+    ['author', 'bookAuthor', 'Add author'],
+    ['series', 'bookSeries', 'Add series'],
+  ];
+  for (const [field, id, placeholder] of fields) {
+    const node = document.getElementById(id);
+    const value = (book[field] || '').trim();
+    node.textContent = value || placeholder;
+    node.classList.toggle('filled', Boolean(value));
+  }
+}
+
+// Clicking a credit turns it into a one-line input; Enter or blur commits, Esc
+// abandons. Neither field is ever derived from sessions, so typing here is the
+// only way they get filled in.
+function editBookCredit(field) {
+  const node = document.getElementById(
+    field === 'author' ? 'bookAuthor' : 'bookSeries',
+  );
+  if (node.querySelector('input')) return;
+  const title = document.getElementById('bookStatus').dataset.title;
+  if (!title) return;
+
+  const current = node.classList.contains('filled') ? node.textContent : '';
+  const input = document.createElement('input');
+  input.className = 'book-credit-input';
+  input.type = 'text';
+  input.value = current;
+  input.placeholder = field === 'author' ? 'Author' : 'Series';
+  node.replaceChildren(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    done = true;
+    let book = null;
+    if (commit && input.value.trim() !== current) {
+      book = await window.electronAPI.updateBook(title, {
+        [field]: input.value,
+      });
+    }
+    setBookCredits(book || (await window.electronAPI.getBook(title)) || { title });
+  };
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      finish(true);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+// Wired once: the sheet's shell is static, only its contents are rewritten.
+(function wireBookSheet() {
+  const status = document.getElementById('bookStatus');
+  if (!status) return;
+  status.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.book-status-btn');
+    if (!btn) return;
+    const title = status.dataset.title;
+    if (!title) return;
+    const book = await window.electronAPI.updateBook(title, {
+      status: btn.dataset.status,
+    });
+    if (book) setBookStatus(book.status);
+  });
+  // Author and series are spans with a button role, so they need the keyboard
+  // to behave like one.
+  for (const [id, field] of [
+    ['bookAuthor', 'author'],
+    ['bookSeries', 'series'],
+  ]) {
+    const node = document.getElementById(id);
+    node.addEventListener('click', () => editBookCredit(field));
+    node.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      editBookCredit(field);
+    });
+  }
+
+  // A Recently Read row opens its book. The cover upload button stops
+  // propagation, so it keeps working inside the row.
+  document
+    .getElementById('recentlyReadList')
+    .addEventListener('click', (event) => {
+      const row = event.target.closest('.recent-book');
+      if (!row) return;
+      const title = row.dataset.bookTitle;
+      if (title) openBookModal(title);
+    });
+})();
 
 function closeModal(event) {
   if (!event || event.target.id === 'modalOverlay') {
@@ -2375,11 +2675,52 @@ document.addEventListener('keydown', (e) => {
       ?.classList.contains('active')
   )
     return closeSettingsModal();
+  if (
+    document.getElementById('bookModalOverlay')?.classList.contains('active')
+  )
+    return closeBookModal();
   if (document.getElementById('modalOverlay')?.classList.contains('active'))
     return closeModal();
   if (document.getElementById('syncModalOverlay')?.classList.contains('active'))
     return closeKindleSyncModal();
 });
+
+// One line per session, shared by the dashboard's entries list and the book
+// sheet: date, clock range, title, then the three numbers. Sessions from before
+// start/end times existed keep an em dash so the columns stay aligned.
+function entryRowHtml({ dateKey, session }, deleteCall = null) {
+  const title = session.title || 'Untitled';
+  const minutes = Math.round(sessionMinutes(session));
+  const chars = session.characters || 0;
+  // Same speed math the session modal uses: chars per hour.
+  const hours =
+    session.unit === 'minutes' ? session.duration / 60 : session.duration;
+  const speed = hours > 0 ? Math.round(chars / hours) : 0;
+
+  // Highlight the stat that matches the unit of the current goal.
+  const goalIsChars = currentGoal.unit === 'characters';
+  const durationClass = goalIsChars ? '' : ' entry-highlight';
+  const charsClass = goalIsChars ? ' entry-highlight' : '';
+
+  const timeRange =
+    session.start_time && session.end_time
+      ? `${session.start_time}–${session.end_time}`
+      : '—';
+
+  return `
+          <div class="entry-item">
+            <span class="entry-date">${dateKey.replaceAll('-', ' ')}</span>
+            <span class="entry-time">${timeRange}</span>
+            <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
+            <div class="entry-stats">
+                <div class="entry-stat entry-duration${durationClass}"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
+                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chr</span></div>
+                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speed.toLocaleString()}</span><span class="entry-stat-unit">/h</span></div>
+            </div>
+            <button class="entry-del-btn" onclick="${deleteCall || `deleteSession('${dateKey}', ${session.id}, false)`}">✖</button>
+          </div>
+        `;
+}
 
 async function renderEntries() {
   const data = await getData();
@@ -2410,41 +2751,7 @@ async function renderEntries() {
 
   entryList.innerHTML = sessions
     .slice(0, 100)
-    .map(({ dateKey, session }) => {
-      const title = session.title || 'Untitled';
-      const minutes = Math.round(sessionMinutes(session));
-      const chars = session.characters || 0;
-      // Same speed math the session modal uses: chars per hour.
-      const hours =
-        session.unit === 'minutes' ? session.duration / 60 : session.duration;
-      const speed = hours > 0 ? Math.round(chars / hours) : 0;
-
-      // Highlight the stat that matches the unit of the current goal.
-      const goalIsChars = currentGoal.unit === 'characters';
-      const durationClass = goalIsChars ? '' : ' entry-highlight';
-      const charsClass = goalIsChars ? ' entry-highlight' : '';
-
-      // Sessions from before start/end times existed keep an em dash so the
-      // column stays aligned instead of the row shifting sideways.
-      const timeRange =
-        session.start_time && session.end_time
-          ? `${session.start_time}–${session.end_time}`
-          : '—';
-
-      return `
-          <div class="entry-item">
-            <span class="entry-date">${dateKey.replaceAll('-', ' ')}</span>
-            <span class="entry-time">${timeRange}</span>
-            <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
-            <div class="entry-stats">
-                <div class="entry-stat entry-duration${durationClass}"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
-                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chr</span></div>
-                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speed.toLocaleString()}</span><span class="entry-stat-unit">/h</span></div>
-            </div>
-            <button class="entry-del-btn" onclick="deleteSession('${dateKey}', ${session.id}, false)">✖</button>
-          </div>
-        `;
-    })
+    .map((entry) => entryRowHtml(entry))
     .join('');
 
   attachTitleMarquee(entryList);

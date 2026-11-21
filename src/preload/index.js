@@ -9,6 +9,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-sessions-by-date', dateKey),
   getAllSessions: () => ipcRenderer.invoke('get-all-sessions'),
 
+  // Books
+  getBook: (title) => ipcRenderer.invoke('get-book', title),
+  updateBook: (title, patch) => ipcRenderer.invoke('update-book', title, patch),
+
   // Book covers
   ensureCovers: (requests) => ipcRenderer.invoke('ensure-covers', requests),
   getCoverUrl: (title) => ipcRenderer.invoke('get-cover-url', title),

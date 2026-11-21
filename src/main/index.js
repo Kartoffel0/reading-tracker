@@ -399,14 +399,41 @@ function openDatabase() {
       title      TEXT PRIMARY KEY,
       kind       TEXT NOT NULL DEFAULT 'book',
       is_audio   INTEGER NOT NULL DEFAULT 0,
-      status     TEXT NOT NULL DEFAULT 'active',
+      status     TEXT NOT NULL DEFAULT 'reading',
       added_at   TEXT NOT NULL,
-      cover      TEXT,
+      author     TEXT,
+      series     TEXT,
       audio_path TEXT,
       position   REAL DEFAULT 0,
       rate       REAL DEFAULT 1.0
     );
   `);
+
+  // Covers already have a home: covers/covers.json plus the image files, both
+  // keyed by title and reachable from the renderer. A column here would be a
+  // second copy of the same fact, so a books table that grew one loses it.
+  if (
+    db.prepare('PRAGMA table_info(books)').all().some((c) => c.name === 'cover')
+  ) {
+    db.exec('ALTER TABLE books DROP COLUMN cover');
+  }
+
+  // Author and series are never derived — the session log has no field for them
+  // and KOReader's sidecar does not carry them — so they arrive only when the
+  // user types them into the book sheet.
+  const bookColumns = new Set(
+    db.prepare('PRAGMA table_info(books)').all().map((column) => column.name),
+  );
+  if (!bookColumns.has('author'))
+    db.exec('ALTER TABLE books ADD COLUMN author TEXT');
+  if (!bookColumns.has('series'))
+    db.exec('ALTER TABLE books ADD COLUMN series TEXT');
+
+  // The shelf has exactly three states, and they name what you are doing with
+  // the book: reading it, done with it, or off it. The first schema guess
+  // (active / paused / done) was bookkeeping vocabulary; fold it on.
+  db.exec("UPDATE books SET status = 'reading' WHERE status IN ('active', 'paused')");
+  db.exec("UPDATE books SET status = 'read' WHERE status = 'done'");
 
   // Backfill is idempotent rather than a one-shot: a fresh file, an old backup
   // restored over the live one, and a data.db dropped in by hand all arrive with
@@ -801,6 +828,48 @@ app.whenReady().then(() => {
 
     db = openDatabase();
     return true;
+  });
+
+  // ===== Books =====
+  // The book sheet reads one row and writes back only what a human can type:
+  // status, author, series. Everything else on the row is derived from sessions
+  // (added_at, is_audio, kind) or belongs to a later phase (audio_path, position,
+  // rate), so it is deliberately not writable from here.
+  ipcMain.handle('get-book', (_, title) => {
+    return db.prepare('SELECT * FROM books WHERE title = ?').get(title) || null;
+  });
+
+  const BOOK_STATUSES = new Set(['reading', 'read', 'dropped']);
+
+  ipcMain.handle('update-book', (_, title, patch = {}) => {
+    const fields = [];
+    const values = [];
+    if (BOOK_STATUSES.has(patch.status)) {
+      fields.push('status = ?');
+      values.push(patch.status);
+    }
+    for (const key of ['author', 'series']) {
+      if (typeof patch[key] !== 'string') continue;
+      fields.push(`${key} = ?`);
+      // An emptied field is stored as NULL, so "not filled in yet" has one
+      // representation instead of two.
+      values.push(patch[key].trim() || null);
+    }
+    if (!fields.length) return null;
+    // A backup restored from before the books table, or a title that arrived by
+    // hand, can be missing here; an UPDATE would then do nothing at all. Own the
+    // title first, then write to it.
+    if (!db.prepare('SELECT 1 FROM books WHERE title = ?').get(title)) {
+      db.prepare('INSERT INTO books (title, added_at) VALUES (?, ?)').run(
+        title,
+        new Date().toISOString().slice(0, 10),
+      );
+    }
+    values.push(title);
+    db.prepare(`UPDATE books SET ${fields.join(', ')} WHERE title = ?`).run(
+      ...values,
+    );
+    return db.prepare('SELECT * FROM books WHERE title = ?').get(title) || null;
   });
 
   // Get database path for info

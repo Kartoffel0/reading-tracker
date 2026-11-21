@@ -2466,6 +2466,234 @@ body.theme-wave .wave-bg {
 .goal-card { height: 400px; }
 .entries-section { height: 220px; margin-top: 0; }
 
+/* ===== BOOK SHEET =====
+   One book, end to end. The modal is wider than the session one because the
+   chart inside it is the dashboard's chart at the dashboard's width — a book
+   read across three months needs the columns, not a squeezed copy. */
+.book-modal {
+    max-width: 1180px;
+    /* The sheet holds the app's own 4:3 proportion, so the cover, the chart and
+       the entry rows keep the same relationship they have on the dashboard.
+       On a short window the viewport cap wins and the entries list scrolls. */
+    aspect-ratio: 4 / 3;
+    height: auto;
+    max-height: 86vh;
+    /* The sheet paints its own background to the edges; the shell only frames. */
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+/* The sheet's own header: the app's standard modal strip, so the close button
+   lives in the flow instead of floating over the chart card's corner. */
+.book-modal .modal-header {
+    padding: 14px 16px 0;
+    align-items: center;
+}
+
+.book-sheet {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    align-items: stretch;
+}
+
+/* ---- left card: cover, credits, span, status ---- */
+.book-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    min-height: 0;
+    /* A card shorter than its cover would clip the art; scrolling keeps the
+       credits reachable on a short window instead. */
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.book-cover-slot {
+    display: flex;
+    flex-shrink: 0;
+}
+
+.book-cover-wrap,
+.book-cover-placeholder {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(128, 128, 128, 0.08);
+    border: 1px solid var(--border-color);
+}
+
+.book-cover-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.book-cover-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.book-cover-placeholder .cover-initial {
+    font-size: 3rem;
+}
+
+.book-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.book-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--text-primary);
+    /* A long Japanese title wraps here instead of running under the chart. */
+    overflow-wrap: anywhere;
+}
+
+.book-byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+
+.book-credit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 1px dashed color-mix(in srgb, var(--text-muted) 45%, transparent);
+}
+
+.book-credit:hover {
+    color: var(--text-primary);
+}
+
+/* A filled field is a fact, not a prompt: the dashed underline goes away. */
+.book-credit.filled {
+    color: var(--text-secondary);
+    border-bottom-color: transparent;
+}
+
+.book-credit-input {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-primary);
+    background: rgba(128, 128, 128, 0.1);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px 6px;
+    width: 100%;
+    min-width: 90px;
+    outline: none;
+}
+
+.book-card-foot {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.book-span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+/* Three states, the same pill the old W/M/Y/A selector used: the active one
+   carries a tinted chip and the little caret above it. */
+.book-status {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: rgba(128, 128, 128, 0.05);
+}
+
+.book-status-btn {
+    position: relative;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    padding: 5px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.book-status-btn:hover {
+    color: var(--text-primary);
+}
+
+.book-status-btn.active {
+    background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    color: var(--text-primary);
+}
+
+.book-status-btn.active::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: var(--accent-primary);
+}
+
+/* ---- right column: the book's chart, then every session it has ---- */
+.book-sheet-right {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Same card the dashboard mounts its chart in, at the same height. */
+.book-stats {
+    height: 380px;
+    flex-shrink: 0;
+}
+
+.book-entries {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.book-entries .entries-header {
+    margin-bottom: 10px;
+}
+
+.book-entry-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
 /* ===== AUDIOBOOK PLAYER (placeholder card) ===== */
 .audiobook-card {
     display: flex;
@@ -3352,10 +3580,11 @@ body.theme-wave .wave-bg {
     gap: 6px;
 }
 
-/* Month charts carry 31 columns, so the regular 6px gap pushes the chart past
-   the card. Dense charts shrink the gap for both bars and axis. */
-.rt-bars[data-period='month'],
-.rt-x-axis[data-period='month'] {
+/* A month carries 31 columns and a long book even more, so the regular 6px gap
+   would push the chart past the card. Dense charts shrink the gap for both the
+   bars and the axis. */
+.rt-bars[data-dense],
+.rt-x-axis[data-dense] {
     gap: 2px;
 }
 

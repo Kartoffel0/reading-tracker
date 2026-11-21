@@ -313,6 +313,53 @@
         </div>
     </div>
 
+    <!-- Book sheet: one book, end to end -->
+    <div class="modal-overlay" id="bookModalOverlay" onclick="closeBookModal(event)">
+        <div class="modal book-modal" id="bookModal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Book details</h3>
+                <button class="modal-close-btn" type="button" onclick="closeBookModal()" aria-label="Close">&minus;</button>
+            </div>
+            <div class="book-sheet">
+                <aside class="panel book-card">
+                    <div class="book-cover-slot" id="bookCoverSlot"></div>
+                    <div class="book-identity">
+                        <h3 class="book-title" id="bookTitle"></h3>
+                        <div class="book-byline">
+                            <span class="book-credit" id="bookAuthor" data-field="author" role="button" tabindex="0">Add author</span>
+                            <span class="book-credit" id="bookSeries" data-field="series" role="button" tabindex="0">Add series</span>
+                        </div>
+                    </div>
+                    <div class="book-card-foot">
+                        <span class="book-span" id="bookSpan"></span>
+                        <div class="book-status" id="bookStatus" role="group" aria-label="Reading status">
+                            <button class="book-status-btn" type="button" data-status="reading">READING</button>
+                            <button class="book-status-btn" type="button" data-status="read">READ</button>
+                            <button class="book-status-btn" type="button" data-status="dropped">DROPPED</button>
+                        </div>
+                    </div>
+                </aside>
+                <div class="book-sheet-right">
+                    <div class="panel reading-time-card book-stats">
+                        <div class="rt-header">
+                            <div class="card-title">READING STATS</div>
+                        </div>
+                        <div class="reading-time-content">
+                            <div class="reading-time-body" id="bookStatsBody"></div>
+                        </div>
+                    </div>
+                    <div class="panel book-entries">
+                        <div class="entries-header">
+                            <h2 class="card-title">RECENT ENTRIES</h2>
+                            <span class="entry-count" id="bookEntryCount"></span>
+                        </div>
+                        <div class="book-entry-list" id="bookEntryList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Kindle Sync Modal -->
     <div class="modal-overlay" id="syncModalOverlay" onclick="closeKindleSyncModal(event)">
         <div class="modal sync-modal" onclick="event.stopPropagation()">
