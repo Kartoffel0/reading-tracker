@@ -2091,15 +2091,21 @@ function buildStatsBody(model) {
     .map((p) => `<div class="rt-gridline" style="top: ${p}%"></div>`)
     .join('');
 
-  // An average sitting on the top gridline (one column of data does that) would
-  // write its label straight over the axis label, so it flips below the line.
-  const avgLine = (value, nice, cls) => {
+  // The tag rides in its own axis gutter rather than on the bars: at the left
+  // edge of the plot the average line runs under both series, and a tag there is
+  // the first thing they cover. Sitting on the top gridline (one column of data
+  // does that) it would land on the axis number, so it flips below the line.
+  const avgLine = (value, nice, cls, side) => {
     if (value <= 0) return '';
     const top = topOf(value, nice);
     const flip = top < 8 ? ' rt-avg-label-low' : '';
-    return `<div class="rt-avg-line ${cls}" style="top: ${top}%"><span class="rt-avg-label${flip}">avg</span></div>`;
+    return `
+      <div class="rt-avg-line ${cls}" style="top: ${top}%"></div>
+      <span class="rt-avg-tag ${cls} rt-avg-tag-${side}${flip}" style="top: ${top}%">avg</span>`;
   };
-  const avgLines = avgLine(avgChars, niceChars, 'rt-avg-chars') + avgLine(avgMinutes, niceMinutes, 'rt-avg-time');
+  const avgLines =
+    avgLine(avgChars, niceChars, 'rt-avg-chars', 'left') +
+    avgLine(avgMinutes, niceMinutes, 'rt-avg-time', 'right');
 
   const xLabels = sorted.map((b) => `<span>${b.label}</span>`).join('');
   const speedValue =

@@ -3716,17 +3716,29 @@ body.theme-wave .wave-bg {
     color: var(--accent-secondary);
 }
 
-.rt-avg-label {
+/* The tag lives in the axis gutter the line belongs to — left for characters,
+   right for time — so the bars can never paint over it. */
+/* No colour of its own: .rt-avg-chars / .rt-avg-time carry the series colour and
+   these rules come after them, so a declaration here would flatten both tags to
+   the inherited text colour. */
+.rt-avg-tag {
     position: absolute;
-    left: 3px;
-    top: -10px;
+    left: 0;
+    transform: translateY(-50%);
     font-size: 0.5rem;
-    color: currentColor;
+    pointer-events: none;
 }
 
-/* Line already touching the top gridline: put the tag underneath instead. */
-.rt-avg-label-low {
-    top: 2px;
+.rt-avg-tag-right {
+    left: auto;
+    right: 2px;
+}
+
+/* Line already touching the top gridline: drop the tag underneath instead of
+   letting it climb over the axis number. */
+.rt-avg-tag.rt-avg-label-low {
+    transform: none;
+    margin-top: 1px;
 }
 
 /* Speed trend: one polyline per unbroken run, drawn over the bars on its own
