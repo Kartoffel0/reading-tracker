@@ -3652,7 +3652,7 @@ body.theme-wave .wave-bg {
     flex: 1 1 0;
     min-height: 3px;
     min-width: 0;
-    max-width: 16px;
+    max-width: 42px;
     border-radius: 3px 3px 0 0;
     pointer-events: none;
     transition: height 0.4s ease, background 0.2s ease;
