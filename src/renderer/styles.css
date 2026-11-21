@@ -2896,16 +2896,17 @@ body.theme-wave .wave-bg {
 /* The gauge is a full-width SVG; at 800 px it would grow to ~430 px tall and
    push the calendar out of the card. Cap it and scale the arc down. */
 .goal-gauge {
-    flex: 0 0 auto;
-    max-height: 120px;
+    flex: 0 0 280px;
+    max-height: 150px;
     display: flex;
+    align-items: center;
     justify-content: center;
 }
 
 .goal-gauge-svg {
-    width: auto;
-    height: 100%;
-    max-width: 100%;
+    width: 100%;
+    height: auto;
+    max-height: 150px;
     display: block;
 }
 
@@ -2915,25 +2916,21 @@ body.theme-wave .wave-bg {
     min-height: 0;
     display: grid;
     grid-template-columns: 1fr;
-    /* The gauge and stats are sized by their content. The calendar needs only
-       its own 7 rows plus the legend, so the minimum is just enough for that. */
-    grid-template-rows: auto auto minmax(130px, 1fr);
+    /* Top block is gauge + stats (content sized); the calendar takes the rest
+       and needs only its 7 rows plus the legend. */
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 10px;
     margin-top: 8px;
 }
 
-/* The gauge spans the whole card width. It is a shallow elliptical arc, so
-   spanning the width does not add height. */
-.goal-gauge {
-    width: 100%;
+.goal-top {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
 }
 
-.goal-gauge-svg {
-    display: block;
-    width: 100%;
-    height: auto;
-}
-
+/* The gauge spans its column; the SVG keeps its own aspect ratio. */
 .goal-track {
     stroke: rgba(128, 128, 128, 0.25);
     stroke-width: 10;
@@ -2976,20 +2973,23 @@ body.theme-wave .wave-bg {
 
 /* Stats are plain text, not cards: label above, value below */
 .goal-stats {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    /* Four columns, so the horizontal gap is kept small enough to fit them. */
-    gap: 8px 20px;
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: min-content;
+    gap: 10px 12px;
     min-width: 0;
 }
 
 .goal-stat {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: 3px;
-    text-align: center;
+    text-align: left;
+    min-width: 0;
+    padding-left: 10px;
+    border-left: 1px solid var(--border-color);
 }
 
 .goal-stat-label {
@@ -3020,8 +3020,8 @@ body.theme-wave .wave-bg {
 
 .goal-calendar {
     display: grid;
-    grid-template-columns: repeat(var(--gc-weeks, 53), 12px);
-    grid-template-rows: repeat(7, 12px);
+    grid-template-columns: repeat(var(--gc-weeks, 53), var(--gc-size, 12px));
+    grid-template-rows: repeat(7, var(--gc-size, 12px));
     /* Fill column by column so each week is a vertical column, GitHub style */
     grid-auto-flow: column;
     gap: 3px;
@@ -3046,9 +3046,9 @@ body.theme-wave .wave-bg {
 }
 
 .gc-cell {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
+    width: var(--gc-size, 12px);
+    height: var(--gc-size, 12px);
+    border-radius: 4px;
     /* Slightly darker than the card background, no accent, no border */
     background: rgba(128, 128, 128, 0.15);
     border: 1px solid transparent;
@@ -3067,18 +3067,35 @@ body.theme-wave .wave-bg {
     z-index: 20;
 }
 
-/* Reading, but below the goal: same fill, just a colored border */
-.gc-cell.gc-partial {
-    border-color: var(--accent-primary);
+/* Fill = amount read. Five accent tints on top of the neutral empty cell, the
+   same scale the activity map used. */
+.gc-cell.level-1 {
+    background: color-mix(in srgb, var(--accent-primary) 15%, rgba(128, 128, 128, 0.08));
 }
 
-/* Goal met: fully colored */
-.gc-cell.gc-met {
+.gc-cell.level-2 {
+    background: color-mix(in srgb, var(--accent-primary) 30%, rgba(128, 128, 128, 0.05));
+}
+
+.gc-cell.level-3 {
+    background: color-mix(in srgb, var(--accent-primary) 50%, rgba(128, 128, 128, 0.03));
+}
+
+.gc-cell.level-4 {
+    background: color-mix(in srgb, var(--accent-primary) 70%, rgba(128, 128, 128, 0.02));
+}
+
+.gc-cell.level-5 {
     background: var(--accent-primary);
+}
+
+/* Goal met: a border, never a fill — the fill already says how much was read. */
+.gc-cell.gc-met {
     border-color: var(--accent-primary);
 }
 
-/* Current day: extra border layered on top of whatever state it has */
+/* Current day: the only ring in the calendar, so it can never be confused with
+   "goal met". */
 .gc-cell.gc-today {
     outline: 1px solid var(--accent-secondary);
     outline-offset: 1px;
@@ -3149,13 +3166,17 @@ body.theme-wave .wave-bg {
     border: 1px solid transparent;
 }
 
-.gc-legend-cell.gc-partial {
-    border-color: var(--accent-primary);
+.gc-legend-cell.level-1 {
+    background: color-mix(in srgb, var(--accent-primary) 15%, rgba(128, 128, 128, 0.08));
 }
 
 .gc-legend-cell.gc-met {
-    background: var(--accent-primary);
     border-color: var(--accent-primary);
+}
+
+.gc-legend-cell.gc-today {
+    outline: 1px solid var(--accent-secondary);
+    outline-offset: 1px;
 }
 
 /* ===== RECENTLY READ CARD ===== */

@@ -442,12 +442,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   initClock();
 });
 
-// Re-compute the square cell size whenever the window is resized.
-window.addEventListener('resize', () => {
-  const grid = document.getElementById('streakGrid');
-  if (grid) sizeStreakGrid(grid);
-});
-
 // Close date picker when clicking outside
 document.addEventListener('click', (e) => {
   const datePicker = document.getElementById('datePicker');
@@ -718,7 +712,6 @@ async function updateStats(data) {
 function fetchAllData() {
   return getStatsData().then((stats) => {
     updateStats(stats);
-    renderStreakMap();
     renderEntries();
     renderGoalCard(stats);
     getData().then(renderRecentlyRead);
@@ -726,218 +719,16 @@ function fetchAllData() {
   });
 }
 
-function getHoursLevel(hours) {
-  if (hours === 0) return 0;
-  if (hours < 0.25) return 1;
-  if (hours < 0.5) return 2;
-  if (hours < 1) return 3;
-  if (hours < 2) return 4;
-  return 5;
-}
+
 
 // Keeps the activity-map cells square with an identical gap on every side:
 // computes the largest square that fits the card, then widens the gap evenly
 // using whatever space is left over on both axes.
-function sizeStreakGrid(grid) {
-  const rows = parseInt(grid.dataset.rows || '5', 10);
-  const labelRowHeight = 18;
-  const minGap = 4;
-  const maxGap = 8;
 
-  const panel = grid.closest('.streak-panel');
-  const availWidth = grid.clientWidth || (panel ? panel.clientWidth - 40 : 240);
-  const availHeight =
-    grid.clientHeight || (panel ? panel.clientHeight - 90 : 200);
 
-  const cellSize = Math.max(
-    12,
-    Math.min(
-      (availWidth - minGap * 6) / 7,
-      (availHeight - labelRowHeight - minGap * rows) / rows,
-    ),
-  );
 
-  // Extra room on each axis if we grow the gap by the same amount everywhere.
-  const slackX = (availWidth - cellSize * 7 - minGap * 6) / 6;
-  const slackY =
-    (availHeight - labelRowHeight - cellSize * rows - minGap * rows) / rows;
-  const gap = Math.min(maxGap, minGap + Math.max(0, Math.min(slackX, slackY)));
 
-  grid.style.setProperty('--cell-size', `${cellSize}px`);
-  grid.style.setProperty('--gap', `${gap}px`);
-}
 
-async function renderStreakMap() {
-  const grid = document.getElementById('streakGrid');
-  const monthNames = [
-    'JAN',
-    'FEB',
-    'MAR',
-    'APR',
-    'MAY',
-    'JUN',
-    'JUL',
-    'AUG',
-    'SEP',
-    'OCT',
-    'NOV',
-    'DEC',
-  ];
-  document.getElementById('currentMonthLabel').textContent =
-    `${monthNames[currentMonth]} ${currentYear}`;
-
-  const data = await getStatsData();
-  grid.innerHTML = '';
-
-  ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach((d) => {
-    const label = document.createElement('div');
-    label.className = 'day-label';
-    label.textContent = d;
-    grid.appendChild(label);
-  });
-
-  const firstDay = new Date(currentYear, currentMonth, 1);
-  const lastDay = new Date(currentYear, currentMonth + 1, 0);
-  const daysInMonth = lastDay.getDate();
-  const startDayOfWeek = firstDay.getDay();
-  const today = sessionDayDate();
-
-  // Build every grid slot: leading days from the previous month, this month's
-  // days, and trailing days from the next month, so the grid is always a full
-  // rectangle and both edges are rendered the same way.
-  const prevMonth = new Date(currentYear, currentMonth, 0);
-  const prevMonthLastDay = prevMonth.getDate();
-  const gridCells = [];
-
-  for (let i = 0; i < startDayOfWeek; i++) {
-    const day = prevMonthLastDay - startDayOfWeek + 1 + i;
-    gridCells.push({
-      date: new Date(currentYear, currentMonth - 1, day),
-      outOfMonth: true,
-    });
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    gridCells.push({
-      date: new Date(currentYear, currentMonth, day),
-      outOfMonth: false,
-    });
-  }
-
-  const trailingDays = (7 - ((startDayOfWeek + daysInMonth) % 7)) % 7;
-  for (let day = 1; day <= trailingDays; day++) {
-    gridCells.push({
-      date: new Date(currentYear, currentMonth + 1, day),
-      outOfMonth: true,
-    });
-  }
-
-  // Square cells that always fit inside the card: derive the largest square
-  // that fits the available space, then let the leftover become the spacing.
-  const rows = Math.ceil(gridCells.length / 7);
-  grid.dataset.rows = rows;
-  sizeStreakGrid(grid);
-
-  // Calculate max intensity across the visible grid for relative levels. The
-  // metric follows the current goal unit (time when the goal is minutes,
-  // characters otherwise), mirroring the reading-time chart, so the map shades
-  // in terms of what the user actually optimizes for.
-  const goalIsChars = currentGoal.unit === 'characters';
-  const dayIntensity = {};
-  let maxIntensity = 0;
-  for (const { date } of gridCells) {
-    const dateKey = getDateKey(date);
-    const totals = dayTotals(data[dateKey]);
-    const intensity = goalIsChars ? totals.chars : totals.minutes;
-    dayIntensity[dateKey] = intensity;
-    if (intensity > maxIntensity) maxIntensity = intensity;
-  }
-
-  function getRelativeLevel(intensity) {
-    if (intensity === 0 || maxIntensity === 0) return 0;
-    const percentage = intensity / maxIntensity;
-    if (percentage <= 0.2) return 1;
-    if (percentage <= 0.4) return 2;
-    if (percentage <= 0.6) return 3;
-    if (percentage <= 0.8) return 4;
-    return 5;
-  }
-
-  const todayStr = today.toDateString();
-
-  // Aggregates for the whole displayed month (grid edge cells excluded), shown
-  // by the month selector's tooltip in the same shape as day tooltips.
-  let monthMinutes = 0;
-  let monthChars = 0;
-  let monthSessions = 0;
-  for (const { date, outOfMonth } of gridCells) {
-    const dateKey = getDateKey(date);
-    const level = getRelativeLevel(dayIntensity[dateKey]);
-    const cell = document.createElement('div');
-    cell.className = outOfMonth
-      ? `day-cell level-${level} out-of-month`
-      : `day-cell level-${level}`;
-
-    const dateStr = date.toDateString();
-
-    if (dateStr === todayStr) {
-      cell.classList.add('today');
-    } else if (date > today) {
-      cell.classList.add('future');
-    }
-
-    if (date > today) {
-      cell.style.cursor = 'not-allowed';
-    } else {
-      cell.style.cursor = 'pointer';
-      cell.addEventListener('click', () => {
-        openDaySessions(dateKey);
-      });
-    }
-
-    const totals = dayTotals(data[dateKey]);
-    if (!outOfMonth) {
-      monthMinutes += totals.minutes;
-      monthChars += totals.chars;
-      monthSessions += totals.sessions;
-    }
-    const tooltip = document.createElement('div');
-    tooltip.className = 'tooltip';
-    tooltip.innerHTML = tooltipLines(
-      formatTooltipDate(dateKey),
-      totals.minutes,
-      totals.chars,
-      totals.sessions,
-    ).join('<br>');
-    cell.appendChild(tooltip);
-
-    grid.appendChild(cell);
-  }
-
-  const selector = document.getElementById('monthSelector');
-  selector.querySelectorAll(':scope > .tooltip').forEach((node) => node.remove());
-  const monthTooltip = document.createElement('div');
-  monthTooltip.className = 'tooltip';
-  monthTooltip.innerHTML = tooltipLines(
-    `${currentYear} ${String(currentMonth + 1).padStart(2, '0')}`,
-    monthMinutes,
-    monthChars,
-    monthSessions,
-  ).join('<br>');
-  selector.appendChild(monthTooltip);
-}
-
-function changeMonth(delta) {
-  currentMonth += delta;
-  if (currentMonth > 11) {
-    currentMonth = 0;
-    currentYear++;
-  } else if (currentMonth < 0) {
-    currentMonth = 11;
-    currentYear--;
-  }
-  renderStreakMap();
-}
 
 // ===== Dashboard Cards =====
 
@@ -1041,7 +832,71 @@ function computeGoalStats(data) {
     if (runLength > longest) longest = runLength;
   }
 
-  return { current, longest, daysMet, bestValue, bestDate };
+  return {
+    current,
+    longest,
+    daysMet,
+    bestValue,
+    bestDate,
+    bestWeek: computeBestWeek(data, goalUnit),
+    longestSession: computeLongestSession(data),
+    fastestDay: computeFastestDay(data),
+    longestGap: computeLongestGap(data),
+  };
+}
+
+// Sums the goal metric per Monday-start week and returns the biggest.
+function computeBestWeek(data, goalUnit) {
+  const weeks = new Map();
+  for (const [dateKey, sessions] of Object.entries(data)) {
+    const value = dayGoalValue(sessions, goalUnit);
+    if (value <= 0) continue;
+    const day = new Date(dateKey + 'T00:00:00');
+    day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+    const weekKey = getDateKey(day);
+    weeks.set(weekKey, (weeks.get(weekKey) || 0) + value);
+  }
+  let best = 0;
+  for (const value of weeks.values()) best = Math.max(best, value);
+  return best;
+}
+
+// Longest single sitting, in minutes.
+function computeLongestSession(data) {
+  let longest = 0;
+  for (const sessions of Object.values(data)) {
+    for (const session of sessions) {
+      longest = Math.max(longest, sessionMinutes(session));
+    }
+  }
+  return longest;
+}
+
+// Characters per hour on the fastest day that had any time in it.
+function computeFastestDay(data) {
+  let fastest = 0;
+  for (const sessions of Object.values(data)) {
+    const chars = sessions.reduce((sum, s) => sum + (s.characters || 0), 0);
+    const minutes = sessions.reduce((sum, s) => sum + sessionMinutes(s), 0);
+    if (minutes <= 0 || chars <= 0) continue;
+    fastest = Math.max(fastest, chars / (minutes / 60));
+  }
+  return fastest;
+}
+
+// Largest stretch of calendar days between two days that had reading.
+function computeLongestGap(data) {
+  const active = Object.keys(data)
+    .filter((key) => (data[key] || []).some((s) => sessionMinutes(s) > 0))
+    .sort();
+  let longest = 0;
+  for (let i = 1; i < active.length; i++) {
+    // UTC midnight keeps the difference in whole days regardless of DST.
+    const previous = Date.parse(`${active[i - 1]}T00:00:00Z`);
+    const current = Date.parse(`${active[i]}T00:00:00Z`);
+    longest = Math.max(longest, Math.round((current - previous) / 86400000) - 1);
+  }
+  return longest;
 }
 
 function formatGoalValue(value, goalUnit) {
@@ -1127,6 +982,11 @@ async function renderGoalCard(data) {
   const daysEl = document.getElementById('goalDaysMet');
   const bestEl = document.getElementById('goalBestDay');
   const bestLabelEl = document.getElementById('goalBestDayLabel');
+  const bestWeekEl = document.getElementById('goalBestWeek');
+  const bestWeekLabelEl = document.getElementById('goalBestWeekLabel');
+  const longestSessionEl = document.getElementById('goalLongestSession');
+  const fastestDayEl = document.getElementById('goalFastestDay');
+  const longestGapEl = document.getElementById('goalLongestGap');
 
   if (streakEl) streakEl.textContent = stats.current;
   if (longestEl) longestEl.textContent = stats.longest;
@@ -1140,6 +1000,20 @@ async function renderGoalCard(data) {
   if (bestLabelEl) {
     bestLabelEl.textContent =
       goalUnit === 'characters' ? 'BEST DAY (CHARS)' : 'BEST DAY (HRS)';
+  }
+  if (bestWeekEl) bestWeekEl.textContent = formatGoalValue(stats.bestWeek, goalUnit);
+  if (bestWeekLabelEl) {
+    bestWeekLabelEl.textContent =
+      goalUnit === 'characters' ? 'BEST WEEK (CHARS)' : 'BEST WEEK (HRS)';
+  }
+  if (longestSessionEl) {
+    longestSessionEl.textContent = `${Math.round(stats.longestSession)}m`;
+  }
+  if (fastestDayEl) {
+    fastestDayEl.textContent = `${Math.round(stats.fastestDay).toLocaleString()}/h`;
+  }
+  if (longestGapEl) {
+    longestGapEl.textContent = `${Math.round(stats.longestGap)}d`;
   }
 
   renderGoalCalendar(data);
@@ -1198,6 +1072,45 @@ function renderGoalCalendar(data) {
   cal.style.setProperty('--gc-weeks', String(weeks));
   cal.dataset.weeks = String(weeks);
 
+  // Cells grow to fill the strip when there are few weeks (GitHub shrinks them
+  // the other way), capped so a short history does not look like a toy grid.
+  const available = cal.clientWidth || 700;
+  const gcGap = 3;
+  const cellSize = Math.max(
+    10,
+    Math.min(18, Math.floor((available - (weeks - 1) * gcGap) / weeks)),
+  );
+  cal.style.setProperty('--gc-size', `${cellSize}px`);
+
+  // One cell carries two readings: the fill is the amount read (relative to the
+  // busiest day shown, in the goal's own unit), and a border marks a day that
+  // met the goal. Only today gets a ring, so the three states never collide.
+  const goalIsChars = goalUnit === 'characters';
+  const intensityOf = (dateKey) => {
+    const totals = dayTotals(data[dateKey]);
+    return goalIsChars ? totals.chars : totals.minutes;
+  };
+
+  let maxIntensity = 0;
+  for (let week = 0; week < weeks; week++) {
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + week * 7 + i);
+      if (day > today) continue;
+      maxIntensity = Math.max(maxIntensity, intensityOf(getDateKey(day)));
+    }
+  }
+
+  const levelOf = (intensity) => {
+    if (intensity <= 0 || maxIntensity <= 0) return 0;
+    const share = intensity / maxIntensity;
+    if (share <= 0.2) return 1;
+    if (share <= 0.4) return 2;
+    if (share <= 0.6) return 3;
+    if (share <= 0.8) return 4;
+    return 5;
+  };
+
   for (let week = 0; week < weeks; week++) {
     for (let i = 0; i < 7; i++) {
       const day = new Date(start);
@@ -1215,18 +1128,9 @@ function renderGoalCalendar(data) {
       cell.style.gridRow = String(i + 1);
       cell.style.gridColumn = String(week + 1);
 
-      let state = 'gc-empty';
-      if (value >= goalValue) {
-        state = 'gc-met';
-      } else if (value > 0) {
-        state = 'gc-partial';
-      }
-
-      cell.className = `gc-cell ${state}`;
-
-      if (day.getTime() === today.getTime()) {
-        cell.classList.add('gc-today');
-      }
+      cell.className = `gc-cell level-${levelOf(intensityOf(dateKey))}`;
+      if (value >= goalValue && value > 0) cell.classList.add('gc-met');
+      if (day.getTime() === today.getTime()) cell.classList.add('gc-today');
 
       cell.addEventListener('click', () => openDaySessions(dateKey));
 
@@ -1932,49 +1836,6 @@ function shiftReadingPeriod(direction) {
   });
 })();
 
-// Activity map: scroll or drag the card to move between months,
-// mirroring the reading time card's interactions.
-(function () {
-  const card = document.querySelector('.streak-panel');
-  if (!card) return;
-
-  let dragged = false;
-
-  card.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    changeMonth(e.deltaY > 0 ? 1 : -1);
-  });
-
-  let dragStartY = null;
-  card.addEventListener('pointerdown', (e) => {
-    dragStartY = e.clientY;
-  });
-  card.addEventListener('pointermove', (e) => {
-    if (dragStartY === null) return;
-    const dy = e.clientY - dragStartY;
-    if (Math.abs(dy) >= 40) {
-      dragged = true;
-      changeMonth(dy > 0 ? 1 : -1);
-      dragStartY = e.clientY;
-    }
-  });
-  card.addEventListener('pointerup', () => {
-    dragStartY = null;
-  });
-
-  // A drag should not also open a day's session modal.
-  card.addEventListener(
-    'click',
-    (e) => {
-      if (dragged) {
-        e.stopPropagation();
-        dragged = false;
-      }
-    },
-    true,
-  );
-})();
-
 async function openDaySessions(dateKey) {
   // Session-day view: clicking the 20th lists the session that ran past
   // midnight into the 21st, because that is where it counts.
@@ -2235,7 +2096,6 @@ async function updateAll() {
   const raw = await getData();
   const stats = await getStatsData();
   updateStats(stats);
-  await renderStreakMap();
   await renderEntries();
   await renderGoalCard(stats);
   await renderRecentlyRead(raw);

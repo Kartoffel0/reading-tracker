@@ -208,31 +208,6 @@
 
                     <!-- Right column: stats, goal, entries -->
                     <div class="dash-col dash-col-right">
-                        <!-- Card 1: Activity map (streak calendar) -->
-                        <div class="panel streak-panel">
-                            <div class="streak-header">
-                                <div class="card-title">ACTIVITY MAP</div>
-                                <div class="month-selector" id="monthSelector">
-                                    <button class="month-arrow" onclick="changeMonth(-1)">‹</button>
-                                    <span class="month-label" id="currentMonthLabel"></span>
-                                    <button class="month-arrow" onclick="changeMonth(1)">›</button>
-                                </div>
-                            </div>
-                            <div class="streak-grid" id="streakGrid"></div>
-                            <div class="legend">
-                                <span class="legend-label">LESS</span>
-                                <div class="legend-cells">
-                                    <div class="legend-cell" style="background: rgba(255,255,255,0.02);"></div>
-                                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.15;"></div>
-                                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.3;"></div>
-                                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.45;"></div>
-                                    <div class="legend-cell" style="background: var(--accent-primary); opacity: 0.6;"></div>
-                                    <div class="legend-cell" style="background: var(--accent-primary);"></div>
-                                </div>
-                                <span class="legend-label">MORE</span>
-                            </div>
-                        </div>
-
                         <!-- Card 2: Reading time -->
                         <div class="panel reading-time-card" id="readingTimeCard">
                             <div class="rt-header">
@@ -250,27 +225,45 @@
                             </div>
                         </div>
 
-                        <!-- Card 4: Daily goal -->
+                        <!-- Card 4: Goal + activity calendar (merged) -->
                         <div class="panel goal-card">
-                            <div class="card-title">DAILY GOAL</div>
+                            <div class="card-title">ACTIVITY CALENDAR</div>
                             <div id="goalCard">
-                                <div class="goal-gauge" id="goalGauge"></div>
-                                <div class="goal-stats">
-                                    <div class="goal-stat">
-                                        <span class="goal-stat-label">CURRENT STREAK</span>
-                                        <span class="goal-stat-value" id="goalStreak">0</span>
-                                    </div>
-                                    <div class="goal-stat">
-                                        <span class="goal-stat-label">LONGEST</span>
-                                        <span class="goal-stat-value" id="goalLongestStreak">0</span>
-                                    </div>
-                                    <div class="goal-stat">
-                                        <span class="goal-stat-label">DAYS MET</span>
-                                        <span class="goal-stat-value" id="goalDaysMet">0</span>
-                                    </div>
-                                    <div class="goal-stat">
-                                        <span class="goal-stat-label" id="goalBestDayLabel">BEST DAY</span>
-                                        <span class="goal-stat-value" id="goalBestDay">0</span>
+                                <div class="goal-top">
+                                    <div class="goal-gauge" id="goalGauge"></div>
+                                    <div class="goal-stats">
+                                        <div class="goal-stat">
+                                            <span class="goal-stat-label">CURRENT STREAK</span>
+                                            <span class="goal-stat-value" id="goalStreak">0</span>
+                                        </div>
+                                        <div class="goal-stat">
+                                            <span class="goal-stat-label">LONGEST STREAK</span>
+                                            <span class="goal-stat-value" id="goalLongestStreak">0</span>
+                                        </div>
+                                        <div class="goal-stat">
+                                            <span class="goal-stat-label">DAYS MET</span>
+                                            <span class="goal-stat-value" id="goalDaysMet">0</span>
+                                        </div>
+                                        <div class="goal-stat">
+                                            <span class="goal-stat-label" id="goalBestDayLabel">BEST DAY</span>
+                                            <span class="goal-stat-value" id="goalBestDay">0</span>
+                                        </div>
+                                        <div class="goal-stat">
+                                            <span class="goal-stat-label" id="goalBestWeekLabel">BEST WEEK</span>
+                                            <span class="goal-stat-value" id="goalBestWeek">0</span>
+                                        </div>
+                                        <div class="goal-stat">
+                                            <span class="goal-stat-label">LONGEST SESSION</span>
+                                            <span class="goal-stat-value" id="goalLongestSession">0</span>
+                                        </div>
+                                        <div class="goal-stat">
+                                            <span class="goal-stat-label">FASTEST DAY</span>
+                                            <span class="goal-stat-value" id="goalFastestDay">0</span>
+                                        </div>
+                                        <div class="goal-stat">
+                                            <span class="goal-stat-label">LONGEST GAP</span>
+                                            <span class="goal-stat-value" id="goalLongestGap">0</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="goal-calendar-wrap">
@@ -280,12 +273,12 @@
                                             <button class="month-arrow" onclick="scrollGoalCalendar(-1)" title="Older weeks">‹</button>
                                             <button class="month-arrow" onclick="scrollGoalCalendar(1)" title="Newer weeks">›</button>
                                         </div>
-                                        <div class="gc-legend-cell gc-empty"></div>
-                                        <span class="gc-legend-label">none</span>
-                                        <div class="gc-legend-cell gc-partial"></div>
+                                        <div class="gc-legend-cell level-1"></div>
                                         <span class="gc-legend-label">read</span>
                                         <div class="gc-legend-cell gc-met"></div>
                                         <span class="gc-legend-label">goal met</span>
+                                        <div class="gc-legend-cell gc-today"></div>
+                                        <span class="gc-legend-label">today</span>
                                     </div>
                                 </div>
                             </div>
