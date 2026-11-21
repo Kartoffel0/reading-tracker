@@ -2599,6 +2599,47 @@ body.theme-wave .wave-bg {
     min-width: 0;
     padding-left: 8px;
     border-left: 2px solid var(--border-color);
+    /* Anchor for the hint below. */
+    position: relative;
+}
+
+/* A bare label does not say how its number is derived, so each stat explains
+   itself on hover. The card clips (overflow: hidden), so the hint hangs below
+   the stat and the last column right-aligns to stay inside the card. */
+.goal-stat[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 40;
+    width: max-content;
+    max-width: 190px;
+    padding: 5px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    /* Lifts the hint off the labels it overlaps. */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    font-size: 0.6rem;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: normal;
+    text-align: left;
+    pointer-events: none;
+    /* Instant, like the cell tooltips: a fading pseudo-element leaves stale
+       frames behind when the window is occluded. */
+    visibility: hidden;
+}
+
+/* Third column sits ~one hint-width from the card's right edge. */
+.goal-stat:nth-child(3n)::after {
+    left: auto;
+    right: 0;
+}
+
+.goal-stat[data-tooltip]:hover::after {
+    visibility: visible;
 }
 
 .goal-stat-label {
@@ -2624,6 +2665,45 @@ body.theme-wave .wave-bg {
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+}
+
+.gc-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* Weekday rail: a seven-letter column beside the strip, GitHub style. It
+   repeats the grid's padding/margin pair so the letters line up with the rows,
+   and --gc-size reaches it through the shared #goalCalendarBody wrapper. */
+.gc-day-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 0 0 auto;
+    padding-top: 64px;
+    margin-top: -46px;
+    font-size: 0.55rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    pointer-events: none;
+}
+
+.gc-day-labels span {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    height: var(--gc-size, 12px);
+    line-height: 1;
+}
+
+/* The grid takes the rest of the row, so its clientWidth stays "space
+   available" and the cell sizing keeps shrinking a long history to fit. */
+.gc-body > .goal-calendar {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .goal-calendar {

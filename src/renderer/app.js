@@ -1026,7 +1026,10 @@ function renderGoalCalendar(data) {
   const dayDiff = Math.round((today.getTime() - start.getTime()) / 86400000);
   const weeks = Math.max(1, Math.floor(dayDiff / 7) + 1);
 
-  cal.style.setProperty('--gc-weeks', String(weeks));
+  // The size variables live on the wrapper so the weekday rail inherits them
+  // too; the grid reads them through inheritance.
+  const gcBody = document.getElementById('goalCalendarBody') || cal;
+  gcBody.style.setProperty('--gc-weeks', String(weeks));
   cal.dataset.weeks = String(weeks);
 
   // Cells grow to fill the strip when there are few weeks (GitHub shrinks them
@@ -1037,7 +1040,7 @@ function renderGoalCalendar(data) {
     10,
     Math.min(18, Math.floor((available - (weeks - 1) * gcGap) / weeks)),
   );
-  cal.style.setProperty('--gc-size', `${cellSize}px`);
+  gcBody.style.setProperty('--gc-size', `${cellSize}px`);
 
   // One cell carries two readings: the fill is the amount read (relative to the
   // busiest day shown, in the goal's own unit), and a border marks a day that
