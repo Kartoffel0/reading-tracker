@@ -1549,6 +1549,9 @@ async function renderRecentlyRead(data) {
 // Reading time state
 let rtActivePeriod = 'week';
 let rtPeriodOffset = 0; // periods shifted back from the current one
+// Set while a vertical drag is paging periods, so releasing it does not also
+// open the bucket modal the pointer happens to be over.
+let rtDragCycled = false;
 const RT_TABS = [
   { key: 'week', label: 'W', word: 'week' },
   { key: 'month', label: 'M', word: 'month' },
@@ -1930,6 +1933,25 @@ function buildStatsBody(model) {
     speed,
   } = model;
 
+  // Which keys a column covers, for the click-through modal: a day on W / M, a
+  // month on the year tab, a year on all-time. The dash form matches the date
+  // keys getStatsData() uses, so the modal can filter by prefix.
+  const bucketScope =
+    period === 'week' || period === 'month'
+      ? 'day'
+      : period === 'year'
+        ? 'month'
+        : 'year';
+  const bucketKeyOf = (key) => {
+    if (period === 'week') return shiftDateKey(getDateKey(start), key);
+    // All-time buckets are years and carry no start date to derive from.
+    if (period === 'all') return String(key);
+    const year = start.getFullYear();
+    const month = String(start.getMonth() + 1).padStart(2, '0');
+    if (period === 'month') return `${year}-${month}-${String(key).padStart(2, '0')}`;
+    return `${year}-${String(key + 1).padStart(2, '0')}`;
+  };
+
   const topOf = (value, nice) => (nice > 0 ? 100 - (value / nice) * 100 : 100);
   // A column with nothing in it draws nothing: thirty empty days should not
   // read as thirty tiny bars along the baseline.
@@ -1938,12 +1960,8 @@ function buildStatsBody(model) {
 
   const bars = sorted
     .map((b, i) => {
-      const lines = tooltipLines(
-        rtTooltipLabel(period, start, b.key),
-        b.minutes,
-        b.chars,
-        b.sessions,
-      );
+      const bucketLabel = rtTooltipLabel(period, start, b.key);
+      const lines = tooltipLines(bucketLabel, b.minutes, b.chars, b.sessions);
       const rate = speed.points[i];
       if (rate !== null) lines.push(`${formatSpeed(rate)} chars/h`);
       const today = b.key === todayBucketKey ? ' today' : '';
@@ -1955,7 +1973,7 @@ function buildStatsBody(model) {
       const tall = Math.max(charsHeight, timeHeight);
       const tipClass = tall > 72 ? ' rt-tip-down' : '';
       return `
-        <div class="rt-bar-pair${tipClass}" data-tooltip="${lines.join('\n')}" style="--tip-y: ${tall.toFixed(1)}%">
+        <div class="rt-bar-pair${tipClass}" data-tooltip="${lines.join('\n')}" style="--tip-y: ${tall.toFixed(1)}%" data-scope="${bucketScope}" data-key="${bucketKeyOf(b.key)}" data-label="${bucketLabel}" title="Open these sessions">
           <div class="rt-bar rt-bar-chars${today}" style="height: ${charsHeight}%"></div>
           <div class="rt-bar rt-bar-time${today}" style="height: ${timeHeight}%"></div>
         </div>
@@ -2068,6 +2086,15 @@ function buildStatsBody(model) {
     );
   });
 
+  // Clicking a column opens the sessions behind it, in the same modal the goal
+  // calendar cells use.
+  root.querySelector('.rt-bars').addEventListener('click', (event) => {
+    if (rtDragCycled) return;
+    const pair = event.target.closest('.rt-bar-pair');
+    if (!pair) return;
+    openStatsBucket(pair.dataset.scope, pair.dataset.key, pair.dataset.label);
+  });
+
   return root;
 }
 
@@ -2147,11 +2174,13 @@ function shiftReadingPeriod(direction) {
   let dragStartY = null;
   card.addEventListener('pointerdown', (e) => {
     dragStartY = e.clientY;
+    rtDragCycled = false;
   });
   card.addEventListener('pointermove', (e) => {
     if (dragStartY === null) return;
     const dy = e.clientY - dragStartY;
     if (Math.abs(dy) >= 40) {
+      rtDragCycled = true;
       cycle(dy > 0 ? 1 : -1);
       dragStartY = e.clientY;
     }
@@ -2161,37 +2190,53 @@ function shiftReadingPeriod(direction) {
   });
 })();
 
-async function openDaySessions(dateKey) {
-  // Session-day view: clicking the 20th lists the session that ran past
-  // midnight into the 21st, because that is where it counts.
-  const data = await getStatsData();
-  const sessions = data[dateKey];
+// Lists the sessions behind a date or a span of dates. The goal calendar
+// passes one day; the stats card passes every key inside the clicked column,
+// which is a month or a year when the card is on Y / A.
+async function openSessionsFor(title, dateKeys, preloaded) {
+  const data = preloaded || (await getStatsData());
+  const entries = [];
+  for (const dateKey of dateKeys) {
+    const list = data[dateKey];
+    if (!Array.isArray(list)) continue;
+    for (const session of list) entries.push({ dateKey, session });
+  }
+  // Newest first, the order the entries card uses.
+  entries.sort(
+    (a, b) =>
+      b.dateKey.localeCompare(a.dateKey) ||
+      (b.session.id || 0) - (a.session.id || 0),
+  );
+
   const modal = document.getElementById('modalOverlay');
   const modalTitle = document.getElementById('modalTitle');
   const modalBody = document.getElementById('modalBody');
   const footerSummary = document.getElementById('modalFooterSummaryDiv');
 
-  modalTitle.textContent = `Sessions - ${dateKey.replaceAll("-", " ")}`;
+  modalTitle.textContent = title;
 
-  if (!sessions || !Array.isArray(sessions) || sessions.length === 0) {
+  if (entries.length === 0) {
     modalBody.innerHTML =
-      '<div class="empty-state">No sessions recorded for this date.</div>';
+      '<div class="empty-state">No sessions recorded for this period.</div>';
     footerSummary.innerHTML = '';
     modal.classList.add('active');
     return;
   }
 
-  let totalMinutes = 0;
-  let totalChars = 0;
-
   // Covers are resolved by the same helper the Recently Read card uses, so the
   // modal rows show the cover art the card already has for that title.
   await ensureCovers(
-    sessions.map((session) => ({ title: session.title || 'Untitled', language: session.language })),
+    entries.map(({ session }) => ({
+      title: session.title || 'Untitled',
+      language: session.language,
+    })),
   );
 
-  const sessionsHtml = sessions
-    .map((session) => {
+  let totalMinutes = 0;
+  let totalChars = 0;
+
+  const sessionsHtml = entries
+    .map(({ dateKey, session }) => {
       const title = session.title || 'Untitled';
       // Calculate reading speed for this session (characters per hour)
       const durationHours =
@@ -2274,11 +2319,6 @@ async function openDaySessions(dateKey) {
     .join('');
 
   const totalHours = (totalMinutes / 60).toFixed(1);
-  const avgMinutes = totalMinutes / sessions.length;
-  const avgDurationDisplay =
-    avgMinutes >= 60
-      ? `${(avgMinutes / 60).toFixed(1)}h`
-      : `${Math.round(avgMinutes)}m`;
 
   // Calculate average reading speed (total characters / total hours)
   const totalHoursSession = totalMinutes / 60;
@@ -2296,7 +2336,7 @@ async function openDaySessions(dateKey) {
   const summaryHtml = `
                 <div class="day-summary">
                     <div class="day-summary-item">
-                        <div class="day-summary-value">${sessions.length}</div>
+                        <div class="day-summary-value">${entries.length}</div>
                         <div class="day-summary-label">Sessions</div>
                     </div>
                     <div class="day-summary-item${timeClass}">
@@ -2321,6 +2361,23 @@ async function openDaySessions(dateKey) {
   attachCoverUploads(modalBody);
 
   modal.classList.add('active');
+}
+
+// A calendar cell is a single day.
+async function openDaySessions(dateKey) {
+  await openSessionsFor(`Sessions - ${dateKey.replaceAll('-', ' ')}`, [dateKey]);
+}
+
+// A stats column is a whole bucket: one day on W / M, a month on the year tab,
+// a year on all-time.
+async function openStatsBucket(scope, dataKey, label) {
+  if (scope === 'day') {
+    await openSessionsFor(`Sessions - ${label}`, [dataKey]);
+    return;
+  }
+  const data = await getStatsData();
+  const keys = Object.keys(data).filter((key) => key.startsWith(dataKey));
+  await openSessionsFor(`Sessions - ${label}`, keys, data);
 }
 
 function closeModal(event) {

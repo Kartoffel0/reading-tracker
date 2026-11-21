@@ -3332,6 +3332,7 @@ body.theme-wave .wave-bg {
     flex: 1;
     min-width: 0;
     height: 100%;
+    cursor: pointer;
     display: flex;
     align-items: flex-end;
     justify-content: center;
