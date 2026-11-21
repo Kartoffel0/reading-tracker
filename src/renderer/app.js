@@ -1980,6 +1980,7 @@ function buildStatsModel({
     granularity,
     useChars,
     start,
+    end,
     sorted,
     // Charts past twenty columns need a tighter gap to fit the card.
     dense: sorted.length > 20,
@@ -2016,6 +2017,7 @@ function buildStatsBody(model) {
     granularity,
     useChars,
     start,
+    end,
     sorted,
     dense,
     steppers,
@@ -2105,22 +2107,36 @@ function buildStatsBody(model) {
       <div class="rt-avg-line ${cls}" style="top: ${top}%"></div>
       <span class="rt-avg-tag ${cls} rt-avg-tag-${side}${low}" style="top: ${top}%" data-tooltip="${escapeHtml(tooltip)}">avg</span>`;
   };
-  // The averages are per reading day — the mean of the columns that carry
-  // something — so the tooltip says so rather than leaving "average" ambiguous.
+  // Both average tooltips read the same way: the span they cover, the total for
+  // that series, then the mean per reading day — the average only counts the
+  // columns that carry something, which is why it is not the total over the span.
+  const spanOf = (from, to) => {
+    const first = from.replaceAll('-', ' ');
+    const last = to.replaceAll('-', ' ');
+    // One bucket is not a span: "2026·2026" would be saying the same thing twice.
+    return first === last ? first : `${first}·${last}`;
+  };
+  const spanLabel =
+    start !== null
+      ? spanOf(getDateKey(start), getDateKey(end))
+      : spanOf(
+          sorted[0]?.tooltip ?? '',
+          sorted[sorted.length - 1]?.tooltip ?? '',
+        );
   const avgLines =
     avgLine(
       avgChars,
       niceChars,
       'rt-avg-chars',
       'left',
-      `characters average\n${formatTooltipChars(avgChars)}\nper reading day`,
+      `${spanLabel}\n${formatTooltipChars(totalChars)}\n${Math.round(avgChars).toLocaleString()} average`,
     ) +
     avgLine(
       avgMinutes,
       niceMinutes,
       'rt-avg-time',
       'right',
-      `time average\n${formatTooltipDuration(avgMinutes)}\nper reading day`,
+      `${spanLabel}\n${(totalMinutes / 60).toFixed(2)} hours\n${rtFormatDuration(avgMinutes)} average`,
     );
 
   const xLabels = sorted.map((b) => `<span>${b.label}</span>`).join('');
