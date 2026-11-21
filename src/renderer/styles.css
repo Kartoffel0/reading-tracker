@@ -2669,6 +2669,10 @@ body.theme-wave .wave-bg {
     border-top-color: var(--accent-primary);
 }
 
+.book-kind .book-status-btn.active::before {
+    display: none;
+}
+
 /* ---- right column: the book's chart, then every session it has ---- */
 .book-sheet-right {
     display: flex;
