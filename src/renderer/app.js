@@ -467,8 +467,8 @@ async function logReading() {
     characters: parseInt(charsInput.value) || 0,
     duration: duration,
     unit: unitSelect.value,
-    start_time: startInput.value || null,
-    end_time: endInput.value || null,
+    start_time: timeFieldValue('sessionStart') || null,
+    end_time: timeFieldValue('sessionEnd') || null,
     media: mediaSelect.value || 'book',
   };
 
@@ -477,8 +477,8 @@ async function logReading() {
   titleInput.value = '';
   charsInput.value = '';
   durationInput.value = '';
-  startInput.value = '';
-  endInput.value = '';
+  setTimeValue('sessionStart', '');
+  setTimeValue('sessionEnd', '');
   unitSelect.value = 'minutes';
 
   await updateAll();
@@ -2219,10 +2219,41 @@ function formatClock(date) {
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-function setTimeValue(inputId, value) {
+function timeGhost(inputId) {
+  return document.getElementById(`${inputId}Ghost`);
+}
+
+// The overlay shows "--:--" when the field is empty, or the auto-derived time
+// that the duration implies. The input itself stays empty until the user types,
+// so the suggestion never looks like something that was entered.
+function refreshTimeGhost(inputId) {
+  const input = document.getElementById(inputId);
+  const ghost = timeGhost(inputId);
+  if (!input || !ghost) return;
+  const empty = !input.value;
+  ghost.textContent = input.dataset.derived || '--:--';
+  ghost.classList.toggle('hidden', !empty);
+  input.classList.toggle('is-empty', empty);
+}
+
+// What the field means: typed value, else the derived suggestion.
+function timeFieldValue(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return '';
+  return input.value || input.dataset.derived || '';
+}
+
+function setTimeValue(inputId, value, derived = false) {
   const input = document.getElementById(inputId);
   if (!input) return;
-  input.value = value;
+  if (derived) {
+    input.value = '';
+    input.dataset.derived = value;
+  } else {
+    input.value = value;
+    delete input.dataset.derived;
+  }
+  refreshTimeGhost(inputId);
 }
 
 function durationInMinutes() {
@@ -2236,25 +2267,36 @@ function durationInMinutes() {
 // Duration typed → end is "now", start is now minus the duration.
 function applyDurationToTimes() {
   const minutes = durationInMinutes();
-  if (minutes === null) return;
+  if (minutes === null) {
+    // Deleting the duration deletes the times: they only existed because of it.
+    setTimeValue('sessionStart', '', false);
+    setTimeValue('sessionEnd', '', false);
+    return;
+  }
   const end = new Date();
   end.setSeconds(0, 0);
   const start = new Date(end.getTime() - minutes * 60000);
-  setTimeValue('sessionStart', formatClock(start));
-  setTimeValue('sessionEnd', formatClock(end));
+  setTimeValue('sessionStart', formatClock(start), true);
+  setTimeValue('sessionEnd', formatClock(end), true);
 }
 
 // Start/end picked → duration follows. Crossing midnight counts forward.
 function applyTimesToDuration() {
-  const start = clockToMinutes(document.getElementById('sessionStart')?.value);
-  const end = clockToMinutes(document.getElementById('sessionEnd')?.value);
-  if (start === null || end === null) return;
+  const durationInput = document.getElementById('sessionDuration');
+  if (!durationInput) return;
+
+  const start = clockToMinutes(timeFieldValue('sessionStart'));
+  const end = clockToMinutes(timeFieldValue('sessionEnd'));
+  // Half a range is not a duration; clear it rather than leave a stale number.
+  if (start === null || end === null) {
+    durationInput.value = '';
+    return;
+  }
+
   let minutes = end - start;
   if (minutes < 0) minutes += 24 * 60;
   const unit = document.getElementById('durationUnit')?.value;
-  const input = document.getElementById('sessionDuration');
-  if (!input) return;
-  input.value =
+  durationInput.value =
     unit === 'hours'
       ? String(Math.round((minutes / 60) * 100) / 100)
       : String(minutes);
@@ -2273,7 +2315,7 @@ function closeTimePanels() {
 }
 
 function buildTimePanel(input, panel) {
-  const current = clockToMinutes(input.value);
+  const current = clockToMinutes(timeFieldValue(input.id));
   const hour = current === null ? null : Math.floor(current / 60);
   const minute = current === null ? null : current % 60;
   panel.dataset.hour = hour === null ? '' : String(hour);
@@ -2321,8 +2363,19 @@ function initSessionTimeFields() {
   if (!durationInput || !startInput || !endInput) return;
 
   durationInput.addEventListener('input', applyDurationToTimes);
-  startInput.addEventListener('input', applyTimesToDuration);
-  endInput.addEventListener('input', applyTimesToDuration);
+
+  // Typing in a time field makes it "typed": the derived suggestion is dropped
+  // so the two never fight over what the field means.
+  const onTimeEdited = (event) => {
+    const input = event.target;
+    delete input.dataset.derived;
+    refreshTimeGhost(input.id);
+    applyTimesToDuration();
+  };
+  startInput.addEventListener('input', onTimeEdited);
+  endInput.addEventListener('input', onTimeEdited);
+  refreshTimeGhost('sessionStart');
+  refreshTimeGhost('sessionEnd');
 
   for (const button of document.querySelectorAll('.time-pick-btn')) {
     button.addEventListener('click', () => toggleTimePanel(button));

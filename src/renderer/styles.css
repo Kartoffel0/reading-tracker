@@ -593,6 +593,29 @@ button.theme-select {
     font-family: 'JetBrains Mono', monospace;
 }
 
+/* Chromium ignores placeholder="" on time inputs, so the prompt and any derived
+   value are painted by an overlay instead. The input's own text is transparent
+   while empty, which is what lets the overlay stand in for it. */
+.time-input.is-empty {
+    color: transparent;
+}
+
+.time-ghost {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    pointer-events: none;
+    user-select: none;
+}
+
+.time-ghost.hidden {
+    display: none;
+}
+
 /* The native picker panel is a browser widget that cannot be themed (white
    sheet, blue selection). Hide its trigger and use the panel below instead. */
 .time-input::-webkit-calendar-picker-indicator {
@@ -3603,6 +3626,25 @@ body.theme-wave .wave-bg {
         margin: 4px 0;
         backdrop-filter: blur(2px);
         animation: dpFadeIn 0.3s ease;
+    }
+
+    /* Chromium aligns the open list with the *selected option*, which paints it
+       over the control whenever the control sits low in the window. Anchor these
+       two to their own bottom edge instead. A named anchor per select is
+       required: `anchor()` does not resolve against the picker's implicit
+       anchor, and anchor names must be unique per document. */
+    #sessionMedia { anchor-name: --media-select; }
+    #durationUnit { anchor-name: --unit-select; }
+
+    #sessionMedia::picker(select) { position-anchor: --media-select; }
+    #durationUnit::picker(select) { position-anchor: --unit-select; }
+
+    #sessionMedia::picker(select),
+    #durationUnit::picker(select) {
+        position-area: none;
+        top: anchor(bottom);
+        left: anchor(left);
+        margin: 4px 0 0;
     }
 
     .form-select:open::picker(select),
