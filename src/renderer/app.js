@@ -1241,6 +1241,11 @@ function monthTotals(data, key) {
 function renderMonthRail(cal, data, start, weeks, cellSize) {
   const rail = document.createElement('div');
   rail.className = 'gc-months';
+  // An extra implicit grid row under the seven weekday rows, spanning every
+  // column: in flow it grows the strip by its own height, and inside the scroll
+  // box it scrolls sideways with the cells.
+  rail.style.gridRow = '8';
+  rail.style.gridColumn = '1 / -1';
 
   // Weeks are grouped by the month their Monday falls in; the label sits on the
   // first week of that month, GitHub style.

@@ -1482,6 +1482,7 @@ input[type="submit"]:focus-visible,
    containing block, so inside a 12px cell the text would wrap word by word.
    Forcing max-content makes the box as wide as its longest line instead. */
 .gc-cell .tooltip,
+.gc-month .tooltip,
 .goal-stat .tooltip,
 .rt-bar::after {
     position: absolute;
@@ -1492,7 +1493,11 @@ input[type="submit"]:focus-visible,
     font-weight: 500;
     line-height: 1.4;
     color: var(--text-primary);
-    background: var(--bg-card);
+    /* Opaque: the card colour is translucent on every theme, which let the
+       cells read straight through the box. Painting it over the theme's solid
+       page colour keeps the tone and closes the holes. */
+    background-color: var(--bg-secondary);
+    background-image: linear-gradient(var(--bg-card), var(--bg-card));
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 4px 8px;
@@ -1500,7 +1505,6 @@ input[type="submit"]:focus-visible,
     width: max-content;
     pointer-events: none;
     z-index: 20;
-    backdrop-filter: blur(2px);
 }
 /* ===== ENTRIES SECTION ===== */
 .entries-section {
@@ -2679,17 +2683,11 @@ body.theme-wave .wave-bg {
 /* Month rail: labels live in the grid's 64px top padding band, one per month,
    positioned by app.js at the week where the month starts. They are children of
    the grid, so they scroll with the strip. */
+/* The rail is the grid's eighth row, so it sits under the strip, scrolls with
+   it and never collides with the gauge arc above. */
 .gc-months {
-    position: absolute;
-    /* 46 of the grid's 64px top padding sit above the card body (it carries a
-       -46px margin so tooltips can escape upwards). Starting the rail at 46
-       puts it in the 18px band that is actually visible. */
-    top: 46px;
-    left: 3px;
-    right: 0;
+    position: relative;
     height: 12px;
-    /* Above the gauge arc, which dips into this band at both ends. */
-    z-index: 2;
     pointer-events: none;
 }
 
@@ -2708,12 +2706,8 @@ body.theme-wave .wave-bg {
     pointer-events: auto;
 }
 
-/* The rail sits at the very top of the scroll box, so the shared upward anchor
-   would be clipped: month tooltips open downwards instead. */
 .gc-month .tooltip {
     display: none;
-    top: calc(100% + 4px);
-    bottom: auto;
 }
 
 .gc-month:hover .tooltip {
@@ -2745,7 +2739,7 @@ body.theme-wave .wave-bg {
        neither moves nor loses alignment. pointer-events: none stops the empty
        padding band from stealing hover/clicks from the cards above; the cells
        restore it for themselves. */
-    padding: 64px 3px 8px;
+    padding: 64px 3px 4px;
     margin: -46px -3px 0;
     overflow-x: auto;
     pointer-events: none;
