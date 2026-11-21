@@ -2190,7 +2190,7 @@ async function renderEntries() {
   }
 
   entryList.innerHTML = sessions
-    .slice(0, 50)
+    .slice(0, 100)
     .map(({ dateKey, session }) => {
       const title = session.title || 'Untitled';
       const minutes = Math.round(sessionMinutes(session));
