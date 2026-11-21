@@ -1963,42 +1963,27 @@ function buildStatsBody(model) {
 
   // One polyline per run of columns that actually have a rate: a gap in the
   // data is a gap in the line, never a straight interpolation across it.
-  // One curve, arcing over the short holes between reading days. Holes wider
-  // than maxGap break the stroke instead: dragging a straight slope across a
-  // week of nothing claims a slowdown (or a surge) that never happened, which
-  // is exactly what made a month with two clusters look wrong.
+  // One curve from the first reading day to the last, connected across empty
+  // stretches. Only days that were read contribute a point, so no value is
+  // invented for a day with no sessions — the curve simply passes over it, and
+  // the monotone spline keeps it from diving through the bars on the way.
   const speedLine = (() => {
     if (!speed.hasData) return '';
-    const maxGap =
-      period === 'week' ? 2 : period === 'month' ? 6 : period === 'year' ? 2 : 1;
-    const runs = [];
-    let run = [];
-    let last = null;
+    const points = [];
     speed.points.forEach((value, i) => {
       if (value === null) return;
-      if (last !== null && i - last > maxGap) {
-        runs.push(run);
-        run = [];
-      }
-      run.push({
+      points.push({
         x: ((i + 0.5) / sorted.length) * 100,
         y: 100 - (value / speed.niceMax) * 100,
       });
-      last = i;
     });
-    if (run.length) runs.push(run);
-
-    return runs
-      .map((points) => {
-        // A lone reading day has no segment to curve through: a zero-length
-        // path with a round cap is a dot.
-        if (points.length === 1) {
-          const p = points[0];
-          return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
-        }
-        return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
-      })
-      .join('');
+    // A lone reading day has no segment to curve through: a zero-length path
+    // with a round cap is a dot.
+    if (points.length === 1) {
+      const p = points[0];
+      return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
+    }
+    return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
   })();
 
   const gridlines = [0, 25, 50, 75, 100]
