@@ -242,13 +242,9 @@ body::after {
     display: flex;
     align-items: center;
     height: 36px;
-    background: var(--bg-card);
     backdrop-filter: blur(12px);
     box-shadow: inset 0 -1px 0 var(--border-color);
-    -webkit-app-region: drag;
     user-select: none;
-}
-
 .titlebar-title {
     position: absolute;
     top: 0;
@@ -573,6 +569,17 @@ button.theme-select {
 .panel.compact .form-group label {
     margin-bottom: 4px;
     font-size: 0.7rem;
+}
+
+/* Start / end pair — two equal slots, native time pickers */
+.time-row {
+    display: flex;
+    gap: 8px;
+}
+
+.time-row .form-input {
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 .compact-form-wrapper .date-picker-display {
@@ -1755,6 +1762,17 @@ body.theme-sakura-light .legend-cell {
     flex-shrink: 0;
 }
 
+/* Fixed slot so rows without times (everything logged before start/end
+   existed) line up with rows that have them. */
+.entry-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    opacity: 0.8;
+    width: 11ch;
+    flex-shrink: 0;
+}
+
 .entry-title {
     display: block;
     overflow: hidden;
@@ -2578,6 +2596,90 @@ body.theme-wave .wave-bg {
 
 /* Activity map is merged into the goal card later — hidden for this layout pass */
 .dashboard-grid .streak-panel { display: none; }
+
+/* ===== AUDIOBOOK PLAYER (placeholder card) ===== */
+.audiobook-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.audiobook-placeholder {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 1fr auto auto auto;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.audiobook-cover-art {
+    border-radius: 10px;
+    border: 1px dashed var(--border-color);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent-primary) 18%, transparent), transparent 65%),
+        var(--bg-secondary);
+}
+
+.audiobook-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.audiobook-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+    overflow: hidden;
+}
+
+.audiobook-progress-fill {
+    width: 38%;
+    height: 100%;
+    background: var(--accent-primary);
+}
+
+.audiobook-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.audiobook-btn {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.audiobook-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-hover);
+}
+
+.audiobook-btn-play {
+    width: 44px;
+    height: 44px;
+    background: var(--accent-primary);
+    border-color: transparent;
+    color: #fff;
+}
+
+.audiobook-idle {
+    text-align: center;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+}
 
 /* ===== AUDIOBOOK PLAYER (placeholder card) ===== */
 .audiobook-card {

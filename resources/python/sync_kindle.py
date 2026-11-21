@@ -531,7 +531,7 @@ def run_sync(from_cache: bool = False, force: bool = False) -> dict:
                 status("Session day ends at %02d:00" % day_end_hour)
                 result = run_sidecar_mode(
                     sidecar_dir=str(cache_dir),
-                    columns=['session_date', 'book_title', 'language', 'char_count', 'session_duration'],
+                    columns=['session_date', 'start_date', 'end_date', 'book_title', 'language', 'char_count', 'session_duration'],
                     timezone=timezone,
                     session_adjustment_hours=day_end_hour,
                     sidecars=pending_dirs,

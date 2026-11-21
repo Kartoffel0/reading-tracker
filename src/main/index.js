@@ -328,6 +328,22 @@ function openDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
   `);
+
+  // Additive, idempotent migrations. Every database opened here goes through
+  // them — a fresh file, the live file after Restore swapped it for an older
+  // backup, or a data.db dropped in by hand — so pre-existing rows keep working
+  // and simply carry NULL times until they get them.
+  const sessionColumns = new Set(
+    db.prepare('PRAGMA table_info(sessions)').all().map((column) => column.name),
+  );
+  const addSessionColumn = (name, definition) => {
+    if (!sessionColumns.has(name)) {
+      db.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${definition}`);
+    }
+  };
+  addSessionColumn('start_time', 'TEXT');
+  addSessionColumn('end_time', 'TEXT');
+  addSessionColumn('media', "TEXT NOT NULL DEFAULT 'book'");
   // migration_flag guarded a one-shot data migration that no longer exists in
   // the app, so the table is dead weight that also trips off every backup: drop
   // it on sight, which scrubs it out of older backups when they get restored.
@@ -493,7 +509,7 @@ app.whenReady().then(() => {
       }
 
       const stmt = db.prepare(
-        'INSERT INTO sessions (id, date, title, language, characters, duration, unit) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_time, end_time, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
       stmt.run(
         session.id,
@@ -503,6 +519,9 @@ app.whenReady().then(() => {
         session.characters,
         session.duration,
         session.unit,
+        session.start_time || null,
+        session.end_time || null,
+        session.media || 'book',
       );
       return { success: true, duplicated: false };
     } catch (error) {
@@ -513,7 +532,7 @@ app.whenReady().then(() => {
   // Bulk insert sessions from CSV data
   ipcMain.handle('bulk-insert-sessions', (_, sessions) => {
     const stmt = db.prepare(
-      'INSERT INTO sessions (id, date, title, language, characters, duration, unit) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_time, end_time, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     );
     const insertMany = db.transaction((rows) => {
       let successCount = 0;
@@ -528,6 +547,9 @@ app.whenReady().then(() => {
             session.characters,
             session.duration,
             session.unit,
+            session.start_time || null,
+            session.end_time || null,
+            session.media || 'book',
           );
           successCount++;
         } catch (err) {
@@ -888,10 +910,21 @@ app.whenReady().then(() => {
         return key; // Fallback: return raw code
       }
 
+      // The extractor hands back timezone-adjusted ISO datetimes; the app stores
+      // the wall-clock HH:MM the session ran at, which is what the day boundary
+      // logic was already computed against.
+      function clockTimeFromDate(value) {
+        if (!value) return null;
+        const match = String(value).match(/T(\d{2}):(\d{2})/);
+        return match ? `${match[1]}:${match[2]}` : null;
+      }
+
       function handleSyncResult(result) {
         // Normalize field names from Python script to DB schema
-        // Python columns: session_date, book_title, language, char_count, session_duration
-        // DB columns:     date,        title,      language, characters, duration, unit
+        // Python columns: session_date, start_date, end_date, book_title,
+        //                 language, char_count, session_duration
+        // DB columns:     date, start_time, end_time, title, language,
+        //                 characters, duration, unit, media
         const normalizedSessions = (result.sessions || []).map((s) => ({
           date: s.session_date || s.date || null,
           title: s.book_title || s.title || 'Untitled',
@@ -900,6 +933,9 @@ app.whenReady().then(() => {
           duration:
             s.session_duration != null ? parseFloat(s.session_duration) : 0,
           unit: s.unit || 'minutes',
+          start_time: clockTimeFromDate(s.start_date),
+          end_time: clockTimeFromDate(s.end_date),
+          media: 'book',
         }));
 
         // Insert sessions into SQLite with proper deduplication FIRST
@@ -1024,7 +1060,14 @@ app.whenReady().then(() => {
 
   function insertSessionsWithDedup(sessions) {
     const insertOne = db.prepare(
-      'INSERT INTO sessions (id, date, title, language, characters, duration, unit) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_time, end_time, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    );
+    // A re-sync of the same sidecar reproduces the same clock time, so start_time
+    // is the strongest duplicate signal. Rows saved before start_time existed
+    // fall back to the old tuple, which is what keeps old imports from
+    // re-inserting themselves on the first sync after this upgrade.
+    const checkByTime = db.prepare(
+      'SELECT 1 FROM sessions WHERE title = ? AND date = ? AND start_time = ?',
     );
     const checkExisting = db.prepare(
       'SELECT 1 FROM sessions WHERE title = ? AND characters = ? AND date = ? AND duration = ? AND language = ?',
@@ -1032,13 +1075,15 @@ app.whenReady().then(() => {
     let inserted = 0;
     let skipped = 0;
     for (const session of sessions) {
-      const existing = checkExisting.get(
-        session.title,
-        session.characters,
-        session.date,
-        session.duration,
-        session.language,
-      );
+      const existing = session.start_time
+        ? checkByTime.get(session.title, session.date, session.start_time)
+        : checkExisting.get(
+            session.title,
+            session.characters,
+            session.date,
+            session.duration,
+            session.language,
+          );
       if (existing) {
         skipped++;
         continue;
@@ -1052,6 +1097,9 @@ app.whenReady().then(() => {
           session.characters || 0,
           session.duration || 0,
           session.unit || 'minutes',
+          session.start_time || null,
+          session.end_time || null,
+          session.media || 'book',
         );
         inserted++;
       } catch (e) {

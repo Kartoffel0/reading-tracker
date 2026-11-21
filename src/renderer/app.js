@@ -143,6 +143,9 @@ function migrateData(parsed) {
         language: s.language || 'Unknown',
         characters: s.characters || 0,
         unit: s.unit || 'minutes',
+        start_time: s.start_time || null,
+        end_time: s.end_time || null,
+        media: s.media || 'book',
       }));
     }
   }
@@ -163,6 +166,9 @@ async function getData() {
       characters: row.characters,
       duration: row.duration,
       unit: row.unit,
+      start_time: row.start_time || null,
+      end_time: row.end_time || null,
+      media: row.media || 'book',
     });
   }
   return data;
@@ -433,7 +439,9 @@ async function testKindleConnection() {
 async function logReading() {
   const dateKey = getSelectedDateKey();
   const titleInput = document.getElementById('sessionTitle');
-  const langSelect = document.getElementById('sessionLanguage');
+  const mediaSelect = document.getElementById('sessionMedia');
+  const startInput = document.getElementById('sessionStart');
+  const endInput = document.getElementById('sessionEnd');
   const charsInput = document.getElementById('sessionCharacters');
   const durationInput = document.getElementById('sessionDuration');
   const unitSelect = document.getElementById('durationUnit');
@@ -453,10 +461,15 @@ async function logReading() {
     id: Date.now(),
     date: dateKey,
     title: titleInput.value || 'Untitled',
-    language: langSelect.value,
+    // Language is no longer asked for: this tracker is Japanese-only, and the
+    // column stays because cover lookup and dedupe read it.
+    language: 'Japanese',
     characters: parseInt(charsInput.value) || 0,
     duration: duration,
     unit: unitSelect.value,
+    start_time: startInput.value || null,
+    end_time: endInput.value || null,
+    media: mediaSelect.value || 'book',
   };
 
   await saveSession(session);
@@ -464,6 +477,8 @@ async function logReading() {
   titleInput.value = '';
   charsInput.value = '';
   durationInput.value = '';
+  startInput.value = '';
+  endInput.value = '';
   unitSelect.value = 'minutes';
 
   await updateAll();
@@ -2138,9 +2153,17 @@ async function renderEntries() {
       const durationClass = goalIsChars ? '' : ' entry-highlight';
       const charsClass = goalIsChars ? ' entry-highlight' : '';
 
+      // Sessions from before start/end times existed keep an em dash so the
+      // column stays aligned instead of the row shifting sideways.
+      const timeRange =
+        session.start_time && session.end_time
+          ? `${session.start_time}–${session.end_time}`
+          : '—';
+
       return `
           <div class="entry-item">
             <span class="entry-date">${dateKey.replaceAll('-', ' ')}</span>
+            <span class="entry-time">${timeRange}</span>
             <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
             <div class="entry-stats">
                 <div class="entry-stat entry-duration${durationClass}"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
