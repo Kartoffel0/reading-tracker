@@ -1759,7 +1759,7 @@ input[type="submit"]:focus-visible,
     border: 1px solid var(--border-color);
     border-radius: 16px;
     width: 90%;
-    max-width: 600px;
+    max-width: 660px;
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
@@ -2021,9 +2021,8 @@ input[type="submit"]:focus-visible,
    .session-row so the cover cards on the dashboard are not touched. */
 .session-meta {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2px 20px;
-    margin-top: 1px;
+    grid-template-columns: 1fr;
+    gap: 8px 20px;
 }
 
 .session-meta-col {
@@ -2031,6 +2030,13 @@ input[type="submit"]:focus-visible,
     flex-direction: column;
     gap: 2px;
     min-width: 0;
+}
+
+.session-row .recent-cover-wrap {
+    position: relative;
+    width: auto;
+    height: 130px;
+    flex-shrink: 0;
 }
 
 .session-row .recent-stat {
@@ -2987,7 +2993,7 @@ body.theme-wave .wave-bg {
 
 .recent-cover-wrap {
     position: relative;
-    width: 68px;
+    width: auto;
     height: 90px;
     flex-shrink: 0;
 }

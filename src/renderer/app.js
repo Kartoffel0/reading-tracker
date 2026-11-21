@@ -2279,8 +2279,8 @@ async function openSessionsFor(title, dateKeys, preloaded) {
                             </span>
                             <div class="session-meta">
                                 <div class="session-meta-col">
-                                    <span class="recent-stat"><span class="recent-stat-label">Start</span><span class="recent-stat-value">${startLabel}</span></span>
-                                    <span class="recent-stat"><span class="recent-stat-label">End</span><span class="recent-stat-value">${endLabel}</span></span>
+                                    <span class="recent-stat"><span class="recent-stat-label">Start Date</span><span class="recent-stat-value">${startLabel}</span></span>
+                                    <span class="recent-stat"><span class="recent-stat-label">End Date</span><span class="recent-stat-value">${endLabel}</span></span>
                                 </div>
                                 <div class="session-meta-col">
                                     <span class="recent-stat"><span class="recent-stat-label">Duration</span><span class="recent-stat-value${timeClass}">${durationDisplay}</span></span>
