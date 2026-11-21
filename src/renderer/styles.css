@@ -3607,6 +3607,9 @@ body.theme-wave .wave-bg {
     inset: 0 var(--rt-gutter-right, 12px) 0 var(--rt-gutter-left, 12px);
     display: flex;
     gap: 6px;
+    /* The columns own the front by default, so the speed curve passes behind
+       them; hovering the speed stat lifts that curve back over. */
+    z-index: 1;
 }
 
 /* A month carries 31 columns and a long book even more, so the regular 6px gap
@@ -3796,8 +3799,10 @@ body.theme-wave .wave-bg {
     margin-top: 1px;
 }
 
-/* Speed trend: one polyline per unbroken run, drawn over the bars on its own
-   scale, in the tertiary accent so it reads apart from both bar series. */
+/* Speed trend: one polyline per unbroken run, on its own scale, in the tertiary
+   accent so it reads apart from both bar series. It rests *behind* the bars —
+   the columns are the data, the trend is context — and only comes forward when
+   its own stat is hovered, which is also when it thickens. */
 /* The box is the bars' box, not the plot's: an SVG is a replaced element, so
    `left` + `right` + `width: auto` falls back to its intrinsic 100x100 ratio
    instead of stretching. A calc() width is the fix. */
@@ -3809,7 +3814,9 @@ body.theme-wave .wave-bg {
     height: 100%;
     overflow: visible;
     pointer-events: none;
+    z-index: 0;
 }
+
 
 /* Dotted on purpose: a zero-length dash with a round cap is a dot, so the trend
    reads as a row of points rather than a measured line. */
@@ -3926,6 +3933,11 @@ body.theme-wave .wave-bg {
    not paint at all. */
 .rt-body:has(.rt-stat-col[data-series='speed']:hover) .rt-trend-dot {
     stroke-width: 2.6;
+}
+
+/* Hovering READING SPEED brings the curve over the columns it describes. */
+.rt-body:has(.rt-stat-col[data-series='speed']:hover) .rt-trend-svg {
+    z-index: 2;
 }
 
 /* ===== UTILITY CLASSES ===== */
