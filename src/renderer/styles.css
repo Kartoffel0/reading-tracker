@@ -630,12 +630,13 @@ button.theme-select {
     position: absolute;
     top: calc(100% + 4px);
     left: 0;
-    width: 168px;
+    right: 0;
     padding: 8px;
-    background: var(--bg-secondary);
+    background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(2px);
     z-index: 120;
 }
 
