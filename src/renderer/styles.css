@@ -2540,6 +2540,7 @@ body.theme-wave .wave-bg {
     display: flex;
     align-items: center;
     min-width: 0;
+    gap: 28px;
 }
 
 /* The gauge spans its column; the SVG keeps its own aspect ratio. */
@@ -2589,25 +2590,24 @@ body.theme-wave .wave-bg {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-auto-rows: min-content;
-    gap: 24px 12px;
+    gap: 32px 12px;
     min-width: 0;
 }
 
 .goal-stat {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    text-align: center;
     min-width: 0;
+    gap: 1px;
     /* Anchor for the hint below. */
     position: relative;
 }
 
 .goal-stat-label {
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     color: var(--text-muted);
-    font-weight: 500;
-    letter-spacing: 0.05em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
 }
 
 /* Stats sit at the top of the card, so their tooltips drop below the stat
@@ -2635,7 +2635,6 @@ body.theme-wave .wave-bg {
     font-size: 1rem;
     font-weight: 700;
     color: var(--text-primary);
-    line-height: 1.1;
 }
 
 /* GitHub-style goal calendar */
@@ -3162,19 +3161,20 @@ body.theme-wave .wave-bg {
 .rt-footer {
     display: flex;
     align-items: flex-end;
-    gap: 20px;
     margin-top: 10px;
+    margin-bottom: -8px;
 }
 
 .rt-summary {
     flex: 0 0 auto;
+    min-width: 45%;
 }
 
 /* Range label and the period steppers share one row. */
 .rt-caption {
     display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: space-between;
 }
 
 .rt-range {
@@ -3183,11 +3183,17 @@ body.theme-wave .wave-bg {
     color: var(--text-secondary);
 }
 
+.rt-period-step {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 140px;
+}
+
 .rt-step {
-    padding: 0 3px;
+    padding: 0 8px;
     font-size: 0.7rem;
-    font-weight: 600;
-    line-height: 1;
+    font-weight: 900;
     color: var(--text-muted);
     background: none;
     border: none;
@@ -3322,14 +3328,14 @@ body.theme-wave .wave-bg {
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    gap: 2px;
 }
 
 .rt-bar {
     flex: 1 1 0;
+    min-height: 3px;
     min-width: 0;
     max-width: 16px;
-    border-radius: 4px 4px 0 0;
+    border-radius: 3px 3px 0 0;
     pointer-events: none;
     transition: height 0.4s ease, background 0.2s ease;
 }
@@ -3487,9 +3493,8 @@ body.theme-wave .wave-bg {
 .rt-stats {
     flex: 1;
     min-width: 0;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
+    display: flex;
+    justify-content: space-between;
 }
 
 .rt-stat-col {
@@ -3509,7 +3514,17 @@ body.theme-wave .wave-bg {
 .rt-stat-value {
     font-family: 'JetBrains Mono', monospace;
     font-size: 1rem;
+    font-weight: 700;
     color: var(--text-primary);
+    min-width: 10ch;
+}
+
+.rt-stat-sessions-value {
+    min-width: 4ch;
+}
+
+.rt-stat-time-value {
+    min-width: 7ch;
 }
 
 /* Hovering a stat column promotes the series it owns; the others stay at the

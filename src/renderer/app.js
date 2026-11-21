@@ -1992,8 +1992,10 @@ function buildStatsBody(model) {
       <div class="rt-summary">
         <div class="rt-caption">
           <span class="rt-range">${rangeLabel} Average</span>
-          <button type="button" class="rt-step" data-step="-1" title="Older period">‹</button>
-          <button type="button" class="rt-step" data-step="1" title="Newer period">›</button>
+          <div class="rt-period-step">
+            <button type="button" class="rt-step" data-step="-1" title="Older period">‹</button>
+            <button type="button" class="rt-step" data-step="1" title="Newer period">›</button>
+          </div>
         </div>
         <div class="rt-headline">
           <span class="rt-big">${
@@ -2004,8 +2006,8 @@ function buildStatsBody(model) {
       </div>
       <div class="rt-stats">
         <div class="rt-stat-col" data-series="sessions">
-          <span class="rt-stat-label">LOG SESSIONS</span>
-          <span class="rt-stat-value">${totalSessions}</span>
+          <span class="rt-stat-label">SESSIONS</span>
+          <span class="rt-stat-value rt-stat-sessions-value">${totalSessions}</span>
         </div>
         <div class="rt-stat-col" data-series="chars">
           <span class="rt-stat-label">CHARACTERS READ</span>
@@ -2013,7 +2015,7 @@ function buildStatsBody(model) {
         </div>
         <div class="rt-stat-col" data-series="time">
           <span class="rt-stat-label">TOTAL TIME</span>
-          <span class="rt-stat-value">${rtFormatDuration(totalMinutes)}</span>
+          <span class="rt-stat-value rt-stat-time-value">${rtFormatDuration(totalMinutes)}</span>
         </div>
         <div class="rt-stat-col" data-series="speed">
           <span class="rt-stat-label">READING SPEED</span>
