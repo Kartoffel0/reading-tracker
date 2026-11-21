@@ -1493,13 +1493,13 @@ input[type="submit"]:focus-visible,
     font-weight: 500;
     line-height: 1.4;
     color: var(--text-primary);
-    /* Slightly translucent, on purpose: the theme's solid page colour at 88%
-       lets the shape of what it covers show through without letting the bars
-       read through the text, and the backdrop blur takes the busy edges off
-       whatever is behind it. A fully transparent box was unreadable; a fully
-       opaque one looked pasted on. */
-    background-color: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
-    backdrop-filter: blur(7px);
+    /* Translucent on purpose: at 62% of the theme's page colour the columns
+       behind the box still read as columns, and the hover blur (below) softens
+       their edges so the text keeps its contrast. 88% looked opaque — on a light
+       theme the page colour and the card colour are near enough to white that
+       the difference vanished. The floor is legibility: nothing below ~55%
+       survives a dense chart. */
+    background-color: color-mix(in srgb, var(--bg-secondary) 62%, transparent);
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 4px 8px;
@@ -1508,6 +1508,17 @@ input[type="submit"]:focus-visible,
     pointer-events: none;
     z-index: 20;
 }
+/* The blur follows visibility: a chart column's tooltip exists on all fifty-four
+   columns at once, and only one of them is ever shown. Paying for a
+   backdrop-filter on every hidden one is compositing nobody asked for. */
+.gc-cell:hover .tooltip,
+.gc-month:hover .tooltip,
+.goal-stat:hover .tooltip,
+.rt-bar-pair:hover::after,
+.rt-avg-tag:hover::after {
+    backdrop-filter: blur(6px);
+}
+
 /* ===== ENTRIES SECTION ===== */
 .entries-section {
     margin-top: 16px;
