@@ -2114,7 +2114,7 @@ function buildStatsBody(model) {
     const first = from.replaceAll('-', ' ');
     const last = to.replaceAll('-', ' ');
     // One bucket is not a span: "2026·2026" would be saying the same thing twice.
-    return first === last ? first : `${first}·${last}`;
+    return first === last ? first : `${first} · ${last}`;
   };
   const spanLabel =
     start !== null
