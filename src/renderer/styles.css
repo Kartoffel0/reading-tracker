@@ -3734,6 +3734,11 @@ body.theme-wave .wave-bg {
     cursor: help;
     padding: 3px;
     margin: -3px 0 0 -3px;
+    /* The tag is transformed, which already makes it a stacking context: giving
+       it a z-index is what lifts its tooltip above the columns. Without one the
+       context sits at the default level, and the bars — relative siblings that
+       come later in the DOM — paint over the whole subtree. */
+    z-index: 30;
 }
 
 .rt-avg-tag-right {
