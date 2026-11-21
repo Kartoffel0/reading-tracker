@@ -2190,12 +2190,176 @@ async function updateAll() {
   await refreshTitleSuggestions();
 }
 
-// Update duration unit labels dynamically
+// Changing the unit keeps the same real duration: 77 minutes → 1.28 hours.
 function updateDurationUnit() {
   const select = document.getElementById('durationUnit');
-  const currentValue = select.value;
-  // Unit toggle is handled by onchange
+  const input = document.getElementById('sessionDuration');
+  if (!select || !input) return;
+  const value = parseFloat(input.value);
+  if (!Number.isFinite(value) || value <= 0) return;
+  input.value =
+    select.value === 'hours'
+      ? String(Math.round((value / 60) * 100) / 100)
+      : String(Math.round(value * 60));
 }
+
+// ─── Session time fields ───────────────────────────────────────────────────
+// Duration and start/end are one value shown twice: editing either updates the
+// other. Programmatic writes never dispatch input events, so there is no loop.
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function clockToMinutes(value) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value || '');
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+function formatClock(date) {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function setTimeValue(inputId, value) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.value = value;
+}
+
+function durationInMinutes() {
+  const input = document.getElementById('sessionDuration');
+  const value = parseFloat(input?.value);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const unit = document.getElementById('durationUnit')?.value;
+  return Math.round(unit === 'hours' ? value * 60 : value);
+}
+
+// Duration typed → end is "now", start is now minus the duration.
+function applyDurationToTimes() {
+  const minutes = durationInMinutes();
+  if (minutes === null) return;
+  const end = new Date();
+  end.setSeconds(0, 0);
+  const start = new Date(end.getTime() - minutes * 60000);
+  setTimeValue('sessionStart', formatClock(start));
+  setTimeValue('sessionEnd', formatClock(end));
+}
+
+// Start/end picked → duration follows. Crossing midnight counts forward.
+function applyTimesToDuration() {
+  const start = clockToMinutes(document.getElementById('sessionStart')?.value);
+  const end = clockToMinutes(document.getElementById('sessionEnd')?.value);
+  if (start === null || end === null) return;
+  let minutes = end - start;
+  if (minutes < 0) minutes += 24 * 60;
+  const unit = document.getElementById('durationUnit')?.value;
+  const input = document.getElementById('sessionDuration');
+  if (!input) return;
+  input.value =
+    unit === 'hours'
+      ? String(Math.round((minutes / 60) * 100) / 100)
+      : String(minutes);
+}
+
+// ─── Custom time picker ────────────────────────────────────────────────────
+// The native panel is an unstylable browser widget (white sheet, blue
+// selection), so the inputs keep the value while this panel does the picking.
+function closeTimePanels() {
+  for (const panel of document.querySelectorAll('.time-panel.active')) {
+    panel.classList.remove('active');
+  }
+  for (const btn of document.querySelectorAll('.time-pick-btn')) {
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function buildTimePanel(input, panel) {
+  const current = clockToMinutes(input.value);
+  const hour = current === null ? null : Math.floor(current / 60);
+  const minute = current === null ? null : current % 60;
+  panel.dataset.hour = hour === null ? '' : String(hour);
+  panel.dataset.minute = minute === null ? '' : String(minute);
+
+  const hours = Array.from({ length: 24 }, (_, h) =>
+    `<button type="button" class="time-cell${h === hour ? ' selected' : ''}" data-hour="${h}">${pad2(h)}</button>`,
+  ).join('');
+  const minutes = Array.from({ length: 60 }, (_, m) =>
+    `<button type="button" class="time-cell${m === minute ? ' selected' : ''}" data-minute="${m}">${pad2(m)}</button>`,
+  ).join('');
+
+  panel.innerHTML = `
+      <div class="time-panel-head"><span>HOUR</span><span>MIN</span></div>
+      <div class="time-columns">
+          <div class="time-col" data-col="hour">${hours}</div>
+          <div class="time-col" data-col="minute">${minutes}</div>
+      </div>`;
+}
+
+function toggleTimePanel(button) {
+  const inputId = button.dataset.target;
+  const panel = document.getElementById(`${inputId}Panel`);
+  const input = document.getElementById(inputId);
+  if (!panel || !input) return;
+
+  const wasOpen = panel.classList.contains('active');
+  closeTimePanels();
+  if (wasOpen) return;
+
+  buildTimePanel(input, panel);
+  panel.classList.add('active');
+  button.setAttribute('aria-expanded', 'true');
+
+  // Bring the selected cells into view — 60 minutes otherwise start at 00.
+  for (const cell of panel.querySelectorAll('.time-cell.selected')) {
+    cell.scrollIntoView({ block: 'center' });
+  }
+}
+
+function initSessionTimeFields() {
+  const durationInput = document.getElementById('sessionDuration');
+  const startInput = document.getElementById('sessionStart');
+  const endInput = document.getElementById('sessionEnd');
+  if (!durationInput || !startInput || !endInput) return;
+
+  durationInput.addEventListener('input', applyDurationToTimes);
+  startInput.addEventListener('input', applyTimesToDuration);
+  endInput.addEventListener('input', applyTimesToDuration);
+
+  for (const button of document.querySelectorAll('.time-pick-btn')) {
+    button.addEventListener('click', () => toggleTimePanel(button));
+  }
+
+  for (const panel of document.querySelectorAll('.time-panel')) {
+    panel.addEventListener('click', (event) => {
+      const cell = event.target.closest('.time-cell');
+      if (!cell) return;
+      const column = cell.parentElement;
+      if (column.dataset.col === 'hour') panel.dataset.hour = cell.dataset.hour;
+      else panel.dataset.minute = cell.dataset.minute;
+
+      for (const sibling of column.children) {
+        sibling.classList.toggle('selected', sibling === cell);
+      }
+
+      const { hour, minute } = panel.dataset;
+      if (hour !== '' && minute !== '') {
+        setTimeValue(panel.id.replace('Panel', ''), `${pad2(hour)}:${pad2(minute)}`);
+        applyTimesToDuration();
+        closeTimePanels();
+      }
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.time-field')) closeTimePanels();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeTimePanels();
+  });
+}
+
+initSessionTimeFields();
+
 
 document.getElementById('sessionDuration').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') logReading();
