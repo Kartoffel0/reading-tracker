@@ -37,8 +37,98 @@
             </div>
         </div>
 
-        <!-- Stats Grid -->
-        <div class="stats-grid">
+        <div class="app-shell">
+            <!-- Left rail: page selector, clock, session form -->
+            <aside class="rail">
+                <nav class="page-selector" aria-label="Pages">
+                    <button type="button" class="page-tab is-active" data-page="dashboard">HOME</button>
+                    <button type="button" class="page-tab" data-page="library">LIBRARY</button>
+                </nav>
+
+                <!-- Clock (placeholder: stopwatch writes start/end into the form) -->
+                <div class="panel clock-card">
+                    <div class="card-title">CLOCK</div>
+                    <div class="clock-placeholder" id="clockDisplay">00:00:00</div>
+                </div>
+
+                <!-- Log Session -->
+                <div class="panel compact">
+                    <div class="card-title">Log Session</div>
+                    <div class="compact-form-wrapper">
+                        <div class="form-group">
+                            <label class="form-label">DATE</label>
+                            <div class="custom-date-picker" id="datePicker">
+                                <div class="date-picker-display" id="datePickerDisplay" onclick="toggleDatePicker()">
+                                    <span id="datePickerValue"></span>
+                                    <svg class="date-picker-icon" viewBox="0 0 24 24" width="16" height="16">
+                                        <path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.89-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z" />
+                                    </svg>
+                                </div>
+                                <div class="date-picker-dropdown" id="datePickerDropdown">
+                                    <div class="dp-header">
+                                        <button class="dp-nav-btn" onclick="dpPrevMonth()">
+                                            <svg viewBox="0 0 24 24" width="16" height="16">
+                                                <path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                                            </svg>
+                                        </button>
+                                        <span class="dp-month-year" id="dpMonthYear"></span>
+                                        <button class="dp-nav-btn" onclick="dpNextMonth()">
+                                            <svg viewBox="0 0 24 24" width="16" height="16">
+                                                <path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div class="dp-weekdays">
+                                        <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                                    </div>
+                                    <div class="dp-days" id="dpDays"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">TITLE / WORK</label>
+                            <input type="text" id="sessionTitle" class="form-input" placeholder="e.g., Fate/stay night, 金の月のマヤ(2) 秘...">
+                            <div class="title-suggestions" id="titleSuggestions"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">LANGUAGE</label>
+                            <select id="sessionLanguage" class="form-select">
+                                <option value="Japanese">Japanese</option>
+                                <option value="English">English</option>
+                                <option value="Portuguese">Portuguese</option>
+                                <option value="Spanish">Spanish</option>
+                                <option value="Korean">Korean</option>
+                                <option value="Chinese">Chinese</option>
+                                <option value="German">German</option>
+                                <option value="French">French</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">CHARACTERS READ</label>
+                            <input type="number" id="sessionCharacters" class="form-input" placeholder="0" min="0" style="-moz-appearance: textfield; -webkit-appearance: none; appearance: none;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">DURATION</label>
+                            <div class="duration-input">
+                                <input type="number" id="sessionDuration" class="form-input" placeholder="0" min="0" step="1">
+                                <select id="durationUnit" class="unit-toggle" onchange="updateDurationUnit()">
+                                    <option value="minutes">Minutes</option>
+                                    <option value="hours">Hours</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-primary" onclick="logReading()">LOG SESSION</button>
+                    </div>
+                    <button id="kindle-sync-btn" type="button" class="btn-bulk-import" onclick="openKindleSyncModal()">Kindle Sync</button>
+                    <div id="bulkImportResults"></div>
+                    <button type="button" class="btn-bulk-import" onclick="openBulkImportModal()">BULK IMPORT</button>
+                </div>
+            </aside>
+
+            <section class="main-area">
+                <!-- Stats Grid -->
+                <div class="stats-grid">
             <div class="stat-card">
                 <div class="kanji-bg-icon">続</div>
                 <div class="value" id="currentStreak">0</div>
@@ -61,83 +151,7 @@
             </div>
         </div>
 
-        <!-- Main Layout -->
-        <div class="main-layout">
-            <!-- Left Panel - Input -->
-            <div class="panel compact">
-                <div class="card-title">Log Session</div>
-                <div class="compact-form-wrapper">
-                    <div class="form-group">
-                        <label class="form-label">DATE</label>
-                        <div class="custom-date-picker" id="datePicker">
-                            <div class="date-picker-display" id="datePickerDisplay" onclick="toggleDatePicker()">
-                                <span id="datePickerValue"></span>
-                                <svg class="date-picker-icon" viewBox="0 0 24 24" width="16" height="16">
-                                    <path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.89-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z" />
-                                </svg>
-                            </div>
-                            <div class="date-picker-dropdown" id="datePickerDropdown">
-                                <div class="dp-header">
-                                    <button class="dp-nav-btn" onclick="dpPrevMonth()">
-                                        <svg viewBox="0 0 24 24" width="16" height="16">
-                                            <path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-                                        </svg>
-                                    </button>
-                                    <span class="dp-month-year" id="dpMonthYear"></span>
-                                    <button class="dp-nav-btn" onclick="dpNextMonth()">
-                                        <svg viewBox="0 0 24 24" width="16" height="16">
-                                            <path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-                                        </svg>
-                                    </button>
-                                </div>
-                                <div class="dp-weekdays">
-                                    <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
-                                </div>
-                                <div class="dp-days" id="dpDays"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">TITLE / WORK</label>
-                        <input type="text" id="sessionTitle" class="form-input" placeholder="e.g., Fate/stay night, 金の月のマヤ(2) 秘...">
-                        <div class="title-suggestions" id="titleSuggestions"></div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">LANGUAGE</label>
-                        <select id="sessionLanguage" class="form-select">
-                            <option value="Japanese">Japanese</option>
-                            <option value="English">English</option>
-                            <option value="Portuguese">Portuguese</option>
-                            <option value="Spanish">Spanish</option>
-                            <option value="Korean">Korean</option>
-                            <option value="Chinese">Chinese</option>
-                            <option value="German">German</option>
-                            <option value="French">French</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">CHARACTERS READ</label>
-                        <input type="number" id="sessionCharacters" class="form-input" placeholder="0" min="0" style="-moz-appearance: textfield; -webkit-appearance: none; appearance: none;">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">DURATION</label>
-                        <div class="duration-input">
-                            <input type="number" id="sessionDuration" class="form-input" placeholder="0" min="0" step="1">
-                            <select id="durationUnit" class="unit-toggle" onchange="updateDurationUnit()">
-                                <option value="minutes">Minutes</option>
-                                <option value="hours">Hours</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button type="button" class="btn-primary" onclick="logReading()">LOG SESSION</button>
-                </div>
-                <button id="kindle-sync-btn" type="button" class="btn-bulk-import" onclick="openKindleSyncModal()">Kindle Sync</button>
-                <div id="bulkImportResults"></div>
-                <button type="button" class="btn-bulk-import" onclick="openBulkImportModal()">BULK IMPORT</button>
-            </div>
-
-            <!-- Right Panel - Dashboard Grid (4 sections) -->
+                <!-- Right Panel - Dashboard Grid (4 sections) -->
             <div class="dashboard-grid">
                 <!-- Card 1: Activity map (streak calendar) -->
                 <div class="panel streak-panel">
@@ -227,16 +241,33 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Recent Entries -->
-        <div class="panel entries-section">
-            <div class="entries-header">
-                <h2 class="card-title" style="margin-bottom: 0; margin-top: 0;">RECENT ENTRIES</h2>
-                <span class="entry-count" id="entryCount">0 entries</span>
+                <!-- Card 5: Audiobook player (placeholder) -->
+                <div class="panel audiobook-card">
+                    <div class="card-title">AUDIOBOOK PLAYER</div>
+                    <div class="audiobook-placeholder">
+                        <div class="audiobook-cover-art"></div>
+                        <div class="audiobook-title">No audiobook loaded</div>
+                        <div class="audiobook-progress"><div class="audiobook-progress-fill"></div></div>
+                        <div class="audiobook-controls">
+                            <button type="button" class="audiobook-btn" title="Previous">&#9198;</button>
+                            <button type="button" class="audiobook-btn audiobook-btn-play" title="Play">&#9654;</button>
+                            <button type="button" class="audiobook-btn" title="Next">&#9197;</button>
+                        </div>
+                        <div class="audiobook-idle">Continue playing</div>
+                    </div>
+                </div>
+
+                <!-- Recent Entries -->
+                <div class="panel entries-section">
+                    <div class="entries-header">
+                        <h2 class="card-title" style="margin-bottom: 0; margin-top: 0;">RECENT ENTRIES</h2>
+                        <span class="entry-count" id="entryCount">0 entries</span>
+                    </div>
+                    <div id="entryList"></div>
+                </div>
             </div>
-            <div id="entryList"></div>
+            </section>
         </div>
     </div>
 

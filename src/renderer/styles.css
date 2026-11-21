@@ -227,9 +227,9 @@ body::after {
 .container {
     position: relative;
     z-index: 1;
-    max-width: 1200px;
-    margin: 0 0 0 auto;
-    padding: 60px 24px 24px 24px;
+    max-width: none;
+    margin: 0;
+    padding: 60px 24px 24px;
 }
 
 /* Frameless window title bar (titleBarStyle: 'hidden') */
@@ -379,24 +379,21 @@ button.theme-select {
 /* ===== STATS GRID ===== */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, 292px);
     gap: 16px;
-    margin-bottom: 16px;
-}
-
-@media (max-width: 768px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
+    height: 102px;
 }
 
 .stat-card {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 24px;
+    padding: 14px 18px;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     transition: all 0.3s ease;
 }
 
@@ -446,17 +443,88 @@ button.theme-select {
     letter-spacing: 0.05em;
 }
 
-/* ===== MAIN LAYOUT & PANEL ===== */
-.main-layout {
-    display: grid;
-    grid-template-columns: 320px 1fr;
+/* ===== APP SHELL: fixed rail + dashboard area ===== */
+.app-shell {
+    display: flex;
+    align-items: stretch;
+    gap: 16px;
+    /* Design width is 1632 (1680 minus 24px padding each side). Wider windows
+       centre the fixed-track layout instead of leaving dead space on the right. */
+    max-width: 1632px;
+    margin: 0 auto;
+}
+
+/* Left rail: page selector, clock, log session (400 px wide) */
+.rail {
+    flex: 0 0 400px;
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+}
+
+.main-area {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
     gap: 16px;
 }
 
-@media (max-width: 900px) {
-    .main-layout {
-        grid-template-columns: 1fr;
-    }
+/* Page selector (400 × 48) */
+.page-selector {
+    flex: 0 0 48px;
+    height: 48px;
+    display: flex;
+    gap: 8px;
+    padding: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.page-tab {
+    flex: 1 1 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.page-tab:hover {
+    color: var(--text-primary);
+}
+
+.page-tab.is-active {
+    background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+    color: var(--accent-primary);
+}
+
+/* Clock card (400 × 336) */
+.clock-card {
+    flex: 0 0 336px;
+    height: 336px;
+    display: flex;
+    flex-direction: column;
+}
+
+.clock-placeholder {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.25rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
 }
 
 .panel {
@@ -466,10 +534,14 @@ button.theme-select {
     padding: 20px;
 }
 
-/* Compact input panel (log session) */
+/* Compact input panel (log session) — fills the rest of the rail */
 .panel.compact {
     display: flex;
     flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
 }
 
 .compact-form-wrapper {
@@ -1611,7 +1683,8 @@ body.theme-sakura-light .legend-cell {
 }
 
 #entryList {
-    max-height: 150px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     scrollbar-width: none;
 }
@@ -2472,32 +2545,138 @@ body.theme-wave .wave-bg {
     height: 100%;
 }
 
-/* ===== DASHBOARD GRID (4 sections) ===== */
+/* ===== DASHBOARD GRID (fixed tracks: 400 | 800, rows 400 / 400 / 220) ===== */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 400px 800px;
+    grid-template-rows: 400px 400px 220px;
     gap: 16px;
     align-items: stretch;
 }
 
-@media (max-width: 900px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
 .dashboard-grid .panel {
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+}
+
+/* Explicit placement — DOM order is irrelevant */
+.recently-read-card { grid-column: 1; grid-row: 1; }
+.audiobook-card { grid-column: 1; grid-row: 2 / span 2; }
+.reading-time-card { grid-column: 2; grid-row: 1; }
+.goal-card { grid-column: 2; grid-row: 2; }
+.entries-section { grid-column: 2; grid-row: 3; margin-top: 0; }
+
+/* Activity map is merged into the goal card later — hidden for this layout pass */
+.dashboard-grid .streak-panel { display: none; }
+
+/* ===== AUDIOBOOK PLAYER (placeholder card) ===== */
+.audiobook-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.audiobook-placeholder {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 1fr auto auto auto;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.audiobook-cover-art {
+    border-radius: 10px;
+    border: 1px dashed var(--border-color);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent-primary) 18%, transparent), transparent 65%),
+        var(--bg-secondary);
+}
+
+.audiobook-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.audiobook-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+    overflow: hidden;
+}
+
+.audiobook-progress-fill {
+    width: 38%;
+    height: 100%;
+    background: var(--accent-primary);
+}
+
+.audiobook-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.audiobook-btn {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.audiobook-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-hover);
+}
+
+.audiobook-btn-play {
+    width: 44px;
+    height: 44px;
+    background: var(--accent-primary);
+    border-color: transparent;
+    color: #fff;
+}
+
+.audiobook-idle {
+    text-align: center;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
 }
 
 
 /* ===== DAILY GOAL CARD ===== */
 .goal-card {
-    aspect-ratio: 1;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+}
+
+/* The gauge is a full-width SVG; at 800 px it would grow to ~430 px tall and
+   push the calendar out of the card. Cap it and scale the arc down. */
+.goal-gauge {
+    flex: 0 0 auto;
+    max-height: 120px;
+    display: flex;
+    justify-content: center;
+}
+
+.goal-gauge-svg {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    display: block;
 }
 
 /* Three parts: gauge (full width), plain-text stats, calendar */
@@ -2750,10 +2929,9 @@ body.theme-wave .wave-bg {
 }
 
 /* ===== RECENTLY READ CARD ===== */
-/* The card keeps the same square size as the other dashboard cards. The list
-   inside is scrollable, so adding more books never grows the card. */
+/* The card fills its 400 × 400 grid cell. The list inside is scrollable, so
+   adding more books never grows the card. */
 .recently-read-card {
-    aspect-ratio: 1;
     display: flex;
     flex-direction: column;
 }
@@ -2925,7 +3103,6 @@ body.theme-wave .wave-bg {
 
 /* ===== READING TIME CARD ===== */
 .reading-time-card {
-    aspect-ratio: 1;
     display: flex;
     flex-direction: column;
 }
