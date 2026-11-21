@@ -1882,7 +1882,7 @@ body.theme-sakura-light .legend-cell {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-size: 0.85rem;
     transition: all 0.2s ease;
 }
