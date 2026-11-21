@@ -210,6 +210,30 @@ function sessionDayKey() {
   return getDateKey(sessionDayDate());
 }
 
+// Which day a session is filed under. The date picker holds the calendar day the
+// session happened on; the stats rule is that anything ending before the
+// session-day boundary belongs to the previous day. With wall-clock times there
+// is no need to pre-shift the picker — the shift happens here, once, at save.
+//
+// A session that crossed midnight already carries its start date, so only the
+// end is judged then, which is also what the Kindle extractor does.
+function sessionDayKeyFor(dateKey, startTime, endTime) {
+  const boundary = sessionDayEndHour * 60;
+  if (boundary <= 0 || !dateKey) return dateKey;
+  const start = clockToMinutes(startTime);
+  const end = clockToMinutes(endTime);
+  if (start === null || end === null) return dateKey;
+
+  const crossesMidnight = end < start;
+  const judged = crossesMidnight ? start : end;
+  if (judged >= boundary) return dateKey;
+
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const shifted = new Date(year, month - 1, day);
+  shifted.setDate(shifted.getDate() - 1);
+  return getDateKey(shifted);
+}
+
 // ===== SHARED TOOLTIP FORMATTING =====
 // Every card tooltip (activity map, goal calendar, reading stats) is built from
 // these helpers so they all read the same way:
@@ -280,17 +304,30 @@ const dpMonthNames = [
   'December',
 ];
 
-// The date picker always opens on the current session day, and the activity
-// map starts on the month that day belongs to. Called on startup once the
-// settings are known, and again if the session-day boundary is changed.
+// Points the date picker at a calendar day (not a session day) and repaints it.
+function selectCalendarDay(date) {
+  const day = new Date(date);
+  day.setHours(0, 0, 0, 0);
+  dpSelectedDate = day;
+  dpCurrentDate = new Date(day);
+  updateDatePickerDisplay();
+  renderDatePickerDays();
+}
+
+// The date picker opens on the current *calendar* day: with start/end times on
+// every session, the day a session is filed under is derived at save time
+// (sessionDayKeyFor), so the picker no longer has to lie about the date. The
+// activity map still starts on the month the current session day belongs to.
+// Called on startup once the settings are known, and again if the session-day
+// boundary is changed.
 function alignToSessionDay() {
   const today = sessionDayDate();
   currentMonth = today.getMonth();
   currentYear = today.getFullYear();
-  dpSelectedDate = new Date(today);
-  dpCurrentDate = new Date(today);
-  updateDatePickerDisplay();
-  renderDatePickerDays();
+
+  const calendarDay = new Date();
+  calendarDay.setHours(0, 0, 0, 0);
+  selectCalendarDay(calendarDay);
 }
 
 function toggleDatePicker() {
@@ -337,7 +374,9 @@ function renderDatePickerDays() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
-  const todayStr = sessionDayKey();
+  // The picker is about calendar days now, so its "today" ring marks the real
+  // today; the session-day boundary only affects where stats file the row.
+  const todayStr = getDateKey(new Date());
   const selectedStr = getDateKey(dpSelectedDate);
 
   // Previous month days
@@ -460,9 +499,17 @@ async function logReading() {
     return;
   }
 
+  // The picker holds the calendar day; the row is filed under the session day
+  // those times belong to (before the boundary counts as the previous day).
+  const filedDate = sessionDayKeyFor(
+    dateKey,
+    timeFieldValue('sessionStart'),
+    timeFieldValue('sessionEnd'),
+  );
+
   const session = {
     id: Date.now(),
-    date: dateKey,
+    date: filedDate,
     title: titleInput.value || 'Untitled',
     // Language is no longer asked for: this tracker is Japanese-only, and the
     // column stays because cover lookup and dedupe read it.
@@ -2546,8 +2593,12 @@ async function stopStopwatch() {
   renderClock();
   await window.electronAPI.updateSettings('stopwatch', { startedAt: null });
 
-  // Hand the range to the form; the duration follows as a suggestion.
-  setTimeValue('sessionStart', formatClock(new Date(startedAt)));
+  // Hand the range to the form; the duration follows as a suggestion. The picker
+  // moves to the day the session started, so a run across midnight files under
+  // the earlier day instead of the day it was stopped.
+  const startedDate = new Date(startedAt);
+  selectCalendarDay(startedDate);
+  setTimeValue('sessionStart', formatClock(startedDate));
   setTimeValue('sessionEnd', formatClock(new Date(endedAt)));
   applyTimesToDuration();
   showToast('Stopped — add title and characters');
