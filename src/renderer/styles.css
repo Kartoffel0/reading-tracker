@@ -1483,7 +1483,8 @@ input[type="submit"]:focus-visible,
 .gc-cell .tooltip,
 .gc-month .tooltip,
 .goal-stat .tooltip,
-.rt-bar-pair::after {
+.rt-bar-pair::after,
+.rt-avg-tag::after {
     position: absolute;
     bottom: calc(100% + 6px);
     left: 50%;
@@ -3726,12 +3727,48 @@ body.theme-wave .wave-bg {
     left: 0;
     transform: translateY(-50%);
     font-size: 0.5rem;
-    pointer-events: none;
+    /* The tag is the annotation's handle: it takes the pointer (nothing else
+       lives in the gutter) and pads itself out to a hittable target without
+       moving the text off the axis line. */
+    pointer-events: auto;
+    cursor: help;
+    padding: 3px;
+    margin: -3px 0 0 -3px;
 }
 
 .rt-avg-tag-right {
     left: auto;
     right: 2px;
+    margin: -3px -3px 0 0;
+}
+
+/* Same box as every other chart tooltip; only the anchor is different — a
+   centred box on a 14px tag would hang off the card's edge. */
+.rt-avg-tag::after {
+    content: attr(data-tooltip);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.rt-avg-tag-left::after {
+    left: -3px;
+    transform: none;
+}
+
+.rt-avg-tag-right::after {
+    left: auto;
+    right: -3px;
+    transform: none;
+}
+
+/* High tag: the box opens downwards, like a tall column's tooltip does. */
+.rt-avg-tag.rt-tip-down::after {
+    top: 4px;
+    bottom: auto;
+}
+
+.rt-avg-tag:hover::after {
+    opacity: 1;
 }
 
 /* Line already touching the top gridline: drop the tag underneath instead of

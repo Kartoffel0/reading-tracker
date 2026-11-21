@@ -2095,17 +2095,33 @@ function buildStatsBody(model) {
   // edge of the plot the average line runs under both series, and a tag there is
   // the first thing they cover. Sitting on the top gridline (one column of data
   // does that) it would land on the axis number, so it flips below the line.
-  const avgLine = (value, nice, cls, side) => {
+  const avgLine = (value, nice, cls, side, tooltip) => {
     if (value <= 0) return '';
     const top = topOf(value, nice);
-    const flip = top < 8 ? ' rt-avg-label-low' : '';
+    // Against the top gridline the tag (and its tooltip) both hang below the
+    // line instead of climbing out of the card.
+    const low = top < 8 ? ' rt-avg-label-low rt-tip-down' : '';
     return `
       <div class="rt-avg-line ${cls}" style="top: ${top}%"></div>
-      <span class="rt-avg-tag ${cls} rt-avg-tag-${side}${flip}" style="top: ${top}%">avg</span>`;
+      <span class="rt-avg-tag ${cls} rt-avg-tag-${side}${low}" style="top: ${top}%" data-tooltip="${escapeHtml(tooltip)}">avg</span>`;
   };
+  // The averages are per reading day — the mean of the columns that carry
+  // something — so the tooltip says so rather than leaving "average" ambiguous.
   const avgLines =
-    avgLine(avgChars, niceChars, 'rt-avg-chars', 'left') +
-    avgLine(avgMinutes, niceMinutes, 'rt-avg-time', 'right');
+    avgLine(
+      avgChars,
+      niceChars,
+      'rt-avg-chars',
+      'left',
+      `characters average\n${formatTooltipChars(avgChars)}\nper reading day`,
+    ) +
+    avgLine(
+      avgMinutes,
+      niceMinutes,
+      'rt-avg-time',
+      'right',
+      `time average\n${formatTooltipDuration(avgMinutes)}\nper reading day`,
+    );
 
   const xLabels = sorted.map((b) => `<span>${b.label}</span>`).join('');
   const speedValue =
