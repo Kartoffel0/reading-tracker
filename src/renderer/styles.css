@@ -2016,9 +2016,9 @@ input[type="submit"]:focus-visible,
 
 /* ===== SESSION ROWS (modal) =====
    Session rows reuse .recent-book / .recent-info / .recent-stat so they keep the
-   Recently Read shell, but their body is two columns: timestamps on the left,
-   the three numbers on the right. Everything that differs is scoped to
-   .session-row so the cover cards on the dashboard are not touched. */
+   Recently Read shell, but their body splits into a timestamp group and a number
+   group. Everything that differs is scoped to .session-row so the cover cards on
+   the dashboard are not touched. */
 .session-meta {
     display: grid;
     grid-template-columns: 1fr;
