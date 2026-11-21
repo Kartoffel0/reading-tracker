@@ -2056,7 +2056,7 @@ function buildStatsBody(model) {
       const tall = Math.max(charsHeight, timeHeight);
       const tipClass = tall > 72 ? ' rt-tip-down' : '';
       return `
-        <div class="rt-bar-pair${tipClass}" data-tooltip="${lines.join('\n')}" style="--tip-y: ${tall.toFixed(1)}%" data-scope="${b.scope}" data-key="${b.clickKey}" data-label="${b.tooltip}" title="Open these sessions">
+        <div class="rt-bar-pair${tipClass}" data-tooltip="${lines.join('\n')}" style="--tip-y: ${tall.toFixed(1)}%" data-scope="${b.scope}" data-key="${b.clickKey}" data-label="${b.tooltip}">
           <div class="rt-bar rt-bar-chars${today}" style="height: ${charsHeight}%"></div>
           <div class="rt-bar rt-bar-time${today}" style="height: ${timeHeight}%"></div>
         </div>
