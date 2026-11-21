@@ -210,28 +210,37 @@ function sessionDayKey() {
   return getDateKey(sessionDayDate());
 }
 
-// Which day a session is filed under. The date picker holds the calendar day the
-// session happened on; the stats rule is that anything ending before the
-// session-day boundary belongs to the previous day. With wall-clock times there
-// is no need to pre-shift the picker — the shift happens here, once, at save.
-//
-// A session that crossed midnight already carries its start date, so only the
-// end is judged then, which is also what the Kindle extractor does.
-function sessionDayKeyFor(dateKey, startTime, endTime) {
+// A session is recorded under the calendar day it ended on — that is what the
+// date column holds and what the entries list shows. Statistics file it under
+// the session day instead: anything ending before the session-day boundary
+// belongs to the previous day (a session stopped at 00:48 counts for yesterday).
+// Sessions without an end time cannot be judged and stay where they are.
+function sessionDayForDate(dateKey, endTime) {
   const boundary = sessionDayEndHour * 60;
   if (boundary <= 0 || !dateKey) return dateKey;
-  const start = clockToMinutes(startTime);
   const end = clockToMinutes(endTime);
-  if (start === null || end === null) return dateKey;
-
-  const crossesMidnight = end < start;
-  const judged = crossesMidnight ? start : end;
-  if (judged >= boundary) return dateKey;
+  if (end === null || end >= boundary) return dateKey;
 
   const [year, month, day] = dateKey.split('-').map(Number);
   const shifted = new Date(year, month - 1, day);
   shifted.setDate(shifted.getDate() - 1);
   return getDateKey(shifted);
+}
+
+// The same rows, keyed by session day. Every statistic reads this; the entries
+// list and the book cards keep using the raw dates so a row shows the day it
+// was actually recorded on.
+async function getStatsData() {
+  const raw = await getData();
+  const byDay = {};
+  for (const [dateKey, sessions] of Object.entries(raw)) {
+    for (const session of sessions) {
+      const dayKey = sessionDayForDate(dateKey, session.end_time);
+      if (!byDay[dayKey]) byDay[dayKey] = [];
+      byDay[dayKey].push(session);
+    }
+  }
+  return byDay;
 }
 
 // ===== SHARED TOOLTIP FORMATTING =====
@@ -499,17 +508,11 @@ async function logReading() {
     return;
   }
 
-  // The picker holds the calendar day; the row is filed under the session day
-  // those times belong to (before the boundary counts as the previous day).
-  const filedDate = sessionDayKeyFor(
-    dateKey,
-    timeFieldValue('sessionStart'),
-    timeFieldValue('sessionEnd'),
-  );
-
+  // Recorded under the day it was logged on; the day-end boundary is applied
+  // when statistics aggregate, not here.
   const session = {
     id: Date.now(),
-    date: filedDate,
+    date: dateKey,
     title: titleInput.value || 'Untitled',
     // Language is no longer asked for: this tracker is Japanese-only, and the
     // column stays because cover lookup and dedupe read it.
@@ -686,11 +689,6 @@ function calculateStreaks(data) {
   return { current: currentStreak, best: bestStreak };
 }
 
-async function calculateDayTotal(dateKey) {
-  const totalMinutes = await window.electronAPI.getDayTotal(dateKey);
-  return totalMinutes / 60;
-}
-
 async function updateStats(data) {
   const dates = Object.keys(data);
   let totalDays = 0;
@@ -716,13 +714,13 @@ async function updateStats(data) {
 }
 
 function fetchAllData() {
-  return getData().then((data) => {
-    updateStats(data);
+  return getStatsData().then((stats) => {
+    updateStats(stats);
     renderStreakMap();
     renderEntries();
-    renderGoalCard(data);
-    renderRecentlyRead(data);
-    renderReadingTime(data);
+    renderGoalCard(stats);
+    getData().then(renderRecentlyRead);
+    renderReadingTime(stats);
   });
 }
 
@@ -786,7 +784,7 @@ async function renderStreakMap() {
   document.getElementById('currentMonthLabel').textContent =
     `${monthNames[currentMonth]} ${currentYear}`;
 
-  const data = await getData();
+  const data = await getStatsData();
   grid.innerHTML = '';
 
   ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach((d) => {
@@ -1976,7 +1974,9 @@ function shiftReadingPeriod(direction) {
 })();
 
 async function openDaySessions(dateKey) {
-  const data = await getData();
+  // Session-day view: clicking the 20th lists the session that ran past
+  // midnight into the 21st, because that is where it counts.
+  const data = await getStatsData();
   const sessions = data[dateKey];
   const modal = document.getElementById('modalOverlay');
   const modalTitle = document.getElementById('modalTitle');
@@ -2230,13 +2230,14 @@ async function renderEntries() {
 }
 
 async function updateAll() {
-  const data = await getData();
-  updateStats(data);
+  const raw = await getData();
+  const stats = await getStatsData();
+  updateStats(stats);
   await renderStreakMap();
   await renderEntries();
-  await renderGoalCard(data);
-  await renderRecentlyRead(data);
-  await renderReadingTime(data);
+  await renderGoalCard(stats);
+  await renderRecentlyRead(raw);
+  await renderReadingTime(stats);
   await refreshTitleSuggestions();
 }
 
@@ -2593,12 +2594,10 @@ async function stopStopwatch() {
   renderClock();
   await window.electronAPI.updateSettings('stopwatch', { startedAt: null });
 
-  // Hand the range to the form; the duration follows as a suggestion. The picker
-  // moves to the day the session started, so a run across midnight files under
-  // the earlier day instead of the day it was stopped.
-  const startedDate = new Date(startedAt);
-  selectCalendarDay(startedDate);
-  setTimeValue('sessionStart', formatClock(startedDate));
+  // Hand the range to the form; the duration follows as a suggestion. The date
+  // stays on the day it was stopped — the boundary rule files the stats under
+  // the previous day when the end time is before it.
+  setTimeValue('sessionStart', formatClock(new Date(startedAt)));
   setTimeValue('sessionEnd', formatClock(new Date(endedAt)));
   applyTimesToDuration();
   showToast('Stopped — add title and characters');

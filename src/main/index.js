@@ -564,10 +564,10 @@ app.whenReady().then(() => {
     return insertMany(sessions);
   });
 
-  ipcMain.handle('delete-session', (_, dateKey, sessionId) => {
-    return db
-      .prepare('DELETE FROM sessions WHERE date = ? AND id = ?')
-      .run(dateKey, sessionId);
+  // Deleted by id, not by date: a session counted under the previous session day
+  // lives in a different bucket than the date it was recorded with.
+  ipcMain.handle('delete-session', (_, _dateKey, sessionId) => {
+    return db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
   });
 
   // Get sessions for a specific date
@@ -589,16 +589,6 @@ app.whenReady().then(() => {
     return db
       .prepare('SELECT DISTINCT date FROM sessions ORDER BY date DESC')
       .all();
-  });
-
-  // Get total minutes for a date
-  ipcMain.handle('get-day-total', (_, dateKey) => {
-    const row = db
-      .prepare(
-        "SELECT COALESCE(SUM(CASE WHEN unit = 'minutes' THEN duration ELSE duration * 60 END), 0) as total FROM sessions WHERE date = ?",
-      )
-      .get(dateKey);
-    return row ? row.total : 0;
   });
 
   // Get all dates for streak calculation

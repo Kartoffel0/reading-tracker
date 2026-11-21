@@ -16,7 +16,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Data queries
   getDates: () => ipcRenderer.invoke('get-dates'),
-  getDayTotal: (dateKey) => ipcRenderer.invoke('get-day-total', dateKey),
   getActiveDates: () => ipcRenderer.invoke('get-active-dates'),
   getSessionCounts: () => ipcRenderer.invoke('get-session-counts'),
 
