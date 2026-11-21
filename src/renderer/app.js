@@ -997,9 +997,9 @@ async function renderGoalCard(data) {
   if (daysEl) daysEl.textContent = stats.daysMet;
   if (bestEl) {
     bestEl.textContent = formatGoalValue(stats.bestValue, goalUnit);
-    bestEl.title = stats.bestDate
-      ? `${stats.bestDate} · ${Math.round(stats.bestValue).toLocaleString()} ${goalUnit}`
-      : 'No reading recorded yet';
+    // No native title here: renderStatHints() already gives this stat a real
+    // tooltip with the same date and value, and the native one only added a grey
+    // second box a second later.
   }
   if (bestLabelEl) {
     bestLabelEl.textContent =
