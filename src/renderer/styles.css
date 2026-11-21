@@ -1493,11 +1493,13 @@ input[type="submit"]:focus-visible,
     font-weight: 500;
     line-height: 1.4;
     color: var(--text-primary);
-    /* Opaque: the card colour is translucent on every theme, which let the
-       cells read straight through the box. Painting it over the theme's solid
-       page colour keeps the tone and closes the holes. */
-    background-color: var(--bg-secondary);
-    background-image: linear-gradient(var(--bg-card), var(--bg-card));
+    /* Slightly translucent, on purpose: the theme's solid page colour at 88%
+       lets the shape of what it covers show through without letting the bars
+       read through the text, and the backdrop blur takes the busy edges off
+       whatever is behind it. A fully transparent box was unreadable; a fully
+       opaque one looked pasted on. */
+    background-color: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+    backdrop-filter: blur(7px);
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 4px 8px;
