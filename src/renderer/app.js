@@ -1953,33 +1953,27 @@ function buildStatsBody(model) {
 
   // One polyline per run of columns that actually have a rate: a gap in the
   // data is a gap in the line, never a straight interpolation across it.
+  // One continuous curve from the first reading day to the last: it arcs over
+  // the empty stretches instead of breaking at every gap. Only days that were
+  // read contribute a point, so nothing is invented for a day with no sessions
+  // — the curve simply passes over it.
   const speedLine = (() => {
     if (!speed.hasData) return '';
-    const runs = [];
-    let run = [];
+    const points = [];
     speed.points.forEach((value, i) => {
-      if (value === null) {
-        if (run.length) runs.push(run);
-        run = [];
-        return;
-      }
-      run.push({
+      if (value === null) return;
+      points.push({
         x: ((i + 0.5) / sorted.length) * 100,
         y: 100 - (value / speed.niceMax) * 100,
       });
     });
-    if (run.length) runs.push(run);
-    return runs
-      .map((points) => {
-        // A lone day has no segment to curve through: a zero-length path with a
-        // round cap is a dot.
-        if (points.length === 1) {
-          const p = points[0];
-          return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
-        }
-        return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
-      })
-      .join('');
+    // A lone reading day has no segment to curve through: a zero-length path
+    // with a round cap is a dot.
+    if (points.length === 1) {
+      const p = points[0];
+      return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
+    }
+    return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
   })();
 
   const gridlines = [0, 25, 50, 75, 100]
