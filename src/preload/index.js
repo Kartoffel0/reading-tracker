@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Books
   getBook: (title) => ipcRenderer.invoke('get-book', title),
   updateBook: (title, patch) => ipcRenderer.invoke('update-book', title, patch),
+  listBooks: () => ipcRenderer.invoke('list-books'),
+  addBook: (title) => ipcRenderer.invoke('add-book', title),
 
   // Book covers
   ensureCovers: (requests) => ipcRenderer.invoke('ensure-covers', requests),

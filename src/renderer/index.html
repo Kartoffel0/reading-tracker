@@ -153,6 +153,12 @@
             </aside>
 
             <section class="main-area">
+                <!-- Two pages live in one width-driven track; the rail never
+                     moves. Both stay laid out, because the calendar and the
+                     streak map measure their own widths and a hidden panel
+                     measures zero. -->
+                <div class="page-track" id="pageTrack" data-active="dashboard">
+                    <section class="page" data-page="dashboard">
                 <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -289,6 +295,24 @@
                             <div id="entryList"></div>
                         </div>
                     </div>
+                </div>
+                    </section>
+
+                    <!-- Page 2: the whole shelf. One scroll area, rows of
+                         covers, status as the badge — the shelf axis the
+                         database keeps (book | vn) is not what you browse by. -->
+                    <section class="page" data-page="library">
+                        <div class="panel library-panel">
+                            <div class="library-header">
+                                <div class="card-title">LIBRARY</div>
+                                <span class="library-count" id="libraryCount"></span>
+                                <div class="rt-tabs library-tabs" id="libraryTabs"></div>
+                            </div>
+                            <div class="library-scroll" id="libraryScroll">
+                                <div class="library-grid" id="libraryGrid"></div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </section>
         </div>

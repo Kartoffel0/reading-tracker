@@ -877,16 +877,55 @@ app.whenReady().then(() => {
     // hand, can be missing here; an UPDATE would then do nothing at all. Own the
     // title first, then write to it.
     if (!db.prepare('SELECT 1 FROM books WHERE title = ?').get(title)) {
-      db.prepare('INSERT INTO books (title, added_at) VALUES (?, ?)').run(
-        title,
-        new Date().toISOString().slice(0, 10),
-      );
+      db.prepare(
+        "INSERT INTO books (title, status, added_at) VALUES (?, 'reading', ?)",
+      ).run(title, new Date().toISOString().slice(0, 10));
     }
     values.push(title);
     db.prepare(`UPDATE books SET ${fields.join(', ')} WHERE title = ?`).run(
       ...values,
     );
     return db.prepare('SELECT * FROM books WHERE title = ?').get(title) || null;
+  });
+
+  // The library grid needs every book in one answer, cover already resolved:
+  // N IPC calls to paint N covers would be N round trips for data the main
+  // process holds anyway. Sorted by recency of use — last session day, then the
+  // day the title was added — so a book with no sessions still lands in place.
+  ipcMain.handle('list-books', () => {
+    const rows = db
+      .prepare(
+        `SELECT b.title, b.kind, b.is_audio, b.status, b.added_at, b.author, b.series,
+                (SELECT s.language FROM sessions s WHERE s.title = b.title
+                  ORDER BY s.date DESC LIMIT 1) AS language,
+                (SELECT MAX(s.date) FROM sessions s WHERE s.title = b.title) AS last_read
+           FROM books b
+          ORDER BY COALESCE((SELECT MAX(s.date) FROM sessions s WHERE s.title = b.title), b.added_at) DESC,
+                   b.title COLLATE NOCASE`,
+      )
+      .all();
+    return rows.map((row) => ({ ...row, cover: getCoverUrl(row.title) }));
+  });
+
+  // A book can exist before it is read: the grid's add tile writes the title and
+  // the book sheet that opens next is where author, shelf and cover get filled
+  // in. An existing title comes back as it is instead of erroring, so adding the
+  // same book twice opens the one that is already there.
+  ipcMain.handle('add-book', (_, title) => {
+    const clean = typeof title === 'string' ? title.trim() : '';
+    if (!clean) return null;
+    let row = db.prepare('SELECT * FROM books WHERE title = ?').get(clean);
+    if (!row) {
+      // kind_manual: a person decided this book exists, so no session-derived
+      // guess gets to move its shelf later. status is named instead of left to
+      // the column default, because a table created before the shelf lost its
+      // bookkeeping vocabulary still carries DEFAULT 'active'.
+      db.prepare(
+        "INSERT INTO books (title, kind, kind_manual, status, added_at) VALUES (?, 'book', 1, 'reading', ?)",
+      ).run(clean, new Date().toISOString().slice(0, 10));
+      row = db.prepare('SELECT * FROM books WHERE title = ?').get(clean);
+    }
+    return { ...row, cover: getCoverUrl(clean) };
   });
 
   // Get database path for info

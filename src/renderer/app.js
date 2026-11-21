@@ -2503,6 +2503,11 @@ const BOOK_STATUSES = ['reading', 'read', 'dropped'];
 function closeBookModal(event) {
   if (!event || event.target.id === 'bookModalOverlay') {
     document.getElementById('bookModalOverlay').classList.remove('active');
+    // Status and cover are edited inside the sheet, so the shelf behind it is
+    // stale the moment it closes.
+    if (document.getElementById('pageTrack')?.dataset.active === 'library') {
+      renderLibrary();
+    }
   }
 }
 
@@ -2539,10 +2544,16 @@ async function openBookModal(title) {
   document.getElementById('bookStatus').dataset.title = title;
 
   // Cover art comes from the same cache the cards use, in the sheet's frame.
-  await ensureCovers([{ title, language: entries[0]?.session.language }]);
+  // Whatever is cached is drawn straight away; a missing one is looked up while
+  // the sheet is already open, because a network round trip is not something a
+  // click should wait behind — a book added a second ago has no cover yet and
+  // would otherwise stare at a spinner's worth of dead time.
   const slot = document.getElementById('bookCoverSlot');
   slot.innerHTML = coverMarkup(title, 'large');
   attachCoverUploads(slot);
+  const coverLookup = coverCache.has(title)
+    ? null
+    : ensureCovers([{ title, language: entries[0]?.session.language }]);
 
   // Credits and status are the only columns a human can fill in; everything
   // else on the row is derived from sessions.
@@ -2591,6 +2602,18 @@ async function openBookModal(title) {
   attachTitleMarquee(document.querySelector('.book-card'));
 
   document.getElementById('bookModalOverlay').classList.add('active');
+
+  // Repaint the frame if the lookup found art, but only while this book is
+  // still the one on screen — a fast click-through to another title must not
+  // get this one's cover.
+  if (coverLookup) {
+    void coverLookup.then(() => {
+      const showing = document.getElementById('bookStatus')?.dataset.title;
+      if (showing !== title) return;
+      slot.innerHTML = coverMarkup(title, 'large');
+      attachCoverUploads(slot);
+    });
+  }
 }
 
 // Deleting from inside the sheet keeps the sheet open and refreshes it.
@@ -3815,4 +3838,202 @@ function showSyncResult(newCount, skipped, totalFound, sessions) {
     `;
     statsContainer.appendChild(card);
   }
+}
+
+// ===== Library page =====
+// Two pages share one viewport (see .page-track). The track slides, so both
+// pages stay laid out and the goal calendar keeps its measured width instead of
+// coming back from a hidden panel at zero.
+const LIB_FILTERS = [
+  { key: 'all', label: 'ALL' },
+  { key: 'reading', label: 'READING' },
+  { key: 'read', label: 'READ' },
+  { key: 'dropped', label: 'DROPPED' },
+];
+const LIB_STATUS_LABELS = { reading: 'Reading', read: 'Read', dropped: 'Dropped' };
+
+let libFilter = 'all';
+let libBooks = [];
+
+function setPage(page) {
+  const track = document.getElementById('pageTrack');
+  if (!track) return;
+  track.dataset.active = page;
+  document
+    .querySelectorAll('.page-tab')
+    .forEach((tab) => tab.classList.toggle('is-active', tab.dataset.page === page));
+  // The shelf is rebuilt on every visit: status and covers are edited from the
+  // book sheet, and a stale grid is worse than a cheap re-read.
+  if (page === 'library') renderLibrary();
+}
+
+function libTileHtml(book) {
+  const title = book.title || 'Untitled';
+  const status = book.status in LIB_STATUS_LABELS ? book.status : 'reading';
+  const cover =
+    coverCache.get(book.title)?.url ?? book.cover ?? null;
+  const art = cover
+    ? `<img class="lib-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">`
+    : `<div class="lib-cover lib-cover-placeholder">${escapeHtml(
+        Array.from(title)[0] || '?',
+      )}</div>`;
+  return `
+    <button type="button" class="lib-item" data-title="${escapeHtml(title)}" data-status="${status}" title="${escapeHtml(title)}">
+${art}
+      <span class="lib-status">${LIB_STATUS_LABELS[status]}</span>
+    </button>`;
+}
+
+// The last tile is the add slot. It sits inside the same grid so the shelf
+// always ends with a place to put the next book.
+function libAddTileHtml(adding = false) {
+  if (adding) {
+    return `
+    <button type="button" class="lib-item lib-add-form" data-adding="1">
+      <input type="text" placeholder="Title" spellcheck="false" maxlength="200" aria-label="Book title">
+      <span class="lib-add-hint">Enter to add</span>
+    </button>`;
+  }
+  return `
+    <button type="button" class="lib-item lib-add" aria-label="Add a book">
+      <span class="lib-add-plus">+</span>
+      <span>ADD BOOK</span>
+    </button>`;
+}
+
+function paintLibrary() {
+  const grid = document.getElementById('libraryGrid');
+  const countEl = document.getElementById('libraryCount');
+  if (!grid) return;
+
+  // The grid is rebuilt from scratch on every visit, which would otherwise drop
+  // the shelf back to its first row each time the page slides in.
+  const scroll = document.getElementById('libraryScroll');
+  const offset = scroll?.scrollTop ?? 0;
+
+  const shown =
+    libFilter === 'all'
+      ? libBooks
+      : libBooks.filter((b) => b.status === libFilter);
+  if (countEl) {
+    const titles = shown.length === 1 ? 'title' : 'titles';
+    countEl.textContent = `${shown.length} ${titles}`;
+  }
+
+  document.querySelectorAll('#libraryTabs .rt-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.key === libFilter);
+  });
+
+  grid.innerHTML =
+    shown.map(libTileHtml).join('') +
+    (shown.length === 0 && libFilter !== 'all'
+      ? `<div class="library-empty">No books marked ${LIB_STATUS_LABELS[libFilter].toLowerCase()} yet.</div>`
+      : '') +
+    libAddTileHtml();
+
+  if (scroll) scroll.scrollTop = offset;
+}
+
+async function renderLibrary() {
+  if (!document.getElementById('libraryGrid')) return;
+  try {
+    libBooks = (await window.electronAPI.listBooks?.()) || [];
+  } catch (err) {
+    console.error('Library read failed:', err.message);
+    libBooks = [];
+  }
+  paintLibrary();
+
+  // Missing covers are filled behind the grid, then repainted: the shelf shows
+  // a title glyph immediately rather than waiting on a network lookup per tile.
+  const missing = libBooks.filter((b) => !b.cover && !coverCache.has(b.title));
+  if (missing.length === 0) return;
+  await ensureCovers(
+    missing.map((b) => ({ title: b.title, language: b.language || undefined })),
+  );
+  paintLibrary();
+}
+
+(function initLibrary() {
+  document.querySelectorAll('.page-tab').forEach((tab) => {
+    tab.addEventListener('click', () => setPage(tab.dataset.page));
+  });
+
+  const tabs = document.getElementById('libraryTabs');
+  if (tabs) {
+    for (const filter of LIB_FILTERS) {
+      const tab = document.createElement('div');
+      tab.className = 'rt-tab' + (filter.key === libFilter ? ' active' : '');
+      tab.dataset.key = filter.key;
+      tab.textContent = filter.label;
+      tab.addEventListener('click', () => {
+        libFilter = filter.key;
+        paintLibrary();
+      });
+      tabs.appendChild(tab);
+    }
+  }
+
+  const grid = document.getElementById('libraryGrid');
+  if (!grid) return;
+
+  grid.addEventListener('click', (e) => {
+    const add = e.target.closest('.lib-add');
+    if (add) {
+      openLibraryAdd(add);
+      return;
+    }
+    const item = e.target.closest('.lib-item[data-title]');
+    if (item) openBookModal(item.dataset.title);
+  });
+})();
+
+function openLibraryAdd(btn) {
+  btn.outerHTML = libAddTileHtml(true);
+  const form = document.querySelector('.lib-add-form');
+  const input = form?.querySelector('input');
+  if (!input) return;
+  input.focus();
+
+  const commit = async () => {
+    if (form.dataset.done) return;
+    form.dataset.done = '1';
+    const title = input.value.trim();
+    if (!title) {
+      cancelLibraryAdd(form);
+      return;
+    }
+    const book = await window.electronAPI.addBook?.(title);
+    if (!book) {
+      cancelLibraryAdd(form);
+      return;
+    }
+    // Put the row on the shelf and open it in one go. A full renderLibrary()
+    // here would wait on the new title's cover lookup — a network round trip
+    // standing between the click and the sheet, for a cover the sheet is about
+    // to request itself.
+    libBooks = [book, ...libBooks.filter((b) => b.title !== book.title)];
+    paintLibrary();
+    // Straight into the sheet: the grid only knows the title, and author,
+    // shelf and cover are edited there.
+    openBookModal(book.title);
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      form.dataset.done = '1';
+      cancelLibraryAdd(form);
+    }
+  });
+  input.addEventListener('blur', commit);
+}
+
+function cancelLibraryAdd(form) {
+  if (!form || !form.isConnected) return;
+  form.outerHTML = libAddTileHtml();
 }

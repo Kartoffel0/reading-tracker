@@ -224,11 +224,17 @@ body::after {
 }
 
 /* ===== CONTAINER & TITLE BAR ===== */
+/* The app fills the window exactly once. Pages scroll inside their own boxes
+   instead of the document, which is what lets each page keep an offset. */
 .container {
     position: relative;
     z-index: 1;
     max-width: none;
     margin: 0;
+    height: 100vh;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
     padding: 66px 24px 24px;
 }
 
@@ -447,6 +453,8 @@ button.theme-select {
 .app-shell {
     display: flex;
     align-items: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
     gap: 16px;
     /* Design width is 1632 (1680 minus 24px padding each side). Wider windows
        centre the fixed-track layout instead of leaving dead space on the right. */
@@ -462,14 +470,282 @@ button.theme-select {
     flex-direction: column;
     gap: 16px;
     min-height: 0;
+    /* The rail is the one column that does not page away, so it scrolls alone
+       if the window gets shorter than the stopwatch, the form and the sync
+       buttons stacked. */
+    overflow-y: auto;
+    scrollbar-width: thin;
 }
 
+/* Two pages, one viewport. The track slides horizontally and each page owns
+   its scroll offset, so coming back to the dashboard lands where it was left.
+   Sliding, not display:none: a hidden panel measures zero width, and the goal
+   calendar and streak map both measure themselves. */
 .main-area {
     flex: 1 1 auto;
     min-width: 0;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+}
+
+.page-track {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    /* 1px of bleed: subpixel widths would otherwise leave a hairline of the
+       outgoing page along the edge. */
+    transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-track[data-active='library'] {
+    transform: translateX(-100%);
+}
+
+.page {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* The scrollbar is a sliver, not a gutter: the pages are laid out to the
+       same 1216 as the rail beside them. */
+    scrollbar-width: thin;
+}
+
+/* ===== LIBRARY ===== */
+/* The shelf is one scroll area: a header that stays put and rows of covers
+   under it. Tiles are 250px tall and the width follows the 2:3 cover, so a row
+   holds as many as the window gives it instead of a fixed column count. */
+.library-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    /* The grid scrolls, not the panel: the header stays put above it. */
+    overflow: hidden;
+}
+
+.library-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.library-header .card-title {
+    margin: 0;
+}
+
+.library-count {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-right: auto;
+}
+
+.library-tabs {
+    align-self: center;
+}
+
+.library-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    /* Room for the hover scale, which spills past a tile's own box; without it
+       the first and last columns lose a pixel of glow to the scroll edge. */
+    padding: 4px 6px 8px;
+    margin: -4px -6px -8px;
+}
+
+.library-grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 16px;
+}
+
+/* One book. Height is the anchor and the width is the cover's own 2:3, which
+   keeps every row on a single baseline whatever the titles are. */
+.lib-item {
+    position: relative;
+    height: 250px;
+    width: 167px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: transform 0.18s ease;
+}
+
+.lib-item:hover,
+.lib-item:focus-visible {
+    transform: scale(1.04);
+    /* The scale makes a stacking context, so a hovered tile would otherwise be
+       painted under the tile to its right. */
+    z-index: 3;
+    outline: none;
+}
+
+.lib-cover {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.lib-cover-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3.2rem;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--text-primary) 70%, transparent);
+    background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--accent-primary) 35%, var(--bg-card)),
+        color-mix(in srgb, var(--accent-primary) 10%, var(--bg-card))
+    );
+}
+
+.lib-item:hover .lib-cover,
+.lib-item:focus-visible .lib-cover {
+    border-color: var(--border-hover);
+    box-shadow: 0 0 20px var(--accent-primary-glow);
+}
+
+/* Status is the badge on the shelf: what you are doing with the book, not what
+   kind of thing it is. Pinned bottom-right, where the volume number usually sits
+   on the art, and big enough to read at a glance. */
+.lib-status {
+    /* Three tokens per state, so the pill is painted once and the states swap a
+       look rather than a shade. The tint sits over a nearly opaque page tone:
+       the badge lies on cover art, and a flat translucent chip disappears
+       against half the shelf. */
+    --lib-status-fill: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+    --lib-status-ink: var(--text-muted);
+    --lib-status-edge: color-mix(in srgb, var(--text-muted) 35%, transparent);
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 4px 11px 5px;
+    /* Enough to soften the corners, not enough to read as a pill: a shelf label
+       is a label. */
+    border-radius: 5px;
+    background: var(--lib-status-fill);
+    border: 1px solid var(--lib-status-edge);
+    backdrop-filter: blur(4px);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--lib-status-ink);
+    pointer-events: none;
+}
+
+/* Reading is the only state that is happening right now, so it is the only
+   filled badge: solid accent, page-coloured ink. Read is that same accent at
+   rest — tint and accent text — and dropped is the app's own grey. Three
+   different shapes of label, not three shades of one hue that all read alike at
+   167px wide. */
+.lib-item[data-status='reading'] .lib-status {
+    --lib-status-fill: var(--accent-primary);
+    --lib-status-ink: var(--bg-primary);
+    --lib-status-edge: color-mix(in srgb, var(--accent-primary) 70%, transparent);
+}
+
+.lib-item[data-status='read'] .lib-status {
+    --lib-status-fill: color-mix(
+        in srgb,
+        var(--accent-primary) 12%,
+        color-mix(in srgb, var(--bg-primary) 82%, transparent)
+    );
+    --lib-status-ink: var(--accent-primary);
+    --lib-status-edge: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+/* The last tile is the add slot: dashed and empty, so the shelf reads as
+   unfinished on purpose instead of missing something. */
+.lib-add {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px dashed var(--border-color);
+    border-radius: 10px;
+    color: var(--text-muted);
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.58rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    transition: color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.lib-add-plus {
+    font-size: 1.6rem;
+    line-height: 1;
+    font-weight: 300;
+}
+
+.lib-add:hover,
+.lib-add:focus-visible {
+    color: var(--accent-primary);
+    border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
+}
+
+.lib-add-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px dashed color-mix(in srgb, var(--accent-primary) 45%, transparent);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.lib-add-form input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    text-align: center;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+}
+
+.lib-add-form input::placeholder {
+    color: var(--text-muted);
+}
+
+.lib-add-hint {
+    font-size: 0.55rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.library-empty {
+    width: 100%;
+    padding: 40px 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--text-muted);
 }
 
 /* Page selector (400 × 48) */
