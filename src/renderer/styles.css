@@ -1451,16 +1451,15 @@ input[type="submit"]:focus-visible,
 }
 
 .month-arrow {
-    font-size: 0.7rem;
     line-height: 1;
-    font-weight: 600;
+    font-weight: 900;
     color: var(--text-muted);
-    padding: 4px 7px;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
     background: transparent;
     border: none;
+    padding: 0 8px;
 }
 
 .month-arrow:hover {
@@ -2663,7 +2662,7 @@ body.theme-wave .wave-bg {
     flex-direction: column;
     gap: 4px;
     flex: 0 0 auto;
-    padding-top: 64px;
+    padding-top: 60px;
     margin-top: -46px;
     font-size: 0.55rem;
     font-weight: 600;
@@ -2739,7 +2738,7 @@ body.theme-wave .wave-bg {
        neither moves nor loses alignment. pointer-events: none stops the empty
        padding band from stealing hover/clicks from the cards above; the cells
        restore it for themselves. */
-    padding: 64px 3px 4px;
+    padding: 58px 3px 4px;
     margin: -46px -3px 0;
     overflow-x: auto;
     pointer-events: none;
@@ -2850,7 +2849,7 @@ body.theme-wave .wave-bg {
 
 .gc-nav {
     display: flex;
-    gap: 4px;
+    gap: 8px;
     margin-right: auto;
 }
 
