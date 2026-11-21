@@ -2167,7 +2167,7 @@ async function renderEntries() {
             <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
             <div class="entry-stats">
                 <div class="entry-stat entry-duration${durationClass}"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
-                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chars</span></div>
+                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chr</span></div>
                 <div class="entry-stat entry-speed"><span class="entry-stat-value">${speed.toLocaleString()}</span><span class="entry-stat-unit">/h</span></div>
             </div>
             <button class="entry-del-btn" onclick="deleteSession('${dateKey}', ${session.id}, false)">✖</button>

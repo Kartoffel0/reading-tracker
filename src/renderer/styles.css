@@ -1877,8 +1877,8 @@ body.theme-sakura-light .legend-cell {
 .entry-item {
     display: flex;
     align-items: center;
-    gap: 36px;
-    padding: 10px 16px;
+    gap: 12px;
+    padding: 12px 12px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -1897,17 +1897,19 @@ body.theme-sakura-light .legend-cell {
     color: var(--text-muted);
     font-weight: 500;
     flex-shrink: 0;
+    font-size: 0.8em;
 }
 
 /* Fixed slot so rows without times (everything logged before start/end
    existed) line up with rows that have them. */
 .entry-time {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
+    font-size: 0.62rem;
     color: var(--text-muted);
     opacity: 0.8;
     width: 11ch;
     flex-shrink: 0;
+    font-weight: 500;
 }
 
 .entry-title {
@@ -1937,7 +1939,7 @@ body.theme-sakura-light .legend-cell {
    map exactly to one glyph each in the monospace font. */
 .entry-stats {
     display: flex;
-    gap: 14px;
+    gap: 8px;
     align-items: baseline;
     flex-shrink: 0;
     margin-left: auto;
@@ -1957,7 +1959,7 @@ body.theme-sakura-light .legend-cell {
 .entry-stat-value {
     font-family: 'JetBrains Mono', monospace;
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.8em;
     white-space: nowrap;
     text-align: right;
     flex-shrink: 0;
@@ -1974,7 +1976,7 @@ body.theme-sakura-light .legend-cell {
 
 .entry-duration .entry-stat-value {
     color: var(--text-secondary);
-    min-width: 6ch;
+    min-width: 5ch;
 }
 
 .entry-duration .entry-stat-unit {
@@ -1983,16 +1985,16 @@ body.theme-sakura-light .legend-cell {
 
 .entry-chars .entry-stat-value {
     color: var(--text-secondary);
-    min-width: 10ch;
+    min-width: 7ch;
 }
 
 .entry-chars .entry-stat-unit {
-    min-width: 5ch;
+    min-width: 3ch;
 }
 
 .entry-speed .entry-stat-value {
     color: var(--text-muted);
-    min-width: 10ch;
+    min-width: 6ch;
 }
 
 .entry-speed .entry-stat-unit {
@@ -2013,8 +2015,8 @@ body.theme-sakura-light .legend-cell {
     cursor: pointer;
     transition: opacity 0.2s ease, color 0.2s ease;
     flex-shrink: 0;
-    margin-left: 14px;
-    padding: 0 8px;
+    margin-left: 4px;
+    padding: 0 4px 0 0;
     display: flex;
     align-items: center;
     justify-content: center;
