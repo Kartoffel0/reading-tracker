@@ -1483,7 +1483,7 @@ input[type="submit"]:focus-visible,
 .gc-cell .tooltip,
 .gc-month .tooltip,
 .goal-stat .tooltip,
-.rt-bar::after {
+.rt-bar-pair::after {
     position: absolute;
     bottom: calc(100% + 6px);
     left: 50%;
@@ -3099,78 +3099,82 @@ body.theme-wave .wave-bg {
     flex-direction: column;
 }
 
+/* buildStatsBody() in app.js drops one node in here, so the whole card body is
+   scoped to .rt-body. */
+.rt-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .rt-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
-}
-
-/* The auto margin absorbs the space-between slack, pinning the arrows to the
-   tab selector while the title keeps the left edge. Buttons reuse .month-arrow. */
-.rt-nav {
-    display: flex;
-    align-self: flex-end;
-    gap: 4px;
-    margin-bottom: -22px;
-    z-index: 1;
 }
 
 .rt-header .card-title {
     margin: 0;
 }
 
+/* Underline tabs: no container, no pill — the letters and a 2px bar under the
+   active one. */
 .rt-tabs {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 6px;
-    background: rgba(128, 128, 128, 0.04);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    position: relative;
+    gap: 2px;
     cursor: pointer;
 }
 
 .rt-tab {
+    position: relative;
     font-size: 0.65rem;
     font-weight: 600;
     color: var(--text-muted);
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 1px 7px 4px;
     cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.rt-tab.active {
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-card));
+    transition: color 0.2s ease;
 }
 
 .rt-tab:hover {
     color: var(--text-primary);
-    background: color-mix(in srgb, var(--accent-primary) 20%, var(--bg-card));
 }
 
-.rt-tab-indicator {
+.rt-tab.active {
+    color: var(--accent-primary);
+}
+
+.rt-tab.active::after {
+    content: '';
     position: absolute;
-    top: -7px;
-    left: 0;
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 7px solid var(--accent-primary);
-    transition: left 0.35s ease;
-    pointer-events: none;
+    left: 5px;
+    right: 5px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent-primary);
 }
 
+/* Bottom row: the period summary on the left, the four stat columns filling
+   the rest of the width. */
+.rt-footer {
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    margin-top: 10px;
+}
+
+.rt-summary {
+    flex: 0 0 auto;
+}
+
+/* Range label and the period steppers share one row. */
 .rt-caption {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    margin-top: 4px;
+    gap: 4px;
 }
 
 .rt-range {
@@ -3179,10 +3183,27 @@ body.theme-wave .wave-bg {
     color: var(--text-secondary);
 }
 
-.rt-delta {
+.rt-step {
+    padding: 0 3px;
     font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1;
     color: var(--text-muted);
-    min-height: 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.rt-step:hover {
+    color: var(--accent-primary);
+}
+
+/* The big number and its delta share a baseline. */
+.rt-headline {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
 }
 
 .rt-big {
@@ -3191,19 +3212,66 @@ body.theme-wave .wave-bg {
     color: var(--text-primary);
     font-family: 'JetBrains Mono', monospace;
     line-height: 1.2;
-    margin-top: 2px;
+}
+
+.rt-delta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
 }
 
 .rt-chart {
-    flex: 3;
+    flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    margin-top: 4px;
+    margin-top: 8px;
     padding: 8px;
     background: rgba(128, 128, 128, 0.04);
     border: 1px solid var(--border-color);
     border-radius: 10px;
+}
+
+/* Legend inside the chart box: one swatch per plotted series. */
+.rt-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.rt-legend-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.rt-legend-key::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: currentColor;
+}
+
+.rt-legend-chars {
+    color: var(--accent-primary);
+}
+
+.rt-legend-time {
+    color: var(--accent-secondary);
+}
+
+/* Speed is a line, so its swatch is one too. */
+.rt-legend-speed {
+    color: var(--accent-tertiary);
+}
+
+.rt-legend-speed::before {
+    height: 2px;
+    border-radius: 1px;
 }
 
 .rt-plot {
@@ -3212,18 +3280,18 @@ body.theme-wave .wave-bg {
     min-height: 0;
 }
 
-/* The y-axis labels live in a reserved gutter on the right edge of the plot.
-   The bars and x-axis labels are inset by that same amount so they never sit
-   underneath the axis text. */
+/* Each series carries its own axis, so each side gets a measured gutter:
+   --rt-gutter-left / --rt-gutter-right are set inline by buildStatsBody() from
+   the formatted labels. */
 .rt-bars {
     position: absolute;
-    inset: 0 var(--rt-axis-gutter, 12px) 0 0;
+    inset: 0 var(--rt-gutter-right, 12px) 0 var(--rt-gutter-left, 12px);
     display: flex;
     gap: 6px;
 }
 
-/* Month charts carry 31 columns, so the regular 6px gap pushes the chart
-   past the card. Dense charts shrink the gap for both bars and axis. */
+/* Month charts carry 31 columns, so the regular 6px gap pushes the chart past
+   the card. Dense charts shrink the gap for both bars and axis. */
 .rt-bars[data-period='month'],
 .rt-x-axis[data-period='month'] {
     gap: 2px;
@@ -3243,92 +3311,171 @@ body.theme-wave .wave-bg {
     background: rgba(128, 128, 128, 0.12);
 }
 
+/* One hover target per column, spanning the full plot height: a bucket is a
+   slice, not a bar, so the average lines and the speed line answer to the same
+   x position as the bars. */
+.rt-bar-pair {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+}
+
+.rt-bar {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 16px;
+    border-radius: 4px 4px 0 0;
+    pointer-events: none;
+    transition: height 0.4s ease, background 0.2s ease;
+}
+
+/* Muted is the resting state of every series; hovering the matching stat
+   promotes it to the full-strength accent. Same paint pair as before: the
+   translucent fill is the "not today" day, the solid one is "today". */
+.rt-bar-chars {
+    background: color-mix(in srgb, var(--accent-primary) 85%, transparent);
+}
+
+.rt-bar-time {
+    background: color-mix(in srgb, var(--accent-secondary) 85%, transparent);
+}
+
+.rt-bar.today {
+    background: var(--accent-primary);
+}
+
+.rt-bar-time.today {
+    background: var(--accent-secondary);
+}
+
+/* Styling comes from the shared tooltip block; the anchor and the reveal are
+   specific. --tip-y is the taller bar's height, so the box rides above the
+   data instead of above the whole column. */
+.rt-bar-pair::after {
+    content: attr(data-tooltip);
+    opacity: 0;
+    bottom: calc(var(--tip-y, 100%) + 8px);
+    transition: opacity 0.15s ease;
+}
+
+/* A tall column would push the box over the legend, so it opens downwards
+   inside the plot instead. */
+.rt-bar-pair.rt-tip-down::after {
+    top: 4px;
+    bottom: auto;
+}
+
+.rt-bar-pair:hover::after {
+    opacity: 1;
+}
+
+/* `z-index: 10` on the hovered column lifts its tooltip above its siblings. */
+.rt-bar-pair:hover {
+    z-index: 10;
+}
+
+/* The edge columns anchor their tooltip to the inner side so it cannot leave
+   the card. */
+.rt-bar-pair:first-child::after {
+    left: 0;
+    transform: none;
+}
+
+.rt-bar-pair:last-child::after {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+
+/* Each series' average, in that series' colour and on that series' axis. */
 .rt-avg-line {
     position: absolute;
-    left: 0;
-    right: 0;
-    border-top: 1px dashed var(--accent-secondary);
+    left: var(--rt-gutter-left, 12px);
+    right: var(--rt-gutter-right, 12px);
+    border-top: 1px dashed currentColor;
     pointer-events: none;
+}
+
+.rt-avg-chars {
+    color: var(--accent-primary);
+}
+
+.rt-avg-time {
+    color: var(--accent-secondary);
 }
 
 .rt-avg-label {
     position: absolute;
-    right: 0;
-    top: -12px;
-    font-size: 0.55rem;
-    color: var(--accent-secondary);
+    left: 3px;
+    top: -10px;
+    font-size: 0.5rem;
+    color: currentColor;
 }
 
-.rt-y-label {
+/* Line already touching the top gridline: put the tag underneath instead. */
+.rt-avg-label-low {
+    top: 2px;
+}
+
+/* Speed trend: one polyline per unbroken run, drawn over the bars on its own
+   scale, in the tertiary accent so it reads apart from both bar series. */
+/* The box is the bars' box, not the plot's: an SVG is a replaced element, so
+   `left` + `right` + `width: auto` falls back to its intrinsic 100x100 ratio
+   instead of stretching. A calc() width is the fix. */
+.rt-trend-svg {
     position: absolute;
-    right: 2px;
-    transform: translateY(-50%);
-    font-size: 0.55rem;
-    color: var(--text-muted);
+    top: 0;
+    left: var(--rt-gutter-left, 12px);
+    width: calc(100% - var(--rt-gutter-left, 12px) - var(--rt-gutter-right, 12px));
+    height: 100%;
+    overflow: visible;
     pointer-events: none;
 }
 
-.rt-bar-group {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    flex: 1;
-    min-width: 0;
+.rt-trend-line {
+    fill: none;
+    stroke: var(--accent-tertiary);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke-width 0.2s ease;
 }
 
-.rt-bar {
-    position: relative;
-    width: 85%;
-    max-width: 48px;
-    /* Keep zero-value bars a visible rounded nub, matching small bars. */
-    min-height: 2px;
-    /* Translucent paint instead of `opacity`: opacity would fade the bar's
-       ::after tooltip too, but a semi-transparent background leaves the
-       tooltip fully opaque. */
-    background: color-mix(in srgb, var(--accent-primary) 85%, transparent);
-    border-radius: 4px 4px 0 0;
-    transition: height 0.4s ease;
+/* Axis labels: one per series, coloured to match the bars it measures. */
+.rt-y-label {
+    position: absolute;
+    transform: translateY(-50%);
+    font-size: 0.55rem;
+    pointer-events: none;
 }
 
-/* Styling comes from the shared tooltip block; only the reveal behaviour is
-   specific to the chart bars. */
-.rt-bar::after {
-    content: attr(data-tooltip);
-    opacity: 0;
-    transition: opacity 0.15s ease;
+.rt-y-left {
+    left: 0;
+    color: var(--accent-primary);
 }
 
-.rt-bar:hover::after {
-    opacity: 1;
-}
-
-/* `z-index: 10` on the hovered bar creates a stacking context that traps the
-   tooltip's own z-index inside it. Sibling bars paint at z-index 0 in DOM
-   order, so raising only the hovered bar lifts its tooltip above them. */
-.rt-bar:hover {
-    z-index: 10;
-}
-
-/* Only the bar holding the current day keeps the full-strength accent;
-   app.js adds the today class to exactly that bucket when the active
-   range contains today. */
-.rt-bar.today {
-    background: var(--accent-primary);
+.rt-y-right {
+    right: 2px;
+    color: var(--accent-secondary);
 }
 
 .rt-x-axis {
     display: flex;
     gap: 6px;
-    margin-top: 6px;
-    /* Match the bars' inset so the labels stay centered under their bars */
-    padding-right: var(--rt-axis-gutter, 12px);
+    margin-top: 2px;
+    /* Match the bars' insets so the labels stay centered under their columns */
+    padding: 0 var(--rt-gutter-right, 12px) 0 var(--rt-gutter-left, 12px);
 }
 
 .rt-x-axis span {
     flex: 1;
     /* Keep every span the same width even when its text is wider ("30" vs
-       ""), so labels stay centered under their bars. Mirrors .rt-bar-group. */
+       ""), so labels stay centered under their bars. Mirrors .rt-bar-pair. */
     min-width: 0;
     text-align: center;
     font-size: 0.6rem;
@@ -3336,35 +3483,47 @@ body.theme-wave .wave-bg {
     color: var(--text-muted);
 }
 
+/* Four equal columns, label over value. */
 .rt-stats {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 12px;
     flex: 1;
-    min-height: 0;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
 }
 
-.rt-stat-row {
+.rt-stat-col {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 0;
-    flex: 1;
-    min-height: 0;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
 }
 
 .rt-stat-label {
+    font-size: 0.6rem;
     font-weight: 600;
-    color: var(--text-secondary);
-    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
 }
 
 .rt-stat-value {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.8rem;
+    font-size: 1rem;
     color: var(--text-primary);
+}
+
+/* Hovering a stat column promotes the series it owns; the others stay at the
+   resting strength, so nothing flashes or disappears. */
+.rt-body:has(.rt-stat-col[data-series='chars']:hover) .rt-bar-chars {
+    background: var(--accent-primary);
+}
+
+.rt-body:has(.rt-stat-col[data-series='time']:hover) .rt-bar-time {
+    background: var(--accent-secondary);
+}
+
+.rt-body:has(.rt-stat-col[data-series='speed']:hover) .rt-trend-line {
+    stroke-width: 2.8;
 }
 
 /* ===== UTILITY CLASSES ===== */

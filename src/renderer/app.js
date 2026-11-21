@@ -1620,270 +1620,435 @@ function rtMonthTickLabel(day) {
   return day === 1 || day % 5 === 0 ? String(day) : '';
 }
 
-// The [start, end] range for the currently selected period. rtPeriodOffset
-// (0 = current) shifts back by whole periods: weeks by 7 days, months and
-// years by calendar units. All dates are local so weekday alignment is safe.
-function rtPeriodRange() {
+// ---- Reading stats card ---------------------------------------------------
+// Three pieces, in order of purity:
+//   buildStatsModel({ dataByDate, period, offset, unit })  → plain object
+//   buildStatsBody(model)                                  → detached node
+//   renderReadingTime(data)                                → mounts it
+// The book modal will call the first two with its own session map.
+
+// The [start, end] range for a period. `offset` (0 = current) shifts back by
+// whole periods: weeks by 7 days, months and years by calendar units. All
+// dates are local so weekday alignment is safe.
+function rtPeriodRange(period = rtActivePeriod, offset = rtPeriodOffset) {
   const now = sessionDayDate();
-  if (rtActivePeriod === 'week') {
+  if (period === 'week') {
     const start = new Date(now);
-    start.setDate(start.getDate() - now.getDay() - rtPeriodOffset * 7);
+    start.setDate(start.getDate() - now.getDay() - offset * 7);
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
     return { start, end };
   }
-  if (rtActivePeriod === 'month') {
-    const start = new Date(
-      now.getFullYear(),
-      now.getMonth() - rtPeriodOffset,
-      1,
-    );
+  if (period === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - offset, 1);
     const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
     return { start, end };
   }
-  if (rtActivePeriod === 'year') {
-    const start = new Date(now.getFullYear() - rtPeriodOffset, 0, 1);
+  if (period === 'year') {
+    const start = new Date(now.getFullYear() - offset, 0, 1);
     const end = new Date(start.getFullYear(), 11, 31);
     return { start, end };
   }
   return { start: null, end: null };
 }
 
+// Which column a date falls into for a period, and the label that column
+// carries on the x axis.
+function rtBucketKey(period, date) {
+  if (period === 'week') return date.getDay();
+  if (period === 'month') return date.getDate();
+  if (period === 'year') return date.getMonth();
+  return date.getFullYear();
+}
+
+function rtBucketLabel(period, key) {
+  if (period === 'week') return 'SMTWTFS'[key];
+  if (period === 'month') return rtMonthTickLabel(key);
+  if (period === 'year') return 'JFMAMJJASOND'[key];
+  return String(key);
+}
+
 // Tooltip date labels follow the shared "YYYY MM DD" convention. The year and
 // all-time tabs bucket by month and year, so they use the shortened period
 // label ("2026 10" / "2026") instead of a single day.
-function rtTooltipLabel(bucketKey) {
-  const { start } = rtPeriodRange();
-  if (rtActivePeriod === 'week') {
+function rtTooltipLabel(period, start, bucketKey) {
+  if (period === 'week') {
     const d = new Date(start);
     d.setDate(start.getDate() + bucketKey);
     return formatTooltipDate(getDateKey(d));
-  } else if (rtActivePeriod === 'month') {
+  }
+  if (period === 'month') {
     return `${start.getFullYear()} ${String(start.getMonth() + 1).padStart(2, '0')} ${String(bucketKey).padStart(2, '0')}`;
-  } else if (rtActivePeriod === 'year') {
+  }
+  if (period === 'year') {
     return `${start.getFullYear()} ${String(bucketKey + 1).padStart(2, '0')}`;
   }
   return String(bucketKey);
 }
 
-async function renderReadingTime(data) {
-  const body = document.getElementById('readingTimeBody');
-  const tabs = document.getElementById('readingTimeTabs');
-  if (!body || !tabs) return;
+// chars/hour around one column. `half` is the rolling window: 0 reads the
+// column itself, 1 averages it with its neighbours. Summing characters and
+// minutes before dividing is the honest average of a rate (a mean of ratios
+// would let a five-minute session weigh as much as a two-hour one).
+// A column whose whole window is empty returns null, so the line breaks across
+// dead time instead of inventing a slope through it.
+function rtSpeedAt(buckets, index, half) {
+  if (!buckets[index]) return null;
+  let chars = 0;
+  let minutes = 0;
+  for (let i = index - half; i <= index + half; i++) {
+    const b = buckets[i];
+    if (!b || b.minutes <= 0) continue;
+    chars += b.chars;
+    minutes += b.minutes;
+  }
+  return minutes > 0 ? chars / (minutes / 60) : null;
+}
 
-  const { start, end } = rtPeriodRange();
+// The window widens with the period so a month does not turn into a spray of
+// single-day dots: a week is a daily rate, a month a rolling week, a year a
+// rolling quarter.
+function rtSpeedSeries(buckets, period) {
+  const half = period === 'week' ? 0 : period === 'month' ? 3 : period === 'year' ? 1 : 0;
+  const points = buckets.map((_, i) => rtSpeedAt(buckets, i, half));
+  const values = points.filter((v) => v !== null);
+  const peak = values.length ? Math.max(...values) : 0;
+  const step = peak > 2000 ? 500 : 100;
+  const niceMax = peak > 0 ? Math.ceil(peak / step) * step : 0;
+  return { points, peak, niceMax, half, hasData: values.length > 0 };
+}
+
+// The axis gutter has to hold the widest label it will ever draw ("1,200,000"
+// is nine characters), otherwise the text sits on top of the bars. The 0.55rem
+// labels run ~5.2px per character.
+function rtAxisGutter(label) {
+  return `${Math.max(12, Math.ceil(label.length * 5.2) + 6)}px`;
+}
+
+function buildStatsModel({ dataByDate, period, offset = 0, unit = 'minutes' }) {
+  const { start, end } = rtPeriodRange(period, offset);
+  const useChars = unit === 'characters';
+  const startKey = start === null ? null : getDateKey(start);
+  const endKey = end === null ? null : getDateKey(end);
+
+  // The period before this one, for the delta line.
   let prevStart = null;
   let prevEnd = null;
   if (start !== null) {
     prevEnd = new Date(start);
     prevEnd.setDate(prevEnd.getDate() - 1);
-    prevStart = new Date(start);
-    if (rtActivePeriod === 'week') {
+    if (period === 'week') {
+      prevStart = new Date(start);
       prevStart.setDate(prevStart.getDate() - 7);
-    } else if (rtActivePeriod === 'month') {
+    } else if (period === 'month') {
       prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
     } else {
       prevStart = new Date(start.getFullYear() - 1, 0, 1);
     }
   }
-
-  const startKey = start === null ? null : getDateKey(start);
-  const endKey = end === null ? null : getDateKey(end);
   const prevStartKey = prevStart === null ? null : getDateKey(prevStart);
   const prevEndKey = prevEnd === null ? null : getDateKey(prevEnd);
 
-  // The chart mirrors the daily goal unit: characters when the goal is set in
-  // characters, time otherwise. The stats rows below always show both.
-  const useChars = currentGoal.unit === 'characters';
-
+  const buckets = new Map();
   let totalMinutes = 0;
   let totalChars = 0;
+  let totalSessions = 0;
   let prevMetric = 0;
-  const buckets = new Map();
 
-  for (const [dateKey, sessions] of Object.entries(data)) {
+  for (const [dateKey, sessions] of Object.entries(dataByDate)) {
     if (!Array.isArray(sessions)) continue;
-    for (const s of sessions) {
-      const mins = sessionMinutes(s);
-      const chars = s.characters || 0;
-      const metric = useChars ? chars : mins;
-      const inActive =
-        startKey === null || (dateKey >= startKey && dateKey <= endKey);
-      if (inActive) {
-        totalMinutes += mins;
+    if (startKey === null || (dateKey >= startKey && dateKey <= endKey)) {
+      const key = rtBucketKey(period, new Date(dateKey + 'T00:00:00'));
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = {
+          key,
+          label: rtBucketLabel(period, key),
+          minutes: 0,
+          chars: 0,
+          sessions: 0,
+        };
+        buckets.set(key, bucket);
+      }
+      for (const s of sessions) {
+        const minutes = sessionMinutes(s);
+        const chars = s.characters || 0;
+        bucket.minutes += minutes;
+        bucket.chars += chars;
+        bucket.sessions += 1;
+        totalMinutes += minutes;
         totalChars += chars;
-        const d = new Date(dateKey + 'T00:00:00');
-        let bucketKey;
-        let label;
-        if (rtActivePeriod === 'week') {
-          bucketKey = d.getDay();
-          label = 'SMTWTFS'[bucketKey];
-        } else if (rtActivePeriod === 'month') {
-          bucketKey = d.getDate();
-          label = rtMonthTickLabel(bucketKey);
-        } else if (rtActivePeriod === 'year') {
-          bucketKey = d.getMonth();
-          label = 'JFMAMJJASOND'[bucketKey];
-        } else {
-          bucketKey = d.getFullYear();
-          label = String(bucketKey);
-        }
-        const entry = buckets.get(bucketKey) || { minutes: 0, chars: 0, label };
-        entry.minutes += mins;
-        entry.chars += chars;
-        buckets.set(bucketKey, entry);
-      } else if (
-        prevStartKey !== null &&
-        dateKey >= prevStartKey &&
-        dateKey <= prevEndKey
-      ) {
-        prevMetric += metric;
+      }
+      totalSessions += sessions.length;
+    } else if (
+      prevStartKey !== null &&
+      dateKey >= prevStartKey &&
+      dateKey <= prevEndKey
+    ) {
+      for (const s of sessions) {
+        prevMetric += useChars ? s.characters || 0 : sessionMinutes(s);
       }
     }
   }
 
-  if (rtActivePeriod === 'week') {
+  // Empty columns keep the axis continuous.
+  const filled = [...buckets.values()];
+  if (period === 'week') {
     for (let i = 0; i < 7; i++) {
       if (!buckets.has(i)) {
-        buckets.set(i, { minutes: 0, chars: 0, label: 'SMTWTFS'[i] });
+        filled.push({ key: i, label: 'SMTWTFS'[i], minutes: 0, chars: 0, sessions: 0 });
       }
     }
-  } else if (rtActivePeriod === 'month') {
-    const daysInMonth = new Date(
-      start.getFullYear(),
-      start.getMonth() + 1,
-      0,
-    ).getDate();
-    for (let d = 1; d <= daysInMonth; d++) {
+  } else if (period === 'month') {
+    const days = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+    for (let d = 1; d <= days; d++) {
       if (!buckets.has(d)) {
-        buckets.set(d, { minutes: 0, chars: 0, label: rtMonthTickLabel(d) });
+        filled.push({ key: d, label: rtMonthTickLabel(d), minutes: 0, chars: 0, sessions: 0 });
       }
     }
-  } else if (rtActivePeriod === 'year') {
+  } else if (period === 'year') {
     for (let m = 0; m < 12; m++) {
       if (!buckets.has(m)) {
-        buckets.set(m, { minutes: 0, chars: 0, label: 'JFMAMJJASOND'[m] });
+        filled.push({ key: m, label: 'JFMAMJJASOND'[m], minutes: 0, chars: 0, sessions: 0 });
       }
     }
   }
+  const sorted = filled.sort((a, b) => a.key - b.key);
 
-  const sorted = [...buckets.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([key, v]) => ({ key, ...v }));
+  const peakChars = sorted.reduce((m, b) => Math.max(m, b.chars), 0);
+  const peakMinutes = sorted.reduce((m, b) => Math.max(m, b.minutes), 0);
+  const niceChars = rtNiceCeilChars(peakChars);
+  const niceMinutes = rtNiceCeil(peakMinutes);
 
-  const metricOf = (b) => (useChars ? b.chars : b.minutes);
-  const maxMetric = Math.max(...sorted.map(metricOf), 1);
-  const niceMax = useChars ? rtNiceCeilChars(maxMetric) : rtNiceCeil(maxMetric);
-
-  const nonEmpty = sorted.filter((b) => metricOf(b) > 0);
-  const avgMetric = nonEmpty.length
-    ? nonEmpty.reduce((s, b) => s + metricOf(b), 0) / nonEmpty.length
-    : 0;
-  const avgTop = 100 - (avgMetric / niceMax) * 100;
+  // Each series averages over the columns where it has something, the same way
+  // the single-series chart did — an empty Sunday should not drag the mean.
+  const avgOf = (get) => {
+    const withValue = sorted.filter((b) => get(b) > 0);
+    return withValue.length
+      ? withValue.reduce((sum, b) => sum + get(b), 0) / withValue.length
+      : 0;
+  };
+  const avgChars = avgOf((b) => b.chars);
+  const avgMinutes = avgOf((b) => b.minutes);
 
   const totalMetric = useChars ? totalChars : totalMinutes;
-  const periodWord = RT_TABS.find((t) => t.key === rtActivePeriod).word;
+  const periodWord = RT_TABS.find((t) => t.key === period).word;
   let deltaText = '';
   if (prevStartKey !== null && prevMetric > 0) {
     const pct = Math.round(((totalMetric - prevMetric) / prevMetric) * 100);
-    const arrow = pct >= 0 ? '↗' : '↘';
-    deltaText = `${arrow} ${Math.abs(pct)}% from previous ${periodWord}`;
+    deltaText = `${pct >= 0 ? '↗' : '↘'} ${Math.abs(pct)}% from previous ${periodWord}`;
   }
 
-  let rangeLabel;
-  if (start === null) {
-    rangeLabel = 'All time';
-  } else {
-    rangeLabel = `${rtShortDate(start)} – ${rtShortDate(end)}`;
-  }
-
-  const gridlines = [0, 25, 50, 75, 100]
-    .map((p) => `<div class="rt-gridline" style="top: ${100 - p}%"></div>`)
-    .join('');
-
-  // Bucket key for today within the selected period (only when its range
-  // actually contains today), so just that one bar keeps the full-strength
-  // accent while the rest stay translucent.
   const todayKey = sessionDayKey();
-  let todayBucketKey = null;
-  if (
-    rtActivePeriod === 'all' ||
-    (startKey <= todayKey && todayKey <= endKey)
-  ) {
-    const t = sessionDayDate();
-    todayBucketKey =
-      rtActivePeriod === 'week'
-        ? t.getDay()
-        : rtActivePeriod === 'month'
-          ? t.getDate()
-          : rtActivePeriod === 'year'
-            ? t.getMonth()
-            : t.getFullYear();
-  }
+  const todayInRange =
+    startKey === null || (startKey <= todayKey && todayKey <= endKey);
+
+  return {
+    period,
+    useChars,
+    start,
+    sorted,
+    totalMinutes,
+    totalChars,
+    totalSessions,
+    niceChars,
+    niceMinutes,
+    avgChars,
+    avgMinutes,
+    avgMetric: useChars ? avgChars : avgMinutes,
+    deltaText,
+    rangeLabel:
+      start === null ? 'All time' : `${rtShortDate(start)} – ${rtShortDate(end)}`,
+    todayBucketKey: todayInRange
+      ? rtBucketKey(period, sessionDayDate())
+      : null,
+    speed: rtSpeedSeries(sorted, period),
+  };
+}
+
+// Pure DOM: builds the card body from a model and returns the detached node.
+// @see attachStatsBody for the step buttons and the tooltip edge alignment.
+function buildStatsBody(model) {
+  const root = document.createElement('div');
+  root.className = 'rt-body';
+
+  const {
+    period,
+    useChars,
+    start,
+    sorted,
+    totalMinutes,
+    totalChars,
+    totalSessions,
+    niceChars,
+    niceMinutes,
+    avgChars,
+    avgMinutes,
+    avgMetric,
+    deltaText,
+    rangeLabel,
+    todayBucketKey,
+    speed,
+  } = model;
+
+  const topOf = (value, nice) => (nice > 0 ? 100 - (value / nice) * 100 : 100);
+  // A column with nothing in it draws nothing: thirty empty days should not
+  // read as thirty tiny bars along the baseline.
+  const heightOf = (value, nice) =>
+    value > 0 && nice > 0 ? Math.max(2, (value / nice) * 100) : 0;
 
   const bars = sorted
-    .map((b) => {
-      const value = metricOf(b);
-      const h = Math.max(2, (value / niceMax) * 100);
-      // The bar tooltip is plain text (rendered with content: attr()), so the
-      // lines are joined with real newlines and shown via white-space: pre-line.
-      const tooltip = tooltipLines(
-        rtTooltipLabel(b.key),
+    .map((b, i) => {
+      const lines = tooltipLines(
+        rtTooltipLabel(period, start, b.key),
         b.minutes,
         b.chars,
-        null,
-      ).join('\n');
-      const todayClass = b.key === todayBucketKey ? ' today' : '';
+        b.sessions,
+      );
+      const rate = speed.points[i];
+      if (rate !== null) lines.push(`${formatSpeed(rate)} chars/h`);
+      const today = b.key === todayBucketKey ? ' today' : '';
+      const charsHeight = heightOf(b.chars, niceChars);
+      const timeHeight = heightOf(b.minutes, niceMinutes);
+      // The tooltip rides just above the taller bar. A tall column cannot do
+      // that without climbing over the legend, so it drops into the plot's top
+      // band instead — it must never leave the card.
+      const tall = Math.max(charsHeight, timeHeight);
+      const tipClass = tall > 72 ? ' rt-tip-down' : '';
       return `
-        <div class="rt-bar-group">
-          <div class="rt-bar${todayClass}" data-tooltip="${tooltip}" style="height: ${h}%"></div>
+        <div class="rt-bar-pair${tipClass}" data-tooltip="${lines.join('\n')}" style="--tip-y: ${tall.toFixed(1)}%">
+          <div class="rt-bar rt-bar-chars${today}" style="height: ${charsHeight}%"></div>
+          <div class="rt-bar rt-bar-time${today}" style="height: ${timeHeight}%"></div>
         </div>
       `;
     })
     .join('');
 
+  // One polyline per run of columns that actually have a rate: a gap in the
+  // data is a gap in the line, never a straight interpolation across it.
+  const speedLine = (() => {
+    if (!speed.hasData) return '';
+    const runs = [];
+    let run = [];
+    speed.points.forEach((value, i) => {
+      if (value === null) {
+        if (run.length) runs.push(run);
+        run = [];
+        return;
+      }
+      const x = (((i + 0.5) / sorted.length) * 100).toFixed(2);
+      const y = (100 - (value / speed.niceMax) * 100).toFixed(2);
+      run.push(`${x},${y}`);
+    });
+    if (run.length) runs.push(run);
+    return runs
+      .map((points) => {
+        // A lone column has no segment to draw; the round cap turns the
+        // repeated point into a dot.
+        const d = points.length === 1 ? `${points[0]} ${points[0]}` : points.join(' ');
+        return `<polyline class="rt-trend-line" points="${d}" vector-effect="non-scaling-stroke" />`;
+      })
+      .join('');
+  })();
+
+  const gridlines = [0, 25, 50, 75, 100]
+    .map((p) => `<div class="rt-gridline" style="top: ${p}%"></div>`)
+    .join('');
+
+  // An average sitting on the top gridline (one column of data does that) would
+  // write its label straight over the axis label, so it flips below the line.
+  const avgLine = (value, nice, cls) => {
+    if (value <= 0) return '';
+    const top = topOf(value, nice);
+    const flip = top < 8 ? ' rt-avg-label-low' : '';
+    return `<div class="rt-avg-line ${cls}" style="top: ${top}%"><span class="rt-avg-label${flip}">avg</span></div>`;
+  };
+  const avgLines = avgLine(avgChars, niceChars, 'rt-avg-chars') + avgLine(avgMinutes, niceMinutes, 'rt-avg-time');
+
   const xLabels = sorted.map((b) => `<span>${b.label}</span>`).join('');
+  const speedValue =
+    totalMinutes > 0 ? formatSpeed(totalChars / (totalMinutes / 60)) : '0';
 
-  const speed = totalMinutes > 0 ? totalChars / (totalMinutes / 60) : 0;
-
-  body.innerHTML = `
-    <div class="rt-caption">
-      <span class="rt-range">${rangeLabel} Average</span>
-      <span class="rt-delta">${deltaText}</span>
-    </div>
-    <div class="rt-big">${
-      useChars
-        ? `${rtFormatChars(avgMetric)} chars`
-        : rtFormatDuration(avgMetric)
-    }</div>
-    <div class="rt-chart">
+  root.innerHTML = `
+    <div class="rt-chart" style="--rt-gutter-left: ${rtAxisGutter(rtFormatAxisChars(niceChars))}; --rt-gutter-right: ${rtAxisGutter(rtFormatAxis(niceMinutes))}">
+      <div class="rt-legend">
+        <span class="rt-legend-key rt-legend-chars">CHARACTERS</span>
+        <span class="rt-legend-key rt-legend-time">TIME</span>
+        ${speed.hasData ? '<span class="rt-legend-key rt-legend-speed">SPEED</span>' : ''}
+      </div>
       <div class="rt-plot">
         <div class="rt-gridlines">${gridlines}</div>
-        <div class="rt-avg-line" style="top: ${avgTop}%"><span class="rt-avg-label">avg</span></div>
-        <span class="rt-y-label" style="top: 0%">${
-          useChars ? rtFormatAxisChars(niceMax) : rtFormatAxis(niceMax)
-        }</span>
-        <span class="rt-y-label" style="top: 100%">0</span>
-        <div class="rt-bars" data-period="${rtActivePeriod}">${bars}</div>
+        ${avgLines}
+        <span class="rt-y-label rt-y-left" style="top: 0%">${rtFormatAxisChars(niceChars)}</span>
+        <span class="rt-y-label rt-y-left" style="top: 100%">0</span>
+        <span class="rt-y-label rt-y-right" style="top: 0%">${rtFormatAxis(niceMinutes)}</span>
+        <span class="rt-y-label rt-y-right" style="top: 100%">0</span>
+        <div class="rt-bars" data-period="${period}">${bars}</div>
+        <svg class="rt-trend-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${speedLine}</svg>
       </div>
-      <div class="rt-x-axis" data-period="${rtActivePeriod}">${xLabels}</div>
+      <div class="rt-x-axis" data-period="${period}">${xLabels}</div>
     </div>
-    <div class="rt-stats">
-      <div class="rt-stat-row">
-        <span class="rt-stat-label">Characters Read</span>
-        <span class="rt-stat-value">${totalChars.toLocaleString()}</span>
+    <div class="rt-footer">
+      <div class="rt-summary">
+        <div class="rt-caption">
+          <span class="rt-range">${rangeLabel} Average</span>
+          <button type="button" class="rt-step" data-step="-1" title="Older period">‹</button>
+          <button type="button" class="rt-step" data-step="1" title="Newer period">›</button>
+        </div>
+        <div class="rt-headline">
+          <span class="rt-big">${
+            useChars ? `${rtFormatChars(avgMetric)} chars` : rtFormatDuration(avgMetric)
+          }</span>
+          <span class="rt-delta">${deltaText}</span>
+        </div>
       </div>
-      <div class="rt-stat-row">
-        <span class="rt-stat-label">Reading Speed</span>
-        <span class="rt-stat-value">${formatSpeed(speed)}/h</span>
-      </div>
-      <div class="rt-stat-row">
-        <span class="rt-stat-label">Total Time</span>
-        <span class="rt-stat-value">${rtFormatDuration(totalMinutes)}</span>
+      <div class="rt-stats">
+        <div class="rt-stat-col" data-series="sessions">
+          <span class="rt-stat-label">LOG SESSIONS</span>
+          <span class="rt-stat-value">${totalSessions}</span>
+        </div>
+        <div class="rt-stat-col" data-series="chars">
+          <span class="rt-stat-label">CHARACTERS READ</span>
+          <span class="rt-stat-value">${totalChars.toLocaleString()}</span>
+        </div>
+        <div class="rt-stat-col" data-series="time">
+          <span class="rt-stat-label">TOTAL TIME</span>
+          <span class="rt-stat-value">${rtFormatDuration(totalMinutes)}</span>
+        </div>
+        <div class="rt-stat-col" data-series="speed">
+          <span class="rt-stat-label">READING SPEED</span>
+          <span class="rt-stat-value">${speedValue}/h</span>
+        </div>
       </div>
     </div>
   `;
 
+  root.querySelectorAll('.rt-step').forEach((btn) => {
+    btn.addEventListener('click', () =>
+      shiftReadingPeriod(Number(btn.dataset.step)),
+    );
+  });
+
+  return root;
+}
+
+async function renderReadingTime(data) {
+  const body = document.getElementById('readingTimeBody');
+  if (!body) return;
+
+  body.replaceChildren(
+    buildStatsBody(
+      buildStatsModel({
+        dataByDate: data,
+        period: rtActivePeriod,
+        offset: rtPeriodOffset,
+        unit: currentGoal.unit,
+      }),
+    ),
+  );
+
+  const tabs = document.getElementById('readingTimeTabs');
+  if (!tabs) return;
   tabs.querySelectorAll('.rt-tab').forEach((el) => el.remove());
   for (const t of RT_TABS) {
     const tab = document.createElement('div');
@@ -1891,13 +2056,6 @@ async function renderReadingTime(data) {
     tab.dataset.key = t.key;
     tab.textContent = t.label;
     tabs.appendChild(tab);
-  }
-  const indicator = document.getElementById('rtTabIndicator');
-  const activeTab = tabs.querySelector('.rt-tab.active');
-  if (indicator && activeTab) {
-    const tabsRect = tabs.getBoundingClientRect();
-    const tabRect = activeTab.getBoundingClientRect();
-    indicator.style.left = `${tabRect.left - tabsRect.left + tabRect.width / 2 - 5}px`;
   }
 }
 
