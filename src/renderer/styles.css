@@ -2676,6 +2676,50 @@ body.theme-wave .wave-bg {
     line-height: 1;
 }
 
+/* Month rail: labels live in the grid's 64px top padding band, one per month,
+   positioned by app.js at the week where the month starts. They are children of
+   the grid, so they scroll with the strip. */
+.gc-months {
+    position: absolute;
+    /* 46 of the grid's 64px top padding sit above the card body (it carries a
+       -46px margin so tooltips can escape upwards). Starting the rail at 46
+       puts it in the 18px band that is actually visible. */
+    top: 46px;
+    left: 3px;
+    right: 0;
+    height: 12px;
+    /* Above the gauge arc, which dips into this band at both ends. */
+    z-index: 2;
+    pointer-events: none;
+}
+
+.gc-month {
+    position: absolute;
+    top: 0;
+    padding: 0 2px;
+    font-size: 0.55rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    cursor: default;
+    /* The grid ignores pointer events so the padding band never steals hovers
+       from the cards above; the labels opt back in to own their tooltip. */
+    pointer-events: auto;
+}
+
+/* The rail sits at the very top of the scroll box, so the shared upward anchor
+   would be clipped: month tooltips open downwards instead. */
+.gc-month .tooltip {
+    display: none;
+    top: calc(100% + 4px);
+    bottom: auto;
+}
+
+.gc-month:hover .tooltip {
+    display: block;
+}
+
 /* The grid takes the rest of the row, so its clientWidth stays "space
    available" and the cell sizing keeps shrinking a long history to fit. */
 .gc-body > .goal-calendar {
@@ -2684,6 +2728,8 @@ body.theme-wave .wave-bg {
 }
 
 .goal-calendar {
+    /* Positioning context for the month rail in the top padding band. */
+    position: relative;
     display: grid;
     grid-template-columns: repeat(var(--gc-weeks, 53), var(--gc-size, 12px));
     grid-template-rows: repeat(7, var(--gc-size, 12px));
@@ -2772,12 +2818,14 @@ body.theme-wave .wave-bg {
 
 /* Cells at either edge of the scroll viewport would have their centered
    tooltip clipped, so app.js aligns them to the side that has room. */
-.gc-cell .tooltip.tip-left {
+.gc-cell .tooltip.tip-left,
+.gc-month .tooltip.tip-left {
     left: 0;
     transform: none;
 }
 
-.gc-cell .tooltip.tip-right {
+.gc-cell .tooltip.tip-right,
+.gc-month .tooltip.tip-right {
     left: auto;
     right: 0;
     transform: none;

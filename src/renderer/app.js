@@ -1131,6 +1131,8 @@ function renderGoalCalendar(data) {
   );
   gcBody.style.setProperty('--gc-size', `${cellSize}px`);
 
+  renderMonthRail(cal, data, start, weeks, cellSize);
+
   // One cell carries two readings: the fill is the amount read (relative to the
   // busiest day shown, in the goal's own unit), and a border marks a day that
   // met the goal. Only today gets a ring, so the three states never collide.
@@ -1209,6 +1211,78 @@ function renderGoalCalendar(data) {
   // 0 while the grid is being laid out, so compute the width instead.
   cal.scrollLeft = calendarContentWidth(weeks);
   attachGoalCalendarWheel();
+}
+
+// Month rail: one label per calendar month, pinned to the week where the month
+// starts, carrying the month's totals on hover (the tooltip the old activity
+// map's month selector had). The labels live in the grid's top padding band and
+// are positioned by hand, so they scroll with the strip.
+const GC_COL_GAP = 4; // matches the gap declared on .goal-calendar
+const MONTH_NAMES = [
+  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+];
+
+function monthTotals(data, key) {
+  let minutes = 0;
+  let chars = 0;
+  let sessions = 0;
+  for (const [dateKey, list] of Object.entries(data)) {
+    if (!dateKey.startsWith(key)) continue;
+    for (const session of list || []) {
+      minutes += sessionMinutes(session);
+      chars += session.characters || 0;
+      sessions++;
+    }
+  }
+  return { minutes, chars, sessions };
+}
+
+function renderMonthRail(cal, data, start, weeks, cellSize) {
+  const rail = document.createElement('div');
+  rail.className = 'gc-months';
+
+  // Weeks are grouped by the month their Monday falls in; the label sits on the
+  // first week of that month, GitHub style.
+  const months = [];
+  let seen = '';
+  for (let week = 0; week < weeks; week++) {
+    const day = new Date(start);
+    day.setDate(start.getDate() + week * 7);
+    const key = getDateKey(day).slice(0, 7);
+    if (key === seen) continue;
+    seen = key;
+    months.push({ key, week });
+  }
+
+  months.forEach(({ key, week }, index) => {
+    // Too close to the previous label to be readable.
+    if (index > 0 && week - months[index - 1].week < 3) return;
+
+    const label = document.createElement('div');
+    label.className = 'gc-month';
+    label.textContent =
+      `${MONTH_NAMES[Number(key.slice(5, 7)) - 1]} ${key.slice(2, 4)}`;
+    label.style.left = `${week * (cellSize + GC_COL_GAP)}px`;
+
+    const totals = monthTotals(data, key);
+    const tooltip = document.createElement('div');
+    tooltip.className = 'tooltip';
+    tooltip.innerHTML = tooltipLines(
+      `${key.slice(0, 4)} ${key.slice(5, 7)}`,
+      totals.minutes,
+      totals.chars,
+      totals.sessions,
+    ).join('<br>');
+    label.appendChild(tooltip);
+    label.addEventListener('mouseenter', () =>
+      alignTooltip(cal, label, tooltip),
+    );
+
+    rail.appendChild(label);
+  });
+
+  cal.appendChild(rail);
 }
 
 // Keeps a tooltip inside the scroll viewport when its cell sits at an edge.
