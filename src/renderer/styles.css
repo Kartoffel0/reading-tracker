@@ -3153,6 +3153,12 @@ body.theme-wave .wave-bg {
     text-transform: uppercase;
 }
 
+.gc-legend-scale {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
 .gc-legend-cell {
     width: 12px;
     height: 12px;
@@ -3161,17 +3167,30 @@ body.theme-wave .wave-bg {
     border: 1px solid transparent;
 }
 
+/* The less → more ramp, mirroring the calendar's own fill tints. */
 .gc-legend-cell.level-1 {
     background: color-mix(in srgb, var(--accent-primary) 15%, rgba(128, 128, 128, 0.08));
 }
 
-.gc-legend-cell.gc-met {
-    border-color: var(--accent-primary);
+.gc-legend-cell.level-2 {
+    background: color-mix(in srgb, var(--accent-primary) 30%, rgba(128, 128, 128, 0.05));
 }
 
-.gc-legend-cell.gc-today {
-    outline: 1px solid var(--accent-secondary);
-    outline-offset: 1px;
+.gc-legend-cell.level-3 {
+    background: color-mix(in srgb, var(--accent-primary) 50%, rgba(128, 128, 128, 0.03));
+}
+
+.gc-legend-cell.level-4 {
+    background: color-mix(in srgb, var(--accent-primary) 70%, rgba(128, 128, 128, 0.02));
+}
+
+.gc-legend-cell.level-5 {
+    background: var(--accent-primary);
+}
+
+/* Same border as a goal-met cell. */
+.gc-legend-cell.gc-met {
+    border-color: color-mix(in srgb, var(--accent-primary) 50%, rgba(128, 128, 128, 0.03));
 }
 
 /* ===== RECENTLY READ CARD ===== */

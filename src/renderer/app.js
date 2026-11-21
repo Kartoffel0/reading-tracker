@@ -839,9 +839,7 @@ function computeGoalStats(data) {
     bestValue,
     bestDate,
     bestWeek: computeBestWeek(data, goalUnit),
-    longestSession: computeLongestSession(data),
     fastestDay: computeFastestDay(data),
-    longestGap: computeLongestGap(data),
   };
 }
 
@@ -861,17 +859,6 @@ function computeBestWeek(data, goalUnit) {
   return best;
 }
 
-// Longest single sitting, in minutes.
-function computeLongestSession(data) {
-  let longest = 0;
-  for (const sessions of Object.values(data)) {
-    for (const session of sessions) {
-      longest = Math.max(longest, sessionMinutes(session));
-    }
-  }
-  return longest;
-}
-
 // Characters per hour on the fastest day that had any time in it.
 function computeFastestDay(data) {
   let fastest = 0;
@@ -882,21 +869,6 @@ function computeFastestDay(data) {
     fastest = Math.max(fastest, chars / (minutes / 60));
   }
   return fastest;
-}
-
-// Largest stretch of calendar days between two days that had reading.
-function computeLongestGap(data) {
-  const active = Object.keys(data)
-    .filter((key) => (data[key] || []).some((s) => sessionMinutes(s) > 0))
-    .sort();
-  let longest = 0;
-  for (let i = 1; i < active.length; i++) {
-    // UTC midnight keeps the difference in whole days regardless of DST.
-    const previous = Date.parse(`${active[i - 1]}T00:00:00Z`);
-    const current = Date.parse(`${active[i]}T00:00:00Z`);
-    longest = Math.max(longest, Math.round((current - previous) / 86400000) - 1);
-  }
-  return longest;
 }
 
 function formatGoalValue(value, goalUnit) {
@@ -984,9 +956,7 @@ async function renderGoalCard(data) {
   const bestLabelEl = document.getElementById('goalBestDayLabel');
   const bestWeekEl = document.getElementById('goalBestWeek');
   const bestWeekLabelEl = document.getElementById('goalBestWeekLabel');
-  const longestSessionEl = document.getElementById('goalLongestSession');
   const fastestDayEl = document.getElementById('goalFastestDay');
-  const longestGapEl = document.getElementById('goalLongestGap');
 
   if (streakEl) streakEl.textContent = stats.current;
   if (longestEl) longestEl.textContent = stats.longest;
@@ -1006,14 +976,8 @@ async function renderGoalCard(data) {
     bestWeekLabelEl.textContent =
       goalUnit === 'characters' ? 'BEST WEEK (CHARS)' : 'BEST WEEK (HRS)';
   }
-  if (longestSessionEl) {
-    longestSessionEl.textContent = `${Math.round(stats.longestSession)}m`;
-  }
   if (fastestDayEl) {
     fastestDayEl.textContent = `${Math.round(stats.fastestDay).toLocaleString()}/h`;
-  }
-  if (longestGapEl) {
-    longestGapEl.textContent = `${Math.round(stats.longestGap)}d`;
   }
 
   renderGoalCalendar(data);
