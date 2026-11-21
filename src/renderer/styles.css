@@ -587,33 +587,25 @@ button.theme-select {
     min-width: 0;
 }
 
+/* The field is a plain text input: Chromium's own time editor owns its
+   highlight (an unthemeable blue) and ignores placeholder="", so the field only
+   carries the value while the picker and the placeholder do the talking. */
 .time-field .time-input {
     width: 100%;
     padding-right: 38px;
     font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
 }
 
-/* Chromium ignores placeholder="" on time inputs, so the prompt and any derived
-   value are painted by an overlay instead. The input's own text is transparent
-   while empty, which is what lets the overlay stand in for it. */
-.time-input.is-empty {
-    color: transparent;
-}
-
-.time-ghost {
-    position: absolute;
-    top: 50%;
-    left: 12px;
-    transform: translateY(-50%);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.8rem;
+.time-input::placeholder {
     color: var(--text-muted);
-    pointer-events: none;
-    user-select: none;
+    opacity: 1;
 }
 
-.time-ghost.hidden {
-    display: none;
+/* Selection follows the theme instead of the browser default blue. */
+.time-input::selection {
+    background: var(--accent-primary);
+    color: #fff;
 }
 
 /* The native picker panel is a browser widget that cannot be themed (white

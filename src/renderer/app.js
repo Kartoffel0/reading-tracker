@@ -2219,21 +2219,12 @@ function formatClock(date) {
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-function timeGhost(inputId) {
-  return document.getElementById(`${inputId}Ghost`);
-}
-
-// The overlay shows "--:--" when the field is empty, or the auto-derived time
-// that the duration implies. The input itself stays empty until the user types,
-// so the suggestion never looks like something that was entered.
-function refreshTimeGhost(inputId) {
+// The derived time is shown through the field's own placeholder: the value stays
+// empty until the user types, so a suggestion never looks like an entry.
+function refreshTimeField(inputId) {
   const input = document.getElementById(inputId);
-  const ghost = timeGhost(inputId);
-  if (!input || !ghost) return;
-  const empty = !input.value;
-  ghost.textContent = input.dataset.derived || '--:--';
-  ghost.classList.toggle('hidden', !empty);
-  input.classList.toggle('is-empty', empty);
+  if (!input) return;
+  input.placeholder = input.dataset.derived || '--:--';
 }
 
 // What the field means: typed value, else the derived suggestion.
@@ -2253,7 +2244,33 @@ function setTimeValue(inputId, value, derived = false) {
     input.value = value;
     delete input.dataset.derived;
   }
-  refreshTimeGhost(inputId);
+  refreshTimeField(inputId);
+}
+
+// Typing is free-form so nobody has to fight a mask; blur turns "935", "9:5"
+// or "09.35" into 09:35, and anything impossible becomes empty.
+function normalizeTimeText(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return '';
+
+  let hours;
+  let minutes;
+  if (text.includes(':')) {
+    const [h = '', m = ''] = text.split(':');
+    hours = Number(h) || 0;
+    minutes = Number(m) || 0;
+  } else if (digits.length <= 2) {
+    hours = Number(digits);
+    minutes = 0;
+  } else {
+    hours = Number(digits.slice(0, digits.length - 2));
+    minutes = Number(digits.slice(-2));
+  }
+
+  if (hours > 23 || minutes > 59) return '';
+  return `${pad2(hours)}:${pad2(minutes)}`;
 }
 
 function durationInMinutes() {
@@ -2364,18 +2381,32 @@ function initSessionTimeFields() {
 
   durationInput.addEventListener('input', applyDurationToTimes);
 
-  // Typing in a time field makes it "typed": the derived suggestion is dropped
-  // so the two never fight over what the field means.
-  const onTimeEdited = (event) => {
+  // Typing drops the derived suggestion — the two must not fight over what the
+  // field means. Only clock characters survive the keystroke.
+  const onTimeInput = (event) => {
     const input = event.target;
+    const cleaned = input.value.replace(/[^\d:]/g, '');
+    if (cleaned !== input.value) input.value = cleaned;
+    // "0935" becomes "09:35" the moment the fourth digit lands.
+    if (/^\d{4}$/.test(input.value)) input.value = normalizeTimeText(input.value);
     delete input.dataset.derived;
-    refreshTimeGhost(input.id);
+    refreshTimeField(input.id);
     applyTimesToDuration();
   };
-  startInput.addEventListener('input', onTimeEdited);
-  endInput.addEventListener('input', onTimeEdited);
-  refreshTimeGhost('sessionStart');
-  refreshTimeGhost('sessionEnd');
+
+  // Leaving the field tidies "935" into "09:35".
+  const onTimeBlur = (event) => {
+    const input = event.target;
+    if (input.value) input.value = normalizeTimeText(input.value);
+    refreshTimeField(input.id);
+    applyTimesToDuration();
+  };
+
+  for (const input of [startInput, endInput]) {
+    input.addEventListener('input', onTimeInput);
+    input.addEventListener('blur', onTimeBlur);
+    refreshTimeField(input.id);
+  }
 
   for (const button of document.querySelectorAll('.time-pick-btn')) {
     button.addEventListener('click', () => toggleTimePanel(button));

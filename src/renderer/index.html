@@ -102,8 +102,7 @@
                             <label class="form-label">START / END</label>
                             <div class="time-row">
                                 <div class="time-field">
-                                    <input type="time" id="sessionStart" class="form-input time-input" aria-label="Start time">
-                                    <span class="time-ghost" id="sessionStartGhost" aria-hidden="true">--:--</span>
+                                    <input type="text" id="sessionStart" class="form-input time-input" placeholder="--:--" maxlength="5" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="Start time">
                                     <button type="button" class="time-pick-btn" data-target="sessionStart" aria-label="Pick start time" aria-haspopup="true" aria-expanded="false">
                                         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
                                             <circle cx="12" cy="12" r="9" />
@@ -113,8 +112,7 @@
                                     <div class="time-panel" id="sessionStartPanel" role="listbox" aria-label="Start time picker"></div>
                                 </div>
                                 <div class="time-field">
-                                    <input type="time" id="sessionEnd" class="form-input time-input" aria-label="End time">
-                                    <span class="time-ghost" id="sessionEndGhost" aria-hidden="true">--:--</span>
+                                    <input type="text" id="sessionEnd" class="form-input time-input" placeholder="--:--" maxlength="5" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="End time">
                                     <button type="button" class="time-pick-btn" data-target="sessionEnd" aria-label="Pick end time" aria-haspopup="true" aria-expanded="false">
                                         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
                                             <circle cx="12" cy="12" r="9" />
