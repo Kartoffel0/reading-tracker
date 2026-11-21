@@ -1562,6 +1562,13 @@ function rtFormatDuration(minutes) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+// The TOTAL TIME stat reads in a single unit: minutes below the hour, whole
+// hours above it, so a long period shows "48h" and never "48h 4m".
+function rtFormatHoursOnly(minutes) {
+  const total = Math.max(0, Math.round(minutes));
+  return total >= 60 ? `${Math.floor(total / 60)}h` : `${total}m`;
+}
+
 function rtFormatAxis(minutes) {
   return minutes >= 60
     ? `${Math.round(minutes / 60)}h`
@@ -2015,7 +2022,7 @@ function buildStatsBody(model) {
         </div>
         <div class="rt-stat-col" data-series="time">
           <span class="rt-stat-label">TOTAL TIME</span>
-          <span class="rt-stat-value rt-stat-time-value">${rtFormatDuration(totalMinutes)}</span>
+          <span class="rt-stat-value rt-stat-time-value">${rtFormatHoursOnly(totalMinutes)}</span>
         </div>
         <div class="rt-stat-col" data-series="speed">
           <span class="rt-stat-label">READING SPEED</span>
@@ -2068,7 +2075,7 @@ function shiftReadingPeriod(direction) {
   const next = Math.max(0, rtPeriodOffset - direction);
   if (next === rtPeriodOffset) return;
   rtPeriodOffset = next;
-  getData().then(renderReadingTime);
+  getStatsData().then(renderReadingTime);
 }
 
 (function () {
@@ -2081,7 +2088,7 @@ function shiftReadingPeriod(direction) {
     rtActivePeriod =
       RT_TABS[(idx + delta + RT_TABS.length) % RT_TABS.length].key;
     rtPeriodOffset = 0;
-    getData().then(renderReadingTime);
+    getStatsData().then(renderReadingTime);
   }
 
   card.addEventListener('click', (e) => {
@@ -2091,7 +2098,7 @@ function shiftReadingPeriod(direction) {
     if (target && target.key !== rtActivePeriod) {
       rtActivePeriod = target.key;
       rtPeriodOffset = 0;
-      getData().then(renderReadingTime);
+      getStatsData().then(renderReadingTime);
     }
   });
 
