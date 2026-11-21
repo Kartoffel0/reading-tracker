@@ -1726,31 +1726,33 @@ function rtSpeedSeries(buckets, period) {
   return { points, peak, niceMax, half, hasData: values.length > 0 };
 }
 
-// Catmull-Rom through the points, emitted as cubic Béziers. The trend is
-// decoration, so it curves rather than cornering on every bucket.
+// Uniform cubic B-spline through the points, emitted as cubic Beziers.
+// It is C2-continuous (no corner at any bucket) and every Bezier control point
+// is a convex combination of four neighbouring values, so the curve cannot
+// overshoot the data the way an interpolating spline does. The first and last
+// points are repeated so the curve still starts and ends on real readings.
 function rtSmoothPath(points) {
-  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const first = points[0];
+  const last = points[points.length - 1];
+  const P = [first, first, ...points, last, last];
   const at = (p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
-  let d = `M ${at(points[0])}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i - 1] || points[i];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2] || p2;
-    // Monotone: both control points stay inside the y-range of this segment,
-    // so a dense run of differing rates cannot make the spline dip below both
-    // endpoints and rise back — that reads as data that is not there.
-    const lo = Math.min(p1.y, p2.y);
-    const hi = Math.max(p1.y, p2.y);
-    const c1 = {
-      x: p1.x + (p2.x - p0.x) / 6,
-      y: clamp(p1.y + (p2.y - p0.y) / 6, lo, hi),
+  let d = '';
+  for (let i = 1; i <= P.length - 3; i++) {
+    const p0 = P[i - 1];
+    const p1 = P[i];
+    const p2 = P[i + 1];
+    const p3 = P[i + 2];
+    const b0 = {
+      x: (p0.x + 4 * p1.x + p2.x) / 6,
+      y: (p0.y + 4 * p1.y + p2.y) / 6,
     };
-    const c2 = {
-      x: p2.x - (p3.x - p1.x) / 6,
-      y: clamp(p2.y - (p3.y - p1.y) / 6, lo, hi),
+    const c1 = { x: (2 * p1.x + p2.x) / 3, y: (2 * p1.y + p2.y) / 3 };
+    const c2 = { x: (p1.x + 2 * p2.x) / 3, y: (p1.y + 2 * p2.y) / 3 };
+    const b3 = {
+      x: (p1.x + 4 * p2.x + p3.x) / 6,
+      y: (p1.y + 4 * p2.y + p3.y) / 6,
     };
-    d += ` C ${at(c1)} ${at(c2)} ${at(p2)}`;
+    d += (i === 1 ? `M ${at(b0)}` : '') + ` C ${at(c1)} ${at(c2)} ${at(b3)}`;
   }
   return d;
 }
@@ -1983,7 +1985,15 @@ function buildStatsBody(model) {
       const p = points[0];
       return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
     }
-    return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
+    // One binomial [1,2,1] pass before the spline takes the tooth out of
+    // day-to-day swings. It only shapes the curve: tooltips still quote the
+    // real rate for each day.
+    const eased = points.map((p, i) => {
+      const prev = points[i - 1] || p;
+      const next = points[i + 1] || p;
+      return { x: p.x, y: (prev.y + 2 * p.y + next.y) / 4 };
+    });
+    return `<path class="rt-trend-line" d="${rtSmoothPath(eased)}" vector-effect="non-scaling-stroke" />`;
   })();
 
   const gridlines = [0, 25, 50, 75, 100]
