@@ -133,25 +133,6 @@ setInterval(createKanji, 2000);
 // App Logic
 // Use SQLite via Electron IPC when available
 
-function migrateData(parsed) {
-  // Ensure data structure compatibility - add default fields if missing
-  const migrated = {};
-  for (const [dateKey, sessions] of Object.entries(parsed)) {
-    if (Array.isArray(sessions)) {
-      migrated[dateKey] = sessions.map((s) => ({
-        ...s,
-        language: s.language || 'Unknown',
-        characters: s.characters || 0,
-        unit: s.unit || 'minutes',
-        start_time: s.start_time || null,
-        end_time: s.end_time || null,
-        media: s.media || 'book',
-      }));
-    }
-  }
-  return migrated;
-}
-
 async function getData() {
   const rows = await window.electronAPI.getAllSessions();
   const data = {};
@@ -166,8 +147,12 @@ async function getData() {
       characters: row.characters,
       duration: row.duration,
       unit: row.unit,
-      start_time: row.start_time || null,
-      end_time: row.end_time || null,
+      start_at: row.start_at || null,
+      end_at: row.end_at || null,
+      // Clock strings are a display convenience derived from the timestamps; the
+      // timestamps are the truth once a session crosses midnight.
+      start_time: row.start_at ? row.start_at.slice(11, 16) : null,
+      end_time: row.end_at ? row.end_at.slice(11, 16) : null,
       media: row.media || 'book',
     });
   }
@@ -214,17 +199,23 @@ function sessionDayKey() {
 // date column holds and what the entries list shows. Statistics file it under
 // the session day instead: anything ending before the session-day boundary
 // belongs to the previous day (a session stopped at 00:48 counts for yesterday).
-// Sessions without an end time cannot be judged and stay where they are.
-function sessionDayForDate(dateKey, endTime) {
-  const boundary = sessionDayEndHour * 60;
-  if (boundary <= 0 || !dateKey) return dateKey;
-  const end = clockToMinutes(endTime);
-  if (end === null || end >= boundary) return dateKey;
-
+// Rows without a timestamp cannot be judged and stay where they are.
+function shiftDateKey(dateKey, days) {
   const [year, month, day] = dateKey.split('-').map(Number);
   const shifted = new Date(year, month - 1, day);
-  shifted.setDate(shifted.getDate() - 1);
+  shifted.setDate(shifted.getDate() + days);
   return getDateKey(shifted);
+}
+
+function sessionDayForDate(dateKey, endAt) {
+  const boundary = sessionDayEndHour * 60;
+  if (boundary <= 0 || !dateKey) return dateKey;
+  if (!endAt || endAt.length < 16) return dateKey;
+
+  const endDate = endAt.slice(0, 10);
+  const end = clockToMinutes(endAt.slice(11, 16));
+  if (end === null || end >= boundary) return endDate;
+  return shiftDateKey(endDate, -1);
 }
 
 // The same rows, keyed by session day. Every statistic reads this; the entries
@@ -235,7 +226,7 @@ async function getStatsData() {
   const byDay = {};
   for (const [dateKey, sessions] of Object.entries(raw)) {
     for (const session of sessions) {
-      const dayKey = sessionDayForDate(dateKey, session.end_time);
+      const dayKey = sessionDayForDate(dateKey, session.end_at);
       if (!byDay[dayKey]) byDay[dayKey] = [];
       byDay[dayKey].push(session);
     }
@@ -508,8 +499,19 @@ async function logReading() {
     return;
   }
 
-  // Recorded under the day it was logged on; the day-end boundary is applied
-  // when statistics aggregate, not here.
+  // The picker holds the end day; the timestamps carry the wall clock, so a
+  // session spanning midnight is recorded exactly instead of being guessed from
+  // two bare times.
+  const startTime = timeFieldValue('sessionStart');
+  const endTime = timeFieldValue('sessionEnd');
+  let startAt = null;
+  let endAt = null;
+  if (startTime && endTime) {
+    endAt = `${dateKey}T${endTime}`;
+    const startDate = startTime > endTime ? shiftDateKey(dateKey, -1) : dateKey;
+    startAt = `${startDate}T${startTime}`;
+  }
+
   const session = {
     id: Date.now(),
     date: dateKey,
@@ -520,8 +522,8 @@ async function logReading() {
     characters: parseInt(charsInput.value) || 0,
     duration: duration,
     unit: unitSelect.value,
-    start_time: timeFieldValue('sessionStart') || null,
-    end_time: timeFieldValue('sessionEnd') || null,
+    start_at: startAt,
+    end_at: endAt,
     media: mediaSelect.value || 'book',
   };
 

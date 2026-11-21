@@ -334,8 +334,8 @@ function openDatabase() {
 
   // Additive, idempotent migrations. Every database opened here goes through
   // them — a fresh file, the live file after Restore swapped it for an older
-  // backup, or a data.db dropped in by hand — so pre-existing rows keep working
-  // and simply carry NULL times until they get them.
+  // backup, or a data.db dropped in by hand. A row without times keeps NULL
+  // timestamps and is filed by its date alone.
   const sessionColumns = new Set(
     db.prepare('PRAGMA table_info(sessions)').all().map((column) => column.name),
   );
@@ -344,9 +344,41 @@ function openDatabase() {
       db.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${definition}`);
     }
   };
-  addSessionColumn('start_time', 'TEXT');
-  addSessionColumn('end_time', 'TEXT');
   addSessionColumn('media', "TEXT NOT NULL DEFAULT 'book'");
+  addSessionColumn('start_at', 'TEXT');
+  addSessionColumn('end_at', 'TEXT');
+
+  // The first pass after this stored a bare date plus two wall-clock times, which
+  // left a session spanning midnight indistinguishable from one that merely
+  // ended early. Fold those columns into real timestamps (the date column holds
+  // the END day, so a start later than the end means the day before), then drop
+  // them: two sources of truth for the same moment is how they drift apart.
+  if (sessionColumns.has('start_time') || sessionColumns.has('end_time')) {
+    const legacy = db
+      .prepare('SELECT id, date, start_time, end_time FROM sessions')
+      .all();
+    const update = db.prepare(
+      'UPDATE sessions SET start_at = ?, end_at = ? WHERE id = ?',
+    );
+    db.transaction(() => {
+      for (const row of legacy) {
+        if (!row.start_time || !row.end_time || !row.date) continue;
+        const [year, month, day] = row.date.split('-').map(Number);
+        const start = new Date(year, month - 1, day);
+        if (row.start_time > row.end_time) start.setDate(start.getDate() - 1);
+        const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+        update.run(
+          `${startDate}T${row.start_time}`,
+          `${row.date}T${row.end_time}`,
+          row.id,
+        );
+      }
+    })();
+    if (sessionColumns.has('start_time'))
+      db.exec('ALTER TABLE sessions DROP COLUMN start_time');
+    if (sessionColumns.has('end_time'))
+      db.exec('ALTER TABLE sessions DROP COLUMN end_time');
+  }
   // migration_flag guarded a one-shot data migration that no longer exists in
   // the app, so the table is dead weight that also trips off every backup: drop
   // it on sight, which scrubs it out of older backups when they get restored.
@@ -512,7 +544,7 @@ app.whenReady().then(() => {
       }
 
       const stmt = db.prepare(
-        'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_time, end_time, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_at, end_at, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
       stmt.run(
         session.id,
@@ -522,8 +554,8 @@ app.whenReady().then(() => {
         session.characters,
         session.duration,
         session.unit,
-        session.start_time || null,
-        session.end_time || null,
+        session.start_at || null,
+        session.end_at || null,
         session.media || 'book',
       );
       return { success: true, duplicated: false };
@@ -535,7 +567,7 @@ app.whenReady().then(() => {
   // Bulk insert sessions from CSV data
   ipcMain.handle('bulk-insert-sessions', (_, sessions) => {
     const stmt = db.prepare(
-      'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_time, end_time, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_at, end_at, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     );
     const insertMany = db.transaction((rows) => {
       let successCount = 0;
@@ -550,8 +582,8 @@ app.whenReady().then(() => {
             session.characters,
             session.duration,
             session.unit,
-            session.start_time || null,
-            session.end_time || null,
+            session.start_at || null,
+            session.end_at || null,
             session.media || 'book',
           );
           successCount++;
@@ -903,33 +935,41 @@ app.whenReady().then(() => {
         return key; // Fallback: return raw code
       }
 
-      // The extractor hands back timezone-adjusted ISO datetimes; the app stores
-      // the wall-clock HH:MM the session ran at, which is what the day boundary
-      // logic was already computed against.
-      function clockTimeFromDate(value) {
+      // The extractor hands back timezone-adjusted ISO datetimes
+      // (2026-11-21T00:48:13-0300). Keep the wall clock it computed and drop the
+      // offset: the date column already means "local day", and mixing zones in
+      // one column is how a session lands on the wrong day.
+      function localTimestamp(value) {
         if (!value) return null;
-        const match = String(value).match(/T(\d{2}):(\d{2})/);
-        return match ? `${match[1]}:${match[2]}` : null;
+        const match = String(value).match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+        return match ? `${match[1]}T${match[2]}:${match[3]}` : null;
       }
 
       function handleSyncResult(result) {
         // Normalize field names from Python script to DB schema
         // Python columns: session_date, start_date, end_date, book_title,
         //                 language, char_count, session_duration
-        // DB columns:     date, start_time, end_time, title, language,
+        // DB columns:     date, start_at, end_at, title, language,
         //                 characters, duration, unit, media
-        const normalizedSessions = (result.sessions || []).map((s) => ({
-          date: s.session_date || s.date || null,
-          title: s.book_title || s.title || 'Untitled',
-          language: resolveLanguage(s.language),
-          characters: s.char_count != null ? parseInt(s.char_count, 10) : 0,
-          duration:
-            s.session_duration != null ? parseFloat(s.session_duration) : 0,
-          unit: s.unit || 'minutes',
-          start_time: clockTimeFromDate(s.start_date),
-          end_time: clockTimeFromDate(s.end_date),
-          media: 'book',
-        }));
+        const normalizedSessions = (result.sessions || []).map((s) => {
+          const startAt = localTimestamp(s.start_date);
+          const endAt = localTimestamp(s.end_date);
+          return {
+            // The date column holds the END day; the day boundary is applied when
+            // statistics aggregate, so the extractor's own session_date is not
+            // reused here (that would shift twice).
+            date: endAt ? endAt.slice(0, 10) : s.session_date || s.date || null,
+            title: s.book_title || s.title || 'Untitled',
+            language: resolveLanguage(s.language),
+            characters: s.char_count != null ? parseInt(s.char_count, 10) : 0,
+            duration:
+              s.session_duration != null ? parseFloat(s.session_duration) : 0,
+            unit: s.unit || 'minutes',
+            start_at: startAt,
+            end_at: endAt,
+            media: 'book',
+          };
+        });
 
         // Insert sessions into SQLite with proper deduplication FIRST
         let syncStats = {
@@ -1053,14 +1093,13 @@ app.whenReady().then(() => {
 
   function insertSessionsWithDedup(sessions) {
     const insertOne = db.prepare(
-      'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_time, end_time, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_at, end_at, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     );
-    // A re-sync of the same sidecar reproduces the same clock time, so start_time
-    // is the strongest duplicate signal. Rows saved before start_time existed
-    // fall back to the old tuple, which is what keeps old imports from
-    // re-inserting themselves on the first sync after this upgrade.
+    // A re-sync of the same sidecar reproduces the same start timestamp, so that
+    // is the strongest duplicate signal. Rows recorded without times fall back to
+    // the old tuple, which keeps earlier imports from re-inserting themselves.
     const checkByTime = db.prepare(
-      'SELECT 1 FROM sessions WHERE title = ? AND date = ? AND start_time = ?',
+      'SELECT 1 FROM sessions WHERE title = ? AND start_at = ?',
     );
     const checkExisting = db.prepare(
       'SELECT 1 FROM sessions WHERE title = ? AND characters = ? AND date = ? AND duration = ? AND language = ?',
@@ -1068,8 +1107,8 @@ app.whenReady().then(() => {
     let inserted = 0;
     let skipped = 0;
     for (const session of sessions) {
-      const existing = session.start_time
-        ? checkByTime.get(session.title, session.date, session.start_time)
+      const existing = session.start_at
+        ? checkByTime.get(session.title, session.start_at)
         : checkExisting.get(
             session.title,
             session.characters,
@@ -1090,8 +1129,8 @@ app.whenReady().then(() => {
           session.characters || 0,
           session.duration || 0,
           session.unit || 'minutes',
-          session.start_time || null,
-          session.end_time || null,
+          session.start_at || null,
+          session.end_at || null,
           session.media || 'book',
         );
         inserted++;
