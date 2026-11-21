@@ -2603,45 +2603,6 @@ body.theme-wave .wave-bg {
     position: relative;
 }
 
-/* A bare label does not say how its number is derived, so each stat explains
-   itself on hover. The card clips (overflow: hidden), so the hint hangs below
-   the stat and the last column right-aligns to stay inside the card. */
-.goal-stat[data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    z-index: 40;
-    width: max-content;
-    max-width: 190px;
-    padding: 5px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background: var(--bg-card);
-    color: var(--text-secondary);
-    /* Lifts the hint off the labels it overlaps. */
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-    font-size: 0.6rem;
-    font-weight: 500;
-    line-height: 1.4;
-    letter-spacing: normal;
-    text-align: left;
-    pointer-events: none;
-    /* Instant, like the cell tooltips: a fading pseudo-element leaves stale
-       frames behind when the window is occluded. */
-    visibility: hidden;
-}
-
-/* Third column sits ~one hint-width from the card's right edge. */
-.goal-stat:nth-child(3n)::after {
-    left: auto;
-    right: 0;
-}
-
-.goal-stat[data-tooltip]:hover::after {
-    visibility: visible;
-}
-
 .goal-stat-label {
     font-size: 0.7rem;
     color: var(--text-muted);
@@ -2694,7 +2655,7 @@ body.theme-wave .wave-bg {
 .gc-day-labels span {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: center;
     height: var(--gc-size, 12px);
     line-height: 1;
 }
