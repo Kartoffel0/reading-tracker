@@ -2545,14 +2545,22 @@ body.theme-wave .wave-bg {
     height: 100%;
 }
 
-/* ===== DASHBOARD GRID (fixed tracks: 400 | 800, rows 400 / 400 / 220) ===== */
+/* ===== DASHBOARD COLUMNS: 400 + 800, independent stacks ===== */
 .dashboard-grid {
-    display: grid;
-    grid-template-columns: 400px 800px;
-    grid-template-rows: 400px 400px 220px;
+    display: flex;
+    align-items: flex-start;
     gap: 16px;
-    align-items: stretch;
 }
+
+.dash-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.dash-col-left { flex: 0 0 400px; width: 400px; }
+.dash-col-right { flex: 0 0 800px; width: 800px; }
 
 .dashboard-grid .panel {
     min-width: 0;
@@ -2561,12 +2569,12 @@ body.theme-wave .wave-bg {
     flex-direction: column;
 }
 
-/* Explicit placement — DOM order is irrelevant */
-.recently-read-card { grid-column: 1; grid-row: 1; }
-.audiobook-card { grid-column: 1; grid-row: 2 / span 2; }
-.reading-time-card { grid-column: 2; grid-row: 1; }
-.goal-card { grid-column: 2; grid-row: 2; }
-.entries-section { grid-column: 2; grid-row: 3; margin-top: 0; }
+/* Fixed card heights — a card never resizes, only its column changes */
+.audiobook-card { height: 636px; }
+.recently-read-card { height: 400px; }
+.reading-time-card { height: 400px; }
+.goal-card { height: 400px; }
+.entries-section { height: 220px; margin-top: 0; }
 
 /* Activity map is merged into the goal card later — hidden for this layout pass */
 .dashboard-grid .streak-panel { display: none; }

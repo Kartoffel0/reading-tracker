@@ -153,6 +153,33 @@
 
                 <!-- Right Panel - Dashboard Grid (4 sections) -->
             <div class="dashboard-grid">
+                <!-- Left column: player on top, recently read below -->
+                <div class="dash-col dash-col-left">
+                    <!-- Card 5: Audiobook player (placeholder) -->
+                    <div class="panel audiobook-card">
+                        <div class="card-title">AUDIOBOOK PLAYER</div>
+                        <div class="audiobook-placeholder">
+                            <div class="audiobook-cover-art"></div>
+                            <div class="audiobook-title">No audiobook loaded</div>
+                            <div class="audiobook-progress"><div class="audiobook-progress-fill"></div></div>
+                            <div class="audiobook-controls">
+                                <button type="button" class="audiobook-btn" title="Previous">&#9198;</button>
+                                <button type="button" class="audiobook-btn audiobook-btn-play" title="Play">&#9654;</button>
+                                <button type="button" class="audiobook-btn" title="Next">&#9197;</button>
+                            </div>
+                            <div class="audiobook-idle">Continue playing</div>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Recently read -->
+                    <div class="panel recently-read-card">
+                        <div class="card-title">RECENTLY READ</div>
+                        <div id="recentlyReadList"></div>
+                    </div>
+                </div>
+
+                <!-- Right column: stats, goal, entries -->
+                <div class="dash-col dash-col-right">
                 <!-- Card 1: Activity map (streak calendar) -->
                 <div class="panel streak-panel">
                     <div class="streak-header">
@@ -193,12 +220,6 @@
                     <div class="reading-time-content">
                         <div class="reading-time-body" id="readingTimeBody"></div>
                     </div>
-                </div>
-
-                <!-- Card 3: Recently read -->
-                <div class="panel recently-read-card">
-                    <div class="card-title">RECENTLY READ</div>
-                    <div id="recentlyReadList"></div>
                 </div>
 
                 <!-- Card 4: Daily goal -->
@@ -242,22 +263,6 @@
                     </div>
                 </div>
 
-                <!-- Card 5: Audiobook player (placeholder) -->
-                <div class="panel audiobook-card">
-                    <div class="card-title">AUDIOBOOK PLAYER</div>
-                    <div class="audiobook-placeholder">
-                        <div class="audiobook-cover-art"></div>
-                        <div class="audiobook-title">No audiobook loaded</div>
-                        <div class="audiobook-progress"><div class="audiobook-progress-fill"></div></div>
-                        <div class="audiobook-controls">
-                            <button type="button" class="audiobook-btn" title="Previous">&#9198;</button>
-                            <button type="button" class="audiobook-btn audiobook-btn-play" title="Play">&#9654;</button>
-                            <button type="button" class="audiobook-btn" title="Next">&#9197;</button>
-                        </div>
-                        <div class="audiobook-idle">Continue playing</div>
-                    </div>
-                </div>
-
                 <!-- Recent Entries -->
                 <div class="panel entries-section">
                     <div class="entries-header">
@@ -265,6 +270,7 @@
                         <span class="entry-count" id="entryCount">0 entries</span>
                     </div>
                     <div id="entryList"></div>
+                </div>
                 </div>
             </div>
             </section>
