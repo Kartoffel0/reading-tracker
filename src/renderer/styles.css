@@ -654,18 +654,11 @@ button.theme-select {
     pointer-events: none;
 }
 
-/* Reading is the only state that is happening right now, so it is the only
-   filled badge: solid accent, page-coloured ink. Read is that same accent at
-   rest — tint and accent text — and dropped is the app's own grey. Three
-   different shapes of label, not three shades of one hue that all read alike at
-   167px wide. */
+/* Reading is the accent at rest — a tint with accent ink. Read is the filled
+   label: solid accent with page-coloured ink. Dropped is the app's own grey.
+   Three different shapes of label, not three shades of one hue that all read
+   alike at 167px wide. */
 .lib-item[data-status='reading'] .lib-status {
-    --lib-status-fill: var(--accent-primary);
-    --lib-status-ink: var(--bg-primary);
-    --lib-status-edge: color-mix(in srgb, var(--accent-primary) 70%, transparent);
-}
-
-.lib-item[data-status='read'] .lib-status {
     --lib-status-fill: color-mix(
         in srgb,
         var(--accent-primary) 12%,
@@ -673,6 +666,12 @@ button.theme-select {
     );
     --lib-status-ink: var(--accent-primary);
     --lib-status-edge: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+.lib-item[data-status='read'] .lib-status {
+    --lib-status-fill: var(--accent-primary);
+    --lib-status-ink: var(--bg-primary);
+    --lib-status-edge: color-mix(in srgb, var(--accent-primary) 70%, transparent);
 }
 
 /* The last tile is the add slot: dashed and empty, so the shelf reads as
