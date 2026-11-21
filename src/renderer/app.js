@@ -451,8 +451,8 @@ async function logReading() {
     return;
   }
 
-  const duration = parseFloat(durationInput.value);
-  if (isNaN(duration) || duration <= 0) {
+  const duration = durationValue();
+  if (duration === null) {
     showToast('Enter valid duration');
     return;
   }
@@ -476,7 +476,7 @@ async function logReading() {
 
   titleInput.value = '';
   charsInput.value = '';
-  durationInput.value = '';
+  setDurationValue('', false);
   setTimeValue('sessionStart', '');
   setTimeValue('sessionEnd', '');
   unitSelect.value = 'minutes';
@@ -2191,16 +2191,21 @@ async function updateAll() {
 }
 
 // Changing the unit keeps the same real duration: 77 minutes → 1.28 hours.
+// Works for a typed value and for a derived suggestion alike.
 function updateDurationUnit() {
   const select = document.getElementById('durationUnit');
   const input = document.getElementById('sessionDuration');
   if (!select || !input) return;
-  const value = parseFloat(input.value);
+
+  const raw = input.value || input.dataset.derived || '';
+  const value = parseFloat(raw);
   if (!Number.isFinite(value) || value <= 0) return;
-  input.value =
+
+  const converted =
     select.value === 'hours'
-      ? String(Math.round((value / 60) * 100) / 100)
-      : String(Math.round(value * 60));
+      ? Math.round((value / 60) * 100) / 100
+      : Math.round(value * 60);
+  setDurationValue(converted, !input.value);
 }
 
 // ─── Session time fields ───────────────────────────────────────────────────
@@ -2273,23 +2278,51 @@ function normalizeTimeText(raw) {
   return `${pad2(hours)}:${pad2(minutes)}`;
 }
 
-function durationInMinutes() {
+// The duration mirrors the time fields: when it comes from start/end it is a
+// suggestion (placeholder, muted) and the input stays empty until typed.
+function setDurationValue(value, derived) {
   const input = document.getElementById('sessionDuration');
-  const value = parseFloat(input?.value);
-  if (!Number.isFinite(value) || value <= 0) return null;
+  if (!input) return;
+  if (derived) {
+    input.value = '';
+    input.dataset.derived = String(value);
+  } else {
+    input.value = String(value ?? '');
+    delete input.dataset.derived;
+  }
+  input.placeholder = input.dataset.derived || '0';
+}
+
+// The number the field currently means, in the selected unit.
+function durationValue() {
+  const input = document.getElementById('sessionDuration');
+  const raw = input?.value || input?.dataset.derived || '';
+  const value = parseFloat(raw);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function durationInMinutes() {
+  const value = durationValue();
+  if (value === null) return null;
   const unit = document.getElementById('durationUnit')?.value;
   return Math.round(unit === 'hours' ? value * 60 : value);
 }
 
 // Duration typed → end is "now", start is now minus the duration.
 function applyDurationToTimes() {
-  const minutes = durationInMinutes();
-  if (minutes === null) {
+  const input = document.getElementById('sessionDuration');
+  const typed = parseFloat(input?.value);
+  if (!Number.isFinite(typed) || typed <= 0) {
     // Deleting the duration deletes the times: they only existed because of it.
+    delete input?.dataset.derived;
+    if (input) input.placeholder = '0';
     setTimeValue('sessionStart', '', false);
     setTimeValue('sessionEnd', '', false);
     return;
   }
+
+  const unit = document.getElementById('durationUnit')?.value;
+  const minutes = Math.round(unit === 'hours' ? typed * 60 : typed);
   const end = new Date();
   end.setSeconds(0, 0);
   const start = new Date(end.getTime() - minutes * 60000);
@@ -2299,24 +2332,22 @@ function applyDurationToTimes() {
 
 // Start/end picked → duration follows. Crossing midnight counts forward.
 function applyTimesToDuration() {
-  const durationInput = document.getElementById('sessionDuration');
-  if (!durationInput) return;
-
   const start = clockToMinutes(timeFieldValue('sessionStart'));
   const end = clockToMinutes(timeFieldValue('sessionEnd'));
   // Half a range is not a duration; clear it rather than leave a stale number.
   if (start === null || end === null) {
-    durationInput.value = '';
+    setDurationValue('', false);
     return;
   }
 
   let minutes = end - start;
   if (minutes < 0) minutes += 24 * 60;
   const unit = document.getElementById('durationUnit')?.value;
-  durationInput.value =
+  const value =
     unit === 'hours'
-      ? String(Math.round((minutes / 60) * 100) / 100)
-      : String(minutes);
+      ? Math.round((minutes / 60) * 100) / 100
+      : minutes;
+  setDurationValue(value, true);
 }
 
 // ─── Custom time picker ────────────────────────────────────────────────────
@@ -2379,7 +2410,13 @@ function initSessionTimeFields() {
   const endInput = document.getElementById('sessionEnd');
   if (!durationInput || !startInput || !endInput) return;
 
-  durationInput.addEventListener('input', applyDurationToTimes);
+  // Typing drops the derived suggestion before the link runs, or a stale
+  // suggestion would keep painting after the user replaced it.
+  durationInput.addEventListener('input', () => {
+    delete durationInput.dataset.derived;
+    durationInput.placeholder = '0';
+    applyDurationToTimes();
+  });
 
   // Typing drops the derived suggestion — the two must not fight over what the
   // field means. Only clock characters survive the keystroke.
