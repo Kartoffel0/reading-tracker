@@ -1697,10 +1697,11 @@ function rtTooltipLabel(period, start, bucketKey) {
 // column itself, 1 averages it with its neighbours. Summing characters and
 // minutes before dividing is the honest average of a rate (a mean of ratios
 // would let a five-minute session weigh as much as a two-hour one).
-// A column whose whole window is empty returns null, so the line breaks across
-// dead time instead of inventing a slope through it.
+// Only a column that was actually read gets a rate: a neighbour's minutes may
+// fill the window, but quoting "2,430 chars/h" on a day with no sessions reads
+// as a bug, and the trend only exists to show days that happened.
 function rtSpeedAt(buckets, index, half) {
-  if (!buckets[index]) return null;
+  if (!buckets[index] || buckets[index].minutes <= 0) return null;
   let chars = 0;
   let minutes = 0;
   for (let i = index - half; i <= index + half; i++) {
@@ -1723,6 +1724,25 @@ function rtSpeedSeries(buckets, period) {
   const step = peak > 2000 ? 500 : 100;
   const niceMax = peak > 0 ? Math.ceil(peak / step) * step : 0;
   return { points, peak, niceMax, half, hasData: values.length > 0 };
+}
+
+// Catmull-Rom through the points, emitted as cubic Béziers. The trend is
+// decoration, so it curves rather than cornering on every bucket; control
+// points are clamped to the plot so a spike cannot bow outside the grid.
+function rtSmoothPath(points) {
+  const clamp = (v) => Math.min(100, Math.max(0, v));
+  const at = (p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
+  let d = `M ${at(points[0])}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const c1 = { x: p1.x + (p2.x - p0.x) / 6, y: clamp(p1.y + (p2.y - p0.y) / 6) };
+    const c2 = { x: p2.x - (p3.x - p1.x) / 6, y: clamp(p2.y - (p3.y - p1.y) / 6) };
+    d += ` C ${at(c1)} ${at(c2)} ${at(p2)}`;
+  }
+  return d;
 }
 
 // The axis gutter has to hold the widest label it will ever draw ("1,200,000"
@@ -1943,17 +1963,21 @@ function buildStatsBody(model) {
         run = [];
         return;
       }
-      const x = (((i + 0.5) / sorted.length) * 100).toFixed(2);
-      const y = (100 - (value / speed.niceMax) * 100).toFixed(2);
-      run.push(`${x},${y}`);
+      run.push({
+        x: ((i + 0.5) / sorted.length) * 100,
+        y: 100 - (value / speed.niceMax) * 100,
+      });
     });
     if (run.length) runs.push(run);
     return runs
       .map((points) => {
-        // A lone column has no segment to draw; the round cap turns the
-        // repeated point into a dot.
-        const d = points.length === 1 ? `${points[0]} ${points[0]}` : points.join(' ');
-        return `<polyline class="rt-trend-line" points="${d}" vector-effect="non-scaling-stroke" />`;
+        // A lone day has no segment to curve through: a zero-length path with a
+        // round cap is a dot.
+        if (points.length === 1) {
+          const p = points[0];
+          return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
+        }
+        return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
       })
       .join('');
   })();
