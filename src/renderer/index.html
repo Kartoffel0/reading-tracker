@@ -13,16 +13,27 @@
     <div class="kanji-bg" id="kanjiBg"></div>
 
     <div class="container">
-        <!-- Header -->
-        <div class="header-wrapper">
-            <div class="header">
-                <div class="header-left">
-                    <h1><span class="kanji-title">読書</span>Reading Tracker</h1>
-                </div>
-                <div style="display: flex; align-items: center; gap: 16px;">
-                    <button id="settings-btn" class="theme-select" title="Settings" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);padding:8px 12px;border-radius:4px;cursor:pointer;font-size:16px;" onclick="openSettingsModal()">⚙</button>
-                    <button class="theme-select" onclick="window.electronAPI.quitApp()" style="cursor:pointer;" title="Close application">Quit</button>
-                </div>
+        <!-- Title bar -->
+        <div class="titlebar">
+            <div class="titlebar-title">
+                <span>Reading Tracker</span>
+            </div>
+            <div class="titlebar-controls">
+                <button id="settings-btn" class="titlebar-btn" title="Settings" onclick="openSettingsModal()">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+                        <path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.55-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z" />
+                    </svg>
+                </button>
+                <button class="titlebar-btn" title="Minimize" onclick="window.electronAPI.minimizeWindow()">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 11.25h12" />
+                    </svg>
+                </button>
+                <button class="titlebar-btn titlebar-btn-close" title="Close" onclick="window.electronAPI.closeWindow()">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                </button>
             </div>
         </div>
 

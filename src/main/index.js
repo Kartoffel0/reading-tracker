@@ -432,10 +432,10 @@ async function snapshotIfNeeded() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 1300,
-    minWidth: 1200,
-    minHeight: 800,
+    width: 1680,
+    height: 1260,
+    minWidth: 1680,
+    minHeight: 1260,
     backgroundColor: '#0a0a0f',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),
@@ -720,8 +720,12 @@ app.whenReady().then(() => {
     return app.getPath('documents');
   });
 
-  ipcMain.handle('quit-app', () => {
-    app.quit();
+  ipcMain.handle('window-minimize', () => {
+    mainWindow.minimize();
+  });
+
+  ipcMain.handle('window-close', () => {
+    mainWindow.close();
   });
 
   // ─── Kindle Sync ───────────────────────────────────────────────────────────

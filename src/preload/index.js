@@ -45,8 +45,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
   getDocumentsPath: () => ipcRenderer.invoke('get-docs-path'),
 
-  // App lifecycle
-  quitApp: () => ipcRenderer.invoke('quit-app'),
+  // Window controls (custom title bar)
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  closeWindow: () => ipcRenderer.invoke('window-close'),
 
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
