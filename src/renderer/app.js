@@ -1985,15 +1985,7 @@ function buildStatsBody(model) {
       const p = points[0];
       return `<path class="rt-trend-dot" d="M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0 0" vector-effect="non-scaling-stroke" />`;
     }
-    // One binomial [1,2,1] pass before the spline takes the tooth out of
-    // day-to-day swings. It only shapes the curve: tooltips still quote the
-    // real rate for each day.
-    const eased = points.map((p, i) => {
-      const prev = points[i - 1] || p;
-      const next = points[i + 1] || p;
-      return { x: p.x, y: (prev.y + 2 * p.y + next.y) / 4 };
-    });
-    return `<path class="rt-trend-line" d="${rtSmoothPath(eased)}" vector-effect="non-scaling-stroke" />`;
+    return `<path class="rt-trend-line" d="${rtSmoothPath(points)}" vector-effect="non-scaling-stroke" />`;
   })();
 
   const gridlines = [0, 25, 50, 75, 100]
