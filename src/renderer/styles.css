@@ -2014,6 +2014,49 @@ input[type="submit"]:focus-visible,
     padding: 2px 8px;
 }
 
+/* ===== SESSION ROWS (modal) =====
+   Session rows reuse .recent-book / .recent-info / .recent-stat so they keep the
+   Recently Read shell, but their body is two columns: timestamps on the left,
+   the three numbers on the right. Everything that differs is scoped to
+   .session-row so the cover cards on the dashboard are not touched. */
+.session-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 20px;
+    margin-top: 1px;
+}
+
+.session-meta-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.session-row .recent-stat {
+    min-width: 0;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+/* Older rows keep an em dash; long values must not push the label around. */
+.session-row .recent-stat-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The session date takes the badge slot the language code used to hold. */
+.session-date-badge {
+    background: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+    border: 1px solid var(--accent-primary);
+    color: var(--accent-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
 .day-summary {
     margin-top: 18px;
     padding: 18px;

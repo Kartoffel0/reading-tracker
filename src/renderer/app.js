@@ -2251,46 +2251,14 @@ async function openSessionsFor(title, dateKeys, preloaded) {
       const charsClass = goalIsChars ? ' recent-stat-chars' : '';
       const timeClass = goalIsChars ? '' : ' recent-stat-time';
 
-      // Reverse language map: full name -> ISO 639 code
-      const LANG_REVERSE = {
-        Japanese: 'ja',
-        English: 'en',
-        Portuguese: 'pt',
-        Spanish: 'es',
-        Korean: 'ko',
-        Chinese: 'zh',
-        German: 'de',
-        French: 'fr',
-        Italian: 'it',
-        Russian: 'ru',
-        Dutch: 'nl',
-        Swedish: 'sv',
-        Danish: 'da',
-        Norwegian: 'no',
-        Finnish: 'fi',
-        Polish: 'pl',
-        Czech: 'cs',
-        Hungarian: 'hu',
-        Romanian: 'ro',
-        Croatian: 'hr',
-        Slovak: 'sk',
-        Bulgarian: 'bg',
-        Greek: 'el',
-        Turkish: 'tr',
-        Hebrew: 'he',
-        Arabic: 'ar',
-        Hindi: 'hi',
-        Thai: 'th',
-        Vietnamese: 'vi',
-        Indonesian: 'id',
-        Malay: 'ms',
-        Filipino: 'tl',
-        Ukrainian: 'uk',
-      };
-      const langCode =
-        LANG_REVERSE[session.language] ||
-        session.language?.substring(0, 2).toLowerCase() ||
-        '??';
+      // start_at / end_at are ISO timestamps ("2026-11-21T03:17"); rows from
+      // before Phase 1 carry none and keep an em dash so the column stays put.
+      const clockOf = (iso) =>
+        iso && iso.length >= 16
+          ? `${iso.slice(0, 10).replaceAll('-', ' ')} ${iso.slice(11, 16)}`
+          : '—';
+      const startLabel = clockOf(session.start_at);
+      const endLabel = clockOf(session.end_at);
 
       const durationDisplay =
         session.unit === 'minutes'
@@ -2301,17 +2269,25 @@ async function openSessionsFor(title, dateKeys, preloaded) {
       totalChars += session.characters || 0;
 
       return `
-                    <div class="recent-book">
+                    <div class="recent-book session-row">
                         ${coverMarkup(title)}
                         <div class="recent-info">
                             <span class="session-title-row">
                                 <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
-                                <span class="session-badge lang-badge">${langCode.toUpperCase()}</span>
+                                <span class="session-badge session-date-badge">${dateKey.replaceAll('-', ' ')}</span>
                                 <button class="entry-del-btn" onclick="deleteSession('${dateKey}', ${session.id})">✖</button>
                             </span>
-                            <span class="recent-stat"><span class="recent-stat-label">Duration</span> <span class="recent-stat-value${timeClass}">${durationDisplay}</span></span>
-                            <span class="recent-stat"><span class="recent-stat-label">Characters</span> <span class="recent-stat-value${charsClass}">${(session.characters || 0).toLocaleString()}</span></span>
-                            <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span> <span class="recent-stat-value">${speed.toLocaleString().replace(/\s/g, '')}/h</span></span>
+                            <div class="session-meta">
+                                <div class="session-meta-col">
+                                    <span class="recent-stat"><span class="recent-stat-label">Start</span><span class="recent-stat-value">${startLabel}</span></span>
+                                    <span class="recent-stat"><span class="recent-stat-label">End</span><span class="recent-stat-value">${endLabel}</span></span>
+                                </div>
+                                <div class="session-meta-col">
+                                    <span class="recent-stat"><span class="recent-stat-label">Duration</span><span class="recent-stat-value${timeClass}">${durationDisplay}</span></span>
+                                    <span class="recent-stat"><span class="recent-stat-label">Characters</span><span class="recent-stat-value${charsClass}">${(session.characters || 0).toLocaleString()}</span></span>
+                                    <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span><span class="recent-stat-value">${speed.toLocaleString().replace(/\s/g, '')}/h</span></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `;
