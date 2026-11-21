@@ -1610,6 +1610,7 @@ input[type="submit"]:focus-visible,
 .entry-title-text {
     display: inline-block;
     white-space: nowrap;
+    cursor: pointer;
 }
 
 /* The scroll only exists while the row is hovered. When the pointer leaves,
@@ -2471,11 +2472,11 @@ body.theme-wave .wave-bg {
    chart inside it is the dashboard's chart at the dashboard's width — a book
    read across three months needs the columns, not a squeezed copy. */
 .book-modal {
-    max-width: 1180px;
+    max-width: 1260px;
     /* The sheet holds the app's own 4:3 proportion, so the cover, the chart and
        the entry rows keep the same relationship they have on the dashboard.
        On a short window the viewport cap wins and the entries list scrolls. */
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 10;
     height: auto;
     max-height: 86vh;
     /* The sheet paints its own background to the edges; the shell only frames. */
@@ -2495,7 +2496,7 @@ body.theme-wave .wave-bg {
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: 400px minmax(0, 1fr);
     gap: 16px;
     padding: 16px;
     align-items: stretch;
@@ -2505,7 +2506,7 @@ body.theme-wave .wave-bg {
 .book-card {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
     padding: 16px;
     min-height: 0;
     /* A card shorter than its cover would clip the art; scrolling keeps the
@@ -2556,7 +2557,7 @@ body.theme-wave .wave-bg {
 
 .book-title {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 700;
     line-height: 1.35;
     color: var(--text-primary);
@@ -2568,6 +2569,7 @@ body.theme-wave .wave-bg {
     display: flex;
     flex-wrap: wrap;
     gap: 4px 12px;
+    justify-content: flex-end;
 }
 
 .book-credit {
@@ -2604,9 +2606,10 @@ body.theme-wave .wave-bg {
 .book-card-foot {
     margin-top: auto;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 12px;
-    align-items: flex-start;
+    align-items: flex-end;
+    justify-content: space-between;
 }
 
 .book-span {
@@ -2620,10 +2623,9 @@ body.theme-wave .wave-bg {
 .book-status {
     display: flex;
     align-items: center;
-    gap: 2px;
-    padding: 3px;
+    padding: 4px;
     border: 1px solid var(--border-color);
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(128, 128, 128, 0.05);
 }
 
@@ -2636,8 +2638,8 @@ body.theme-wave .wave-bg {
     font-weight: 700;
     letter-spacing: 0.08em;
     color: var(--text-muted);
-    padding: 5px 11px;
-    border-radius: 999px;
+    padding: 8px 8px;
+    border-radius: 4px;
     cursor: pointer;
     transition: color 0.15s ease, background 0.15s ease;
 }
@@ -2672,7 +2674,7 @@ body.theme-wave .wave-bg {
 
 /* Same card the dashboard mounts its chart in, at the same height. */
 .book-stats {
-    height: 380px;
+    flex: 1;
     flex-shrink: 0;
 }
 
@@ -2681,6 +2683,7 @@ body.theme-wave .wave-bg {
     min-height: 0;
     display: flex;
     flex-direction: column;
+    max-height: 280px;
 }
 
 .book-entries .entries-header {
@@ -2691,7 +2694,7 @@ body.theme-wave .wave-bg {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    scrollbar-width: thin;
+    scrollbar-width: none;
 }
 
 /* ===== AUDIOBOOK PLAYER (placeholder card) ===== */
@@ -3212,6 +3215,7 @@ body.theme-wave .wave-bg {
     border: 1px solid var(--border-color);
     border-radius: 10px;
     transition: all 0.2s ease;
+    cursor: pointer;
 }
 
 .recent-book:hover {
