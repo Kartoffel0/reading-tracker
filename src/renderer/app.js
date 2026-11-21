@@ -2496,9 +2496,6 @@ async function openBookModal(title) {
 
   document.getElementById('bookTitleText').textContent = title;
   document.getElementById('bookModalHeader').textContent = `DETAILS - ${title}`;
-  document.getElementById('bookSpan').textContent = first
-    ? `${first.replaceAll('-', ' ')} — ${last.replaceAll('-', ' ')}`
-    : 'Not started';
   document.getElementById('bookEntryCount').textContent =
     `${entries.length} session${entries.length === 1 ? '' : 's'}`;
   document.getElementById('bookStatus').dataset.title = title;
@@ -2517,6 +2514,7 @@ async function openBookModal(title) {
   };
   setBookCredits(book);
   setBookStatus(book.status);
+  setBookKind(book.kind || 'book');
 
   const body = document.getElementById('bookStatsBody');
   if (first) {
@@ -2569,6 +2567,14 @@ async function deleteBookSession(dateKey, sessionId) {
 function setBookStatus(status) {
   for (const btn of document.querySelectorAll('#bookStatus .book-status-btn')) {
     btn.classList.toggle('active', btn.dataset.status === status);
+  }
+}
+
+// The selector reads LN / VN; the row keeps the shelf vocabulary the rest of the
+// code uses (book | vn), so only this mapping knows the UI word for it.
+function setBookKind(kind) {
+  for (const btn of document.querySelectorAll('#bookKind .book-status-btn')) {
+    btn.classList.toggle('active', btn.dataset.kind === kind);
   }
 }
 
@@ -2644,6 +2650,17 @@ function editBookCredit(field) {
     });
     if (book) setBookStatus(book.status);
   });
+  document.getElementById('bookKind').addEventListener('click', async (event) => {
+    const btn = event.target.closest('.book-status-btn');
+    if (!btn) return;
+    const title = status.dataset.title;
+    if (!title) return;
+    const book = await window.electronAPI.updateBook(title, {
+      kind: btn.dataset.kind,
+    });
+    if (book) setBookKind(book.kind);
+  });
+
   // Author and series are spans with a button role, so they need the keyboard
   // to behave like one.
   for (const [id, field] of [

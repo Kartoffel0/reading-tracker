@@ -398,6 +398,9 @@ function openDatabase() {
     CREATE TABLE IF NOT EXISTS books (
       title      TEXT PRIMARY KEY,
       kind       TEXT NOT NULL DEFAULT 'book',
+      -- 1 once a human picked the shelf with the LN/VN selector; derivation
+      -- stops touching it from then on.
+      kind_manual INTEGER NOT NULL DEFAULT 0,
       is_audio   INTEGER NOT NULL DEFAULT 0,
       status     TEXT NOT NULL DEFAULT 'reading',
       added_at   TEXT NOT NULL,
@@ -426,6 +429,8 @@ function openDatabase() {
   );
   if (!bookColumns.has('author'))
     db.exec('ALTER TABLE books ADD COLUMN author TEXT');
+  if (!bookColumns.has('kind_manual'))
+    db.exec('ALTER TABLE books ADD COLUMN kind_manual INTEGER NOT NULL DEFAULT 0');
   if (!bookColumns.has('series'))
     db.exec('ALTER TABLE books ADD COLUMN series TEXT');
 
@@ -457,6 +462,8 @@ function openDatabase() {
 // writes a session, so the table cannot drift from the sessions it describes.
 // kind only ever escalates to 'vn' and the audio flag only ever turns on: a
 // session cannot prove a book is *not* an audiobook, only that it is.
+// A shelf someone picked by hand is never rewritten: the sessions guessed once,
+// the human knows.
 function recordBookForSession(title, media, date) {
   if (!title) return;
   const kind = media === 'vn' ? 'vn' : 'book';
@@ -465,7 +472,9 @@ function recordBookForSession(title, media, date) {
     `INSERT INTO books (title, kind, is_audio, added_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(title) DO UPDATE SET
-       kind     = CASE WHEN excluded.kind = 'vn' THEN 'vn' ELSE books.kind END,
+       kind     = CASE WHEN books.kind_manual = 1 THEN books.kind
+                       WHEN excluded.kind = 'vn' THEN 'vn'
+                       ELSE books.kind END,
        is_audio = MAX(books.is_audio, excluded.is_audio),
        added_at = MIN(books.added_at, excluded.added_at)`,
   ).run(title, kind, isAudio, date || new Date().toISOString().slice(0, 10));
@@ -840,6 +849,7 @@ app.whenReady().then(() => {
   });
 
   const BOOK_STATUSES = new Set(['reading', 'read', 'dropped']);
+  const BOOK_KINDS = new Set(['book', 'vn']);
 
   ipcMain.handle('update-book', (_, title, patch = {}) => {
     const fields = [];
@@ -847,6 +857,13 @@ app.whenReady().then(() => {
     if (BOOK_STATUSES.has(patch.status)) {
       fields.push('status = ?');
       values.push(patch.status);
+    }
+    // The selector says LN or VN; the column stays the shelf vocabulary the rest
+    // of the code reads (book | vn), so nothing downstream has to learn a third
+    // word for the same thing.
+    if (BOOK_KINDS.has(patch.kind)) {
+      fields.push('kind = ?', 'kind_manual = 1');
+      values.push(patch.kind);
     }
     for (const key of ['author', 'series']) {
       if (typeof patch[key] !== 'string') continue;
