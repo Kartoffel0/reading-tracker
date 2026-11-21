@@ -721,13 +721,6 @@ function fetchAllData() {
 
 
 
-// Keeps the activity-map cells square with an identical gap on every side:
-// computes the largest square that fits the card, then widens the gap evenly
-// using whatever space is left over on both axes.
-
-
-
-
 
 
 // ===== Dashboard Cards =====
