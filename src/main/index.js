@@ -384,7 +384,64 @@ function openDatabase() {
   // it on sight, which scrubs it out of older backups when they get restored.
   db.exec('DROP TABLE IF EXISTS migration_flag;');
 
+  // ===== Books =====
+  //
+  // One row per title, keyed exactly like sessions so nothing has to be joined
+  // through a foreign key. Sessions keep working if a books row goes missing, so
+  // this table is additive: it exists so a book can be owned before it is read.
+  //
+  // `kind` is the shelf axis (book | vn). Audiobook is NOT a kind: an audiobook
+  // is still the same book, just a copy you can listen to, and the flag matters
+  // only to the audiobook player. A title logged as voicing therefore keeps
+  // kind='book' and carries is_audio=1.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS books (
+      title      TEXT PRIMARY KEY,
+      kind       TEXT NOT NULL DEFAULT 'book',
+      is_audio   INTEGER NOT NULL DEFAULT 0,
+      status     TEXT NOT NULL DEFAULT 'active',
+      added_at   TEXT NOT NULL,
+      cover      TEXT,
+      audio_path TEXT,
+      position   REAL DEFAULT 0,
+      rate       REAL DEFAULT 1.0
+    );
+  `);
+
+  // Backfill is idempotent rather than a one-shot: a fresh file, an old backup
+  // restored over the live one, and a data.db dropped in by hand all arrive with
+  // sessions but no books rows. Titles already owned are left alone, so a
+  // manually added book never gets its kind overwritten by its first session.
+  db.exec(`
+    INSERT INTO books (title, kind, is_audio, added_at)
+    SELECT title,
+           CASE WHEN SUM(media = 'vn') > 0 THEN 'vn' ELSE 'book' END,
+           CASE WHEN SUM(media = 'audiobook') > 0 THEN 1 ELSE 0 END,
+           MIN(date)
+      FROM sessions
+     WHERE title NOT IN (SELECT title FROM books) AND title IS NOT NULL AND title <> ''
+     GROUP BY title;
+  `);
+
   return db;
+}
+
+// Keeps a session's title known to the library. Called from every path that
+// writes a session, so the table cannot drift from the sessions it describes.
+// kind only ever escalates to 'vn' and the audio flag only ever turns on: a
+// session cannot prove a book is *not* an audiobook, only that it is.
+function recordBookForSession(title, media, date) {
+  if (!title) return;
+  const kind = media === 'vn' ? 'vn' : 'book';
+  const isAudio = media === 'audiobook' ? 1 : 0;
+  db.prepare(
+    `INSERT INTO books (title, kind, is_audio, added_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(title) DO UPDATE SET
+       kind     = CASE WHEN excluded.kind = 'vn' THEN 'vn' ELSE books.kind END,
+       is_audio = MAX(books.is_audio, excluded.is_audio),
+       added_at = MIN(books.added_at, excluded.added_at)`,
+  ).run(title, kind, isAudio, date || new Date().toISOString().slice(0, 10));
 }
 
 // ─── Automatic database backups ──────────────────────────────────────────────
@@ -558,6 +615,7 @@ app.whenReady().then(() => {
         session.end_at || null,
         session.media || 'book',
       );
+      recordBookForSession(session.title, session.media, session.date);
       return { success: true, duplicated: false };
     } catch (error) {
       return { success: false, error: error.message };
@@ -586,6 +644,7 @@ app.whenReady().then(() => {
             session.end_at || null,
             session.media || 'book',
           );
+          recordBookForSession(session.title, session.media, session.date);
           successCount++;
         } catch (err) {
           errors.push({ row: session, error: err.message });
@@ -1133,6 +1192,7 @@ app.whenReady().then(() => {
           session.end_at || null,
           session.media || 'book',
         );
+        recordBookForSession(session.title, session.media, session.date);
         inserted++;
       } catch (e) {
         skipped++;
