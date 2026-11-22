@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
-const { readAudiobookMeta, findAudiobooks, findSubtitles } = require('./mp4');
+const { readAudiobookMeta, findAudioLibrary, findSubtitles } = require('./mp4');
 
 let mainWindow;
 let db = null;
@@ -452,6 +452,11 @@ function openDatabase() {
   // so both halves — where in the book, and when — belong on the row.
   if (!bookColumns.has('session_started_at'))
     db.exec('ALTER TABLE books ADD COLUMN session_started_at INTEGER');
+  // The .srt the scan matched to this book, by filename. Kept on the row so the
+  // player reads the file the scan chose instead of searching the disk on every
+  // load — and so a subtitle sitting in a folder of its own is still found.
+  if (!bookColumns.has('subs_path'))
+    db.exec('ALTER TABLE books ADD COLUMN subs_path TEXT');
 
 
   // The shelf has exactly three states, and they name what you are doing with
@@ -1026,18 +1031,39 @@ app.whenReady().then(() => {
     return result.filePaths[0];
   });
 
-  // Imports every audiobook under a folder. Rows that already exist keep their
-  // placement and their cover; only the file facts are refreshed, so importing
-  // the same folder twice is a no-op rather than a duplicate shelf.
-  ipcMain.handle('audio:import-folder', (_, folder) => {
-    const dir = typeof folder === 'string' ? folder.trim() : '';
-    if (!dir || !fs.existsSync(dir)) return { success: false, error: 'folder not found' };
-    // Remembered before the scan: an empty folder is still a place the user
-    // pointed at, and the list in Settings is how they notice it is empty.
-    rememberAudioFolder(dir);
-    const files = findAudiobooks(dir);
-    if (!files.length) return { success: true, imported: [], folder: dir };
+  // ─── Scanning ────────────────────────────────────────────────────────────
+  //
+  // A scan walks every remembered folder and does both jobs in one pass: the
+  // .m4b files become rows, and the .srt files are pinned to the book whose
+  // *filename* they share. The two kinds are allowed to live in different
+  // folders — a subtitle pack usually does — so the pool searched for a match is
+  // every .srt from every folder, not the ones sitting beside the file.
+  //
+  // Nothing is ever deleted: a book whose file went away keeps its row, and a
+  // subtitle that went away only clears its own pointer.
 
+  function collectAudioFiles(folders) {
+    const audio = [];
+    const srts = [];
+    const missing = [];
+    for (const dir of folders) {
+      if (!fs.existsSync(dir)) {
+        missing.push(dir);
+        continue;
+      }
+      const found = findAudioLibrary(dir);
+      audio.push(...found.audio);
+      srts.push(...found.subtitles);
+    }
+    return { audio, srts, missing };
+  }
+
+  // Rows that already exist keep their placement and their cover. A book that is
+  // already pointing at this exact file is left alone: re-reading the atoms of
+  // every audiobook on every launch would make startup scale with the library
+  // for facts that have not moved.
+  function importAudioFiles(files, srts) {
+    const byPath = db.prepare('SELECT title FROM books WHERE audio_path = ?');
     const select = db.prepare('SELECT * FROM books WHERE title = ?');
     const insert = db.prepare(
       `INSERT INTO books (title, kind, kind_manual, is_audio, status, added_at, author, audio_path, audio_duration, position, rate)
@@ -1048,30 +1074,68 @@ app.whenReady().then(() => {
                         author = COALESCE(author, ?)
         WHERE title = ?`,
     );
+    const pinSubs = db.prepare('UPDATE books SET subs_path = ? WHERE title = ?');
 
     const imported = [];
-    const run = db.transaction(() => {
+    const added = [];
+    const pinned = [];
+
+    db.transaction(() => {
       for (const file of files) {
-        const meta = readAudiobookMeta(file);
-        const title = meta.title || meta.album || titleFromAudioFile(file);
-        if (!title) continue;
-        const existing = select.get(title);
-        if (existing) refresh.run(file, meta.duration || null, meta.artist || null, title);
-        else
-          insert.run(
-            title,
-            new Date().toISOString().slice(0, 10),
-            meta.artist || null,
-            file,
-            meta.duration || null,
-          );
-        storeCoverArt(title, meta.cover);
-        imported.push({ title, path: file, duration: meta.duration, chapters: meta.chapters.length });
+        const known = byPath.get(file);
+        let title = known ? known.title : null;
+        let isNew = false;
+
+        if (!known) {
+          const meta = readAudiobookMeta(file);
+          title = meta.title || meta.album || titleFromAudioFile(file);
+          if (!title) continue;
+          const existing = select.get(title);
+          if (existing) refresh.run(file, meta.duration || null, meta.artist || null, title);
+          else {
+            insert.run(
+              title,
+              new Date().toISOString().slice(0, 10),
+              meta.artist || null,
+              file,
+              meta.duration || null,
+            );
+            added.push(title);
+            isNew = true;
+          }
+          storeCoverArt(title, meta.cover);
+        }
+
+        // Pinned either way: a subtitle added to a folder the book has never
+        // been near still has to reach it.
+        const srt = findSubtitles(file, srts);
+        pinSubs.run(srt, title);
+        if (srt) pinned.push({ title, srt });
+        imported.push({ title, path: file, isNew });
       }
-    });
-    run();
+    })();
+
     audioMetaCache.clear();
-    return { success: true, imported, folder: dir };
+    return { imported, added, pinned };
+  }
+
+  // Startup and "a folder was just added" run the same pass, deliberately: two
+  // code paths would eventually disagree about what a scan means.
+  function runAudioScan() {
+    const folders = readAudioFolders();
+    const { audio, srts, missing } = collectAudioFiles(folders);
+    return { folders, missing, ...importAudioFiles(audio, srts) };
+  }
+
+  ipcMain.handle('audio:scan', () => runAudioScan());
+
+  ipcMain.handle('audio:import-folder', (_, folder) => {
+    const dir = typeof folder === 'string' ? folder.trim() : '';
+    if (!dir || !fs.existsSync(dir)) return { success: false, error: 'folder not found' };
+    // Remembered before the scan: an empty folder is still a place the user
+    // pointed at, and the list in Settings is how they notice it is empty.
+    rememberAudioFolder(dir);
+    return { success: true, folder: dir, ...runAudioScan() };
   });
 
   // The shelf of audiobooks only: books with a file, ordered by what you were
@@ -1146,13 +1210,24 @@ app.whenReady().then(() => {
   // SRT is parsed there, but the bytes arrive here. 8,456 cues is ~700 KB, so it
   // is one round trip and nothing streams.
   ipcMain.handle('audio:subtitles', (_, title) => {
-    const row = db.prepare('SELECT audio_path FROM books WHERE title = ?').get(title);
+    const row = db
+      .prepare('SELECT audio_path, subs_path FROM books WHERE title = ?')
+      .get(title);
     if (!row || !row.audio_path) return null;
-    let srtPath = null;
-    try {
-      srtPath = findSubtitles(row.audio_path);
-    } catch {
-      return null;
+    // The scan's pin first — that is what finds a pack in another folder. A row
+    // without one still looks beside its own file, so a subtitle dropped in
+    // after the last scan is not invisible until the next launch.
+    let srtPath =
+      row.subs_path && fs.existsSync(row.subs_path) ? row.subs_path : null;
+    if (!srtPath) {
+      try {
+        srtPath = findSubtitles(row.audio_path);
+      } catch {
+        return null;
+      }
+      if (srtPath) {
+        db.prepare('UPDATE books SET subs_path = ? WHERE title = ?').run(srtPath, title);
+      }
     }
     if (!srtPath) return null;
     try {

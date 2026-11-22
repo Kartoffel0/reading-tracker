@@ -4841,8 +4841,10 @@ function abSavePrefs() {
 }
 
 // ─── Import ────────────────────────────────────────────────────────────────
-async function abImportFolder() {
-  const folder = await window.electronAPI.pickAudioFolder?.();
+// `picked` is for callers that already hold a path; the buttons pass nothing and
+// get the folder dialog.
+async function abImportFolder(picked) {
+  const folder = picked || (await window.electronAPI.pickAudioFolder?.());
   if (!folder) return null;
   const result = await window.electronAPI.importAudioFolder?.(folder);
   if (!result?.success) {
@@ -4854,17 +4856,44 @@ async function abImportFolder() {
     return null;
   }
   await renderLibrary();
-  const titles = result.imported.map((b) => b.title);
-  showToast(
-    titles.length === 1
-      ? `✓ Imported ${titles[0]}`
-      : `✓ Imported ${titles.length} audiobooks`,
-  );
+  // `added` is the titles this scan had never seen; the rest of the folder was
+  // already on the shelf, which is not the same thing as an import.
+  const fresh = result.added || [];
+  const matched = (result.pinned || []).length;
+  if (fresh.length) {
+    showToast(
+      fresh.length === 1 ? `✓ Imported ${fresh[0]}` : `✓ Imported ${fresh.length} new audiobooks`,
+    );
+  } else {
+    showToast(
+      matched
+        ? `✓ Folder scanned — ${matched} subtitle${matched === 1 ? '' : 's'} matched`
+        : '✓ Folder already up to date',
+    );
+  }
   const shelf = (await window.electronAPI.listAudiobooks?.()) || [];
   const first =
-    shelf.find((b) => result.imported.some((row) => row.title === b.title)) || shelf[0];
+    shelf.find((b) => fresh.includes(b.title)) ||
+    shelf.find((b) => b.title === ab.book?.title) ||
+    shelf[0];
   if (first) await abLoadBook(first);
   return result;
+}
+
+// Once per launch, and silent unless it found something: a new .m4b or an .srt
+// dropped into a remembered folder should land without opening Settings. The
+// renderer runs it, not main, because the result has to reach the library and
+// the player — the same IPC the Add New button calls.
+async function scanAudioFoldersOnce() {
+  const summary = await window.electronAPI.scanAudioFolders?.();
+  if (!summary) return;
+  const added = summary.added?.length || 0;
+  const matched = summary.pinned?.length || 0;
+  if (!added && !matched) return;
+  await renderLibrary();
+  if (added) {
+    showToast(`✓ ${added} new audiobook${added === 1 ? '' : 's'} found in your folders`);
+  }
 }
 
 // The book sheet's LISTEN button: drawn only for a title that has an .m4b, and
@@ -4979,6 +5008,9 @@ async function abBoot() {
   window.addEventListener('beforeunload', () => abSaveProgress(true));
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Before the player picks its resume point: a folder that gained a file since
+  // the last launch has to be in the shelf the boot reads.
+  await scanAudioFoldersOnce();
   abBoot();
 });

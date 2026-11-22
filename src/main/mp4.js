@@ -175,43 +175,66 @@ function readAudiobookMeta(filePath) {
   return meta;
 }
 
-/** Every .m4b under `dir`, recursively, in a stable order. */
-function findAudiobooks(dir, depth = 0) {
-  const found = [];
-  if (depth > 6) return found;
+/**
+ * Every .m4b and every .srt under `dir`, recursively, in a stable order.
+ *
+ * One walk, both kinds: an audiobook and its subtitle sidecar live side by side,
+ * and a scan looking for only one of them would have to pay for the directory
+ * listing twice. The .srt list is what makes a folder of subtitles worth
+ * scanning — a book imported earlier can pick up a subtitle added later.
+ */
+function findAudioLibrary(dir, depth = 0, acc = { audio: [], subtitles: [] }) {
+  if (depth > 6) return acc;
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
-    return found;
+    return acc;
   }
   entries.sort((a, b) => a.name.localeCompare(b.name));
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
     const full = require('path').join(dir, entry.name);
-    if (entry.isDirectory()) found.push(...findAudiobooks(full, depth + 1));
-    else if (/\.m4b$/i.test(entry.name)) found.push(full);
+    if (entry.isDirectory()) findAudioLibrary(full, depth + 1, acc);
+    else if (/\.m4b$/i.test(entry.name)) acc.audio.push(full);
+    else if (/\.srt$/i.test(entry.name)) acc.subtitles.push(full);
   }
-  return found;
+  return acc;
 }
 
 /**
- * The subtitle file that belongs to an audiobook: the sidecar with the same
- * name, or else the only .srt sitting beside it. Returns the path or null.
+ * The subtitle file that belongs to an audiobook, matched by filename: the .srt
+ * with the same basename, or one that extends it with a tag (`book.ja.srt`).
+ *
+ * `pool` is every .srt path the caller knows about — a scan passes the whole
+ * library, because a subtitle pack usually sits in a folder of its own and the
+ * filename is the only thing tying it to a book. Without a pool the search is
+ * limited to the files beside the audiobook.
+ *
+ * There is deliberately no guessing beyond that. A "the only .srt in this
+ * folder" rule reads well until a shelf folder holds four books and one of them
+ * has subtitles: the other three then inherit it. No match is the honest answer.
  */
-function findSubtitles(audioPath) {
+function findSubtitles(audioPath, pool) {
   const path = require('path');
   const dir = path.dirname(audioPath);
-  const base = path.basename(audioPath, path.extname(audioPath));
-  const sameName = path.join(dir, `${base}.srt`);
-  if (fs.existsSync(sameName)) return sameName;
-  const candidates = fs.readdirSync(dir).filter((name) => /\.srt$/i.test(name));
-  if (candidates.length === 1) return path.join(dir, candidates[0]);
-  // Several subtitle files and none named after the book: match on the first
-  // significant word so "[author] title [asin].srt" still pairs up.
-  const marker = base.split(/[\s([\]]+/).filter(Boolean).pop() || '';
-  const hit = candidates.find((name) => marker && name.includes(marker));
-  return hit ? path.join(dir, hit) : null;
+  const base = path.basename(audioPath, path.extname(audioPath)).toLowerCase();
+  let srts = pool;
+  if (!srts) {
+    try {
+      srts = fs
+        .readdirSync(dir)
+        .filter((name) => /\.srt$/i.test(name))
+        .map((name) => path.join(dir, name));
+    } catch {
+      return null;
+    }
+  }
+  const hit = (srts || []).find((file) => {
+    const name = path.basename(file, path.extname(file)).toLowerCase();
+    return name === base || name.startsWith(`${base}.`);
+  });
+  return hit || null;
 }
 
-module.exports = { readAudiobookMeta, findAudiobooks, findSubtitles };
+module.exports = { readAudiobookMeta, findAudioLibrary, findSubtitles };
