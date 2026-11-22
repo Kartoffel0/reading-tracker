@@ -915,6 +915,24 @@ button.theme-select {
     color: var(--accent-primary);
 }
 
+/* A gradient under a transparent 1px border is positioned in the *padding* box
+   by default while it is clipped to the border box, so the border ring shows a
+   shifted slice of the gradient: one bright pixel around the whole button that
+   looks like a second button stacked behind it. Sharing the border box puts the
+   paint and the clip in the same coordinate space. */
+.clock-btn,
+.btn-action,
+.sync-footer-btn {
+    background-origin: border-box;
+}
+
+/* The shared focus style recolours a button's 1px border. On this one the border
+   is the gradient's own edge, so recolouring it draws a second line inside the
+   first; keep the soft ring and leave the border alone. */
+.clock-btn:focus-visible {
+    border-color: transparent;
+}
+
 .panel {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -1464,7 +1482,12 @@ input[type="submit"]:focus-visible,
 [role="button"]:focus-visible {
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 2px var(--accent-primary-glow);
-    outline-color: var(--accent-primary);
+    /* Colour alone is not enough: with `outline-style: auto` Chromium paints its
+       own white focus ring and ignores the colour, which on a dark theme reads as
+       a bright band stuck to the button. A real outline is drawn in the theme's
+       accent and offset off the edge. */
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
 }
 
 .btn-secondary {
