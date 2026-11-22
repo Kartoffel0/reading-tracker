@@ -532,7 +532,7 @@ button.theme-select {
 
 .library-header {
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
     gap: 12px;
 }
 
@@ -558,8 +558,8 @@ button.theme-select {
     scrollbar-width: thin;
     /* Room for the hover scale, which spills past a tile's own box; without it
        the first and last columns lose a pixel of glow to the scroll edge. */
-    padding: 4px 6px 8px;
-    margin: -4px -6px -8px;
+    padding: 24px 24px 24px;
+    margin: -24px -24px -24px;
 }
 
 .library-grid {
@@ -567,14 +567,15 @@ button.theme-select {
     flex-wrap: wrap;
     align-content: flex-start;
     gap: 16px;
+    justify-content: space-between;
 }
 
 /* One book. Height is the anchor and the width is the cover's own 2:3, which
    keeps every row on a single baseline whatever the titles are. */
 .lib-item {
     position: relative;
-    height: 250px;
-    width: 167px;
+    height: 260px;
+    width: auto;
     flex: 0 0 auto;
     padding: 0;
     border: none;
@@ -595,7 +596,7 @@ button.theme-select {
 
 .lib-cover {
     display: block;
-    width: 100%;
+    width: auto;
     height: 100%;
     object-fit: cover;
     border-radius: 10px;
@@ -678,6 +679,9 @@ button.theme-select {
    unfinished on purpose instead of missing something. */
 .lib-add {
     display: flex;
+    width: auto;
+    height: 260px;
+    aspect-ratio: 11/16;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -691,6 +695,7 @@ button.theme-select {
     font-weight: 600;
     letter-spacing: 0.14em;
     transition: color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    margin-right: auto;
 }
 
 .lib-add-plus {
@@ -745,6 +750,7 @@ button.theme-select {
     text-align: center;
     font-size: 0.72rem;
     color: var(--text-muted);
+    display: none;
 }
 
 /* Page selector (400 × 48) */
