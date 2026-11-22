@@ -4084,8 +4084,6 @@ function cancelLibraryAdd(form) {
 const AB_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2];
 const AB_SIZES = ['s', 'm', 'l'];
 const AB_SIZE_LABELS = { s: 'S', m: 'M', l: 'L' };
-// One second of media is the line between "a stray click" and "a listen".
-const AB_MIN_LOG_SECONDS = 1;
 
 const ab = {
   el: null,
