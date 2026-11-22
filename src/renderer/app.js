@@ -4100,6 +4100,11 @@ const ab = {
   // SESSION (which drops it) do.
   session: null,
   lastSaveAt: 0,
+  // How long the player may sit paused before the session files itself. Long
+  // enough that stepping away for a coffee does not end a listen, short enough
+  // that walking off does not leave a stopwatch running overnight.
+  idleLogMs: 10 * 60 * 1000,
+  idleTimer: null,
 };
 
 // ─── SRT ───────────────────────────────────────────────────────────────────
@@ -4444,6 +4449,28 @@ function abPaintSession() {
   if (clear) clear.disabled = !ab.session;
 }
 
+// A paused player is not a finished listen, but it is not a running one either:
+// past the idle window the session files itself and the button goes back to NEW
+// SESSION. Booting counts as paused — the audio never starts on its own.
+function abScheduleIdleLog() {
+  abCancelIdleLog();
+  if (!ab.session) return;
+  ab.idleTimer = setTimeout(() => {
+    ab.idleTimer = null;
+    // Still paused and still running: nothing came back to cancel it.
+    if (!ab.session) return;
+    if (ab.el && !ab.el.paused) return;
+    abLogSession({ auto: true });
+  }, ab.idleLogMs);
+}
+
+function abCancelIdleLog() {
+  if (ab.idleTimer) {
+    clearTimeout(ab.idleTimer);
+    ab.idleTimer = null;
+  }
+}
+
 // Starting writes both halves to the row: the stopwatch survives a restart the
 // same way the clock card's does.
 function abStartSession() {
@@ -4460,6 +4487,7 @@ function abStartSession() {
 // Clearing drops the session without filing it.
 function abClearSession() {
   if (!ab.session) return;
+  abCancelIdleLog();
   ab.session = null;
   if (ab.book) {
     window.electronAPI.saveAudioProgress?.(ab.book.title, {
@@ -4544,6 +4572,9 @@ async function abLoadBook(book, { autoplay = false } = {}) {
   el.playbackRate = Math.min(2, Math.max(0.5, book.rate || 1));
   abPaintAll();
   abPaintChapters();
+  // A session restored from the row arrives paused, so its idle countdown
+  // starts now rather than at whatever time it was left.
+  if (ab.session) abScheduleIdleLog();
 
   const resume = Number.isFinite(book.position) ? book.position : 0;
   const applyResume = () => {
@@ -4607,6 +4638,7 @@ function abCreateAudio() {
   });
 
   el.addEventListener('play', () => {
+    abCancelIdleLog();
     abPaintPlayState();
     abPaintMeta();
     abPaintSession();
@@ -4616,6 +4648,7 @@ function abCreateAudio() {
     abSaveProgress(true);
     abPaintPlayState();
     abPaintSession();
+    abScheduleIdleLog();
   });
 
   el.addEventListener('ratechange', abPaintConfig);
@@ -4625,6 +4658,7 @@ function abCreateAudio() {
     abPaintPlayState();
     abPaintSession();
     abPaintMeta();
+    abScheduleIdleLog();
   });
 
   el.addEventListener('error', () => {
@@ -4666,8 +4700,9 @@ function abIsoMinute(ms) {
 // Logging files the stopwatch: real time from the session's start to now, with
 // the wall clock written into the row exactly as the clock card does. It also
 // stops playback and drops the session, so the button goes back to NEW SESSION.
-async function abLogSession() {
+async function abLogSession({ auto = false } = {}) {
   if (!ab.book || !ab.session) return null;
+  abCancelIdleLog();
   const startedAt = ab.session.startedAt;
   const now = Date.now();
   const elapsedMs = Math.max(0, now - startedAt);
@@ -4695,7 +4730,9 @@ async function abLogSession() {
   showToast(
     result?.duplicated
       ? 'Already logged — same length, same day'
-      : `✓ Logged ${label} listened`,
+      : auto
+        ? `✓ Logged ${label} — player idle 10 min`
+        : `✓ Logged ${label} listened`,
   );
   await updateAll();
   return session;
@@ -4849,6 +4886,10 @@ async function abBoot() {
     scrub.addEventListener('pointerup', endDrag);
     scrub.addEventListener('pointercancel', endDrag);
   }
+
+  // Booting is a paused player: a session that survived the restart has its
+  // idle countdown start now, not an hour ago.
+  if (ab.session) abScheduleIdleLog();
 
   // The stopwatch ticks on its own clock: `timeupdate` only fires while audio is
   // playing, and a paused session still has a running duration.
