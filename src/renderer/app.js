@@ -4083,12 +4083,9 @@ function cancelLibraryAdd(form) {
 
 const AB_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2];
 const AB_SIZES = ['s', 'm', 'l'];
-const AB_LOOPS = ['off', 'book', 'chapter'];
-const AB_LOOP_LABELS = { off: 'Loop off', book: 'Loop book', chapter: 'Loop chapter' };
-const AB_SLEEP_STEPS = [0, 15, 30, 45, 60];
-// A stop shorter than this is a mis-click on the play button, not a listen:
-// logging it would put a 4-second row in the entries list for nothing.
-const AB_MIN_LOG_SECONDS = 30;
+const AB_SIZE_LABELS = { s: 'S', m: 'M', l: 'L' };
+// One second of media is the line between "a stray click" and "a listen".
+const AB_MIN_LOG_SECONDS = 1;
 
 const ab = {
   el: null,
@@ -4098,12 +4095,8 @@ const ab = {
   chapters: [],
   duration: 0,
   subs: { on: true, size: 'm' },
-  loop: 'off',
-  sleepMinutes: 0,
-  sleepAt: 0,
   session: null,
   lastSaveAt: 0,
-  seekTarget: null,
 };
 
 // ─── SRT ───────────────────────────────────────────────────────────────────
@@ -4202,12 +4195,10 @@ function abPaintStage() {
 function abPaintMeta() {
   const titleEl = abNode('abTitle');
   const metaEl = abNode('abMeta');
-  const noteEl = abNode('abHeadNote');
   if (!titleEl) return;
   if (!ab.book) {
     titleEl.textContent = 'Nothing loaded';
     metaEl.textContent = '';
-    if (noteEl) noteEl.textContent = '';
     return;
   }
   titleEl.textContent = ab.book.title;
@@ -4221,13 +4212,6 @@ function abPaintMeta() {
   }
   if (ab.duration) bits.push(abFormatClock(ab.duration));
   metaEl.textContent = bits.join(' · ');
-  // The header note is the one fact about the *file* worth a glance: how many
-  // chapters it has. A subtitle line count is bookkeeping the eye skips.
-  if (noteEl) {
-    noteEl.textContent = ab.chapters.length
-      ? `${ab.chapters.length} chapter${ab.chapters.length === 1 ? '' : 's'}`
-      : '';
-  }
 }
 
 function abPaintProgress() {
@@ -4277,32 +4261,83 @@ function abPaintPlayState() {
   btn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
 }
 
-function abPaintTransportState() {
-  const rate = abNode('abRate');
-  if (rate) rate.textContent = `${(ab.el?.playbackRate || 1).toFixed(2).replace(/0$/, '')}×`;
-  const loop = abNode('abLoop');
-  if (loop) {
-    loop.textContent = AB_LOOP_LABELS[ab.loop];
-    loop.classList.toggle('is-on', ab.loop !== 'off');
+// Build one segmented control: options are [value, label] pairs.
+function abSegments(el, options, isActive, onPick) {
+  if (!el) return;
+  el.innerHTML = '';
+  for (const [value, label] of options) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ab-seg-btn';
+    btn.dataset.value = value;
+    btn.textContent = label;
+    btn.classList.toggle('is-on', isActive(value));
+    btn.addEventListener('click', () => {
+      onPick(value);
+      abPaintConfig();
+    });
+    el.appendChild(btn);
   }
-  const subsBtn = abNode('abSubsBtn');
-  if (subsBtn) {
-    subsBtn.textContent = ab.subs.on ? 'Subs on' : 'Subs off';
-    subsBtn.classList.toggle('is-on', ab.subs.on);
-  }
-  const size = abNode('abSize');
-  if (size) size.textContent = `Tt ${ab.subs.size.toUpperCase()}`;
-  const sleep = abNode('abSleep');
-  if (sleep) {
-    const left = ab.sleepAt ? Math.max(0, Math.ceil((ab.sleepAt - Date.now()) / 60000)) : 0;
-    sleep.textContent = ab.sleepAt ? `Sleep ${left}m` : 'Sleep';
-    sleep.classList.toggle('is-on', Boolean(ab.sleepAt));
-  }
+}
+
+function abBuildConfig() {
+  abSegments(
+    abNode('abCfgSpeed'),
+    AB_RATES.map((rate) => [rate, `${rate}×`]),
+    (value) => Math.abs((ab.el?.playbackRate || 1) - value) < 0.01,
+    (value) => {
+      if (!ab.el) return;
+      ab.el.playbackRate = value;
+      abPaintConfig();
+      abSaveProgress(true);
+    },
+  );
+  abSegments(
+    abNode('abCfgSubs'),
+    [['on', 'ON'], ['off', 'OFF']],
+    (value) => ab.subs.on === (value === 'on'),
+    (value) => {
+      ab.subs.on = value === 'on';
+      abSavePrefs();
+      abPaintConfig();
+    },
+  );
+  abSegments(
+    abNode('abCfgSize'),
+    AB_SIZES.map((size) => [size, AB_SIZE_LABELS[size]]),
+    (value) => ab.subs.size === value,
+    (value) => {
+      ab.subs.size = value;
+      abSavePrefs();
+      abPaintConfig();
+    },
+  );
+}
+
+function abPaintConfig() {
+  const paint = (el, isActive) => {
+    el?.querySelectorAll('.ab-seg-btn').forEach((btn) => {
+      btn.classList.toggle('is-on', isActive(btn.dataset.value));
+    });
+  };
+  paint(abNode('abCfgSpeed'), (value) => Math.abs((ab.el?.playbackRate || 1) - Number(value)) < 0.01);
+  paint(abNode('abCfgSubs'), (value) => ab.subs.on === (value === 'on'));
+  paint(abNode('abCfgSize'), (value) => ab.subs.size === value);
   const stage = abNode('abStage');
   if (stage) {
     stage.dataset.subs = ab.subs.on ? 'on' : 'off';
     stage.dataset.size = ab.subs.size;
   }
+}
+
+function abToggleConfig(force) {
+  const panel = abNode('abConfig');
+  const btn = abNode('abConfigBtn');
+  if (!panel) return;
+  const open = force === undefined ? panel.hidden : force;
+  panel.hidden = !open;
+  btn?.classList.toggle('is-open', open);
+  if (open) abToggleChapters(false);
 }
 
 function abPaintAll() {
@@ -4311,7 +4346,8 @@ function abPaintAll() {
   abPaintProgress();
   abPaintSubs();
   abPaintPlayState();
-  abPaintTransportState();
+  abPaintConfig();
+  abPaintLog();
 }
 
 // ─── Chapter list ──────────────────────────────────────────────────────────
@@ -4342,7 +4378,10 @@ function abToggleChapters(force) {
   if (!list) return;
   const open = force === undefined ? list.hidden : force;
   list.hidden = !open;
-  if (open) abPaintChapters();
+  if (open) {
+    abToggleConfig(false);
+    abPaintChapters();
+  }
 }
 
 // ─── Playback ──────────────────────────────────────────────────────────────
@@ -4362,16 +4401,44 @@ function abPendingSession() {
   return ab.session && ab.session.played >= AB_MIN_LOG_SECONDS ? ab.session : null;
 }
 
-function abShowLogButton() {
+// "2:06" while a listen is in progress — the session's own duration, not the
+// book's position. Hovering the pill swaps in the words that say what a click
+// does (CSS), so the label can be a clock without hiding the button's job.
+function abClockShort(seconds) {
+  const total = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  return h > 0 ? `${h}:${pad2(m)}:${pad2(sec)}` : `${m}:${pad2(sec)}`;
+}
+
+// The session band shows the listen; L is the button that files it.
+function abPaintLog() {
+  const band = abNode('abSession');
   const btn = abNode('abLog');
-  if (!btn) return;
-  const pending = abPendingSession();
-  btn.hidden = !pending;
-  if (pending) {
-    const minutes = Math.max(1, Math.round(pending.played / 60));
-    btn.textContent = `LOG ${formatDuration(minutes)}`;
-    btn.title = `Log ${minutes} minutes of listening`;
+  const played = ab.session ? ab.session.played : 0;
+  const has = Boolean(ab.session) && played >= AB_MIN_LOG_SECONDS;
+  // The band never collapses: it is the card's slack, and a card that changes
+  // height the moment a listen starts is worse than one with an empty slot.
+  if (band) band.classList.toggle('is-idle', !ab.session);
+  const time = abNode('abSessionTime');
+  if (time) time.textContent = abClockShort(played);
+  const since = abNode('abSessionSince');
+  if (since) {
+    since.textContent = ab.session
+      ? `playing since ${new Date(ab.session.startedAt).toTimeString().slice(0, 5)}`
+      : '';
   }
+  if (btn) {
+    btn.disabled = !has;
+    btn.title = has ? 'Log this listen' : 'Nothing to log yet';
+  }
+}
+
+// One repaint for everything the config panel can change.
+function abPaintAllControls() {
+  abPaintConfig();
+  abPaintLog();
 }
 
 function abStartSession() {
@@ -4445,7 +4512,7 @@ async function abLoadBook(book, { autoplay = false } = {}) {
   // Moving to another book ends the current listen. Anything worth keeping is
   // logged here rather than silently dropped by the switch.
   if (ab.book && ab.book.title !== book.title) {
-    await abLogSession({ silent: false, keepPlaying: false });
+    await abLogSession({ keepPlaying: false });
   }
   ab.book = book;
   ab.cues = [];
@@ -4469,7 +4536,7 @@ async function abLoadBook(book, { autoplay = false } = {}) {
     abPaintProgress();
     abPaintSubs();
     abPaintMeta();
-    abPaintTransportState();
+    abPaintConfig();
   };
   if (el.readyState >= 1) applyResume();
   else el.addEventListener('loadedmetadata', applyResume, { once: true });
@@ -4519,6 +4586,8 @@ function abCreateAudio() {
       abPaintMeta();
     }
     abPaintProgress();
+    // The session band counts this listen up, so it belongs on the same tick.
+    abPaintLog();
     abSaveProgress();
   });
 
@@ -4526,32 +4595,22 @@ function abCreateAudio() {
     abStartSession();
     abPaintPlayState();
     abPaintMeta();
+    abPaintLog();
   });
 
   el.addEventListener('pause', () => {
     abSaveProgress(true);
     abPaintPlayState();
-    abShowLogButton();
+    abPaintLog();
   });
 
-  el.addEventListener('ratechange', abPaintTransportState);
+  el.addEventListener('ratechange', abPaintConfig);
 
   el.addEventListener('ended', () => {
     abSaveProgress(true);
-    if (ab.loop === 'book') {
-      ab.el.currentTime = 0;
-      abStartSession();
-      ab.el.play().catch(() => {});
-      return;
-    }
-    if (ab.loop === 'chapter') {
-      const index = abChapterIndexAt(ab.duration - 1);
-      ab.el.currentTime = ab.chapters[index]?.t || 0;
-      ab.el.play().catch(() => {});
-      return;
-    }
     abPaintPlayState();
-    abShowLogButton();
+    abPaintLog();
+    abPaintMeta();
   });
 
   el.addEventListener('error', () => {
@@ -4590,11 +4649,11 @@ function abIsoMinute(ms) {
   );
 }
 
-async function abLogSession({ silent = false, keepPlaying = true } = {}) {
+async function abLogSession({ keepPlaying = true } = {}) {
   const pending = abPendingSession();
   if (!pending || !ab.book) {
     if (!keepPlaying) ab.session = null;
-    abShowLogButton();
+    abPaintLog();
     return null;
   }
   const playedSeconds = pending.played;
@@ -4611,28 +4670,30 @@ async function abLogSession({ silent = false, keepPlaying = true } = {}) {
     media: 'audiobook',
   };
   ab.session = null;
-  abShowLogButton();
+  abPaintLog();
   const result = await saveSession(session);
-  if (silent) {
-    if (result?.duplicated) showToast('Already logged — same length, same day');
-    else showToast(`✓ Logged ${formatDuration(Math.round(playedSeconds / 60))} listened`);
-  } else if (result?.duplicated) {
-    showToast('Already logged — same length, same day');
-  } else {
-    showToast(`✓ Logged ${formatDuration(Math.round(playedSeconds / 60))} listened`);
-  }
+  // A listen short enough to be under a minute still gets a sentence that says
+  // something: formatDuration would round it to "0m".
+  const label =
+    playedSeconds < 60
+      ? `${Math.round(playedSeconds)}s`
+      : formatDuration(Math.round(playedSeconds / 60));
+  showToast(
+    result?.duplicated
+      ? 'Already logged — same length, same day'
+      : `✓ Logged ${label} listened`,
+  );
   await updateAll();
   return session;
 }
 
-// ─── Preferences (subtitles + loop + sleep live in settings, rate per book) ─
+// ─── Preferences (subtitles live in settings, speed per book) ──────────────
 async function abLoadPrefs() {
   try {
     const settings = await window.electronAPI.getSettings();
     const saved = settings?.audio || {};
     if (typeof saved.subs === 'boolean') ab.subs.on = saved.subs;
     if (AB_SIZES.includes(saved.size)) ab.subs.size = saved.size;
-    if (AB_LOOPS.includes(saved.loop)) ab.loop = saved.loop;
   } catch {
     /* first run: the defaults above are the answer */
   }
@@ -4642,7 +4703,6 @@ function abSavePrefs() {
   window.electronAPI.updateSettings?.('audio', {
     subs: ab.subs.on,
     size: ab.subs.size,
-    loop: ab.loop,
   });
 }
 
@@ -4718,45 +4778,12 @@ async function abBoot() {
   });
   abNode('abPrevChapter')?.addEventListener('click', () => abSeekChapter(-1));
   abNode('abNextChapter')?.addEventListener('click', () => abSeekChapter(1));
-  abNode('abLog')?.addEventListener('click', () => abLogSession({ silent: true }));
+  abNode('abLog')?.addEventListener('click', () => abLogSession());
 
   abNode('abStageEmpty')?.addEventListener('click', () => abImportFolder());
 
-  abNode('abRate')?.addEventListener('click', () => {
-    if (!ab.el) return;
-    const index = AB_RATES.indexOf(Number(ab.el.playbackRate));
-    const next = AB_RATES[(index + 1) % AB_RATES.length];
-    ab.el.playbackRate = next;
-    abPaintTransportState();
-    abSaveProgress(true);
-  });
-
-  abNode('abSleep')?.addEventListener('click', () => {
-    const index = AB_SLEEP_STEPS.indexOf(ab.sleepMinutes);
-    ab.sleepMinutes = AB_SLEEP_STEPS[(index + 1) % AB_SLEEP_STEPS.length];
-    ab.sleepAt = ab.sleepMinutes ? Date.now() + ab.sleepMinutes * 60000 : 0;
-    abPaintTransportState();
-    if (ab.sleepMinutes) showToast(`Sleep timer: ${ab.sleepMinutes}m`);
-  });
-
-  abNode('abLoop')?.addEventListener('click', () => {
-    ab.loop = AB_LOOPS[(AB_LOOPS.indexOf(ab.loop) + 1) % AB_LOOPS.length];
-    abSavePrefs();
-    abPaintTransportState();
-  });
-
-  abNode('abSubsBtn')?.addEventListener('click', () => {
-    ab.subs.on = !ab.subs.on;
-    abSavePrefs();
-    abPaintTransportState();
-  });
-
-  abNode('abSize')?.addEventListener('click', () => {
-    ab.subs.size = AB_SIZES[(AB_SIZES.indexOf(ab.subs.size) + 1) % AB_SIZES.length];
-    abSavePrefs();
-    abPaintTransportState();
-  });
-
+  abBuildConfig();
+  abNode('abConfigBtn')?.addEventListener('click', () => abToggleConfig());
   abNode('abChapterBtn')?.addEventListener('click', () => abToggleChapters());
 
   abNode('abChapters')?.addEventListener('click', (event) => {
@@ -4797,32 +4824,21 @@ async function abBoot() {
     scrub.addEventListener('pointercancel', endDrag);
   }
 
-  // Closing the chapter panel: a click outside the card, or Escape.
+  // Both popovers close the same way: a pointer down on something that is not
+  // them, or Escape. They are never open at once — opening one closes the other.
   document.addEventListener('pointerdown', (event) => {
-    if (!abChaptersOpen()) return;
-    if (event.target.closest('#abChapters') || event.target.closest('#abChapterBtn')) {
-      return;
+    if (abChaptersOpen() && !event.target.closest('#abChapters') && !event.target.closest('#abChapterBtn')) {
+      abToggleChapters(false);
     }
-    abToggleChapters(false);
+    if (!abNode('abConfig')?.hidden && !event.target.closest('#abConfig') && !event.target.closest('#abConfigBtn')) {
+      abToggleConfig(false);
+    }
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && abChaptersOpen()) abToggleChapters(false);
+    if (event.key !== 'Escape') return;
+    if (abChaptersOpen()) abToggleChapters(false);
+    else if (!abNode('abConfig')?.hidden) abToggleConfig(false);
   });
-
-  // The sleep timer is the only clock in the player: it exists to stop
-  // playback, so it is checked once a second and does nothing until then.
-  setInterval(() => {
-    if (!ab.sleepAt) return;
-    abPaintTransportState();
-    if (Date.now() < ab.sleepAt) return;
-    ab.sleepAt = 0;
-    ab.sleepMinutes = 0;
-    if (ab.el && !ab.el.paused) {
-      ab.el.pause();
-      showToast('Sleep timer — playback stopped');
-    }
-    abPaintTransportState();
-  }, 1000);
 
   // Position is saved on a timer while playing, on pause, and here on the way
   // out — a window closed mid-chapter must not lose the last few minutes.

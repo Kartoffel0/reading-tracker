@@ -3092,17 +3092,35 @@ body.theme-wave .wave-bg {
 
 .ab-head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
 }
 
-.ab-head-note {
-    font-size: 0.6rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+.ab-head .card-title {
+    margin-bottom: 0;
+}
+
+/* The one door to everything that is not transport. */
+.ab-config-btn {
+    padding: 3px 7px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
     color: var(--text-muted);
+    font: inherit;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.ab-config-btn:hover,
+.ab-config-btn.is-open {
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }
 
 /* The stage: art contained over a blurred copy of itself, framed like a video
@@ -3110,9 +3128,12 @@ body.theme-wave .wave-bg {
    part of the stage and never covers the console. */
 .ab-stage {
     position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    border-radius: 12px;
+    /* Square, always: the art is a square as often as not, and a square frame
+       means the cover is never cropped to fit a shape the file does not have. */
+    aspect-ratio: 1 / 1;
+    flex: 0 0 auto;
+    width: 100%;
+    border-radius: 10px;
     overflow: hidden;
     background: var(--bg-secondary);
     isolation: isolate;
@@ -3330,9 +3351,10 @@ body.theme-wave .wave-bg {
     width: 34px;
     height: 34px;
     padding: 0;
-    border-radius: 50%;
+    /* The app has no circles: every control is a rounded rectangle. */
+    border-radius: 9px;
     border: 1px solid var(--border-color);
-    background: transparent;
+    background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
     color: var(--text-secondary);
     font: inherit;
     cursor: pointer;
@@ -3352,16 +3374,16 @@ body.theme-wave .wave-bg {
 
 .ab-btn-seek {
     width: 38px;
-    border-radius: 12px;
     font-size: 0.62rem;
     font-weight: 600;
     letter-spacing: 0.02em;
 }
 
 .ab-btn-play {
-    width: 46px;
-    height: 46px;
+    width: 44px;
+    height: 44px;
     border-color: transparent;
+    border-radius: 11px;
     background: var(--accent-primary);
     color: #fff;
 }
@@ -3383,77 +3405,148 @@ body.theme-wave .wave-bg {
 .ab-btn-play.is-playing .ab-icon-play { display: none; }
 .ab-btn-play.is-playing .ab-icon-pause { display: block; }
 
-/* Appears the moment playback stops with something worth logging, beside the
-   button that stopped it. */
-.ab-log-btn {
-    padding: 0 10px;
-    height: 30px;
-    border-radius: 15px;
-    border: 1px solid color-mix(in srgb, var(--accent-primary) 45%, transparent);
-    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-    color: var(--accent-primary);
-    font-size: 0.58rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.ab-log-btn:hover {
-    background: color-mix(in srgb, var(--accent-primary) 22%, transparent);
-}
-
-.ab-pills {
+/* The session band: the listen, not the book. A fixed slot so the card does
+   not breathe when a session starts or is logged. */
+.ab-session {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.ab-pill {
-    padding: 0 8px;
-    height: 24px;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    background: transparent;
+    /* The only slack in the card: the stage is a fixed square, so whatever
+       height is left over lands here, above the scrubber. */
+    align-items: flex-end;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-height: 44px;
+    padding: 0 2px 6px;
     color: var(--text-secondary);
-    font: inherit;
-    font-size: 0.62rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    cursor: pointer;
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
-    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.ab-pill:hover {
-    color: var(--text-primary);
-    border-color: var(--border-hover);
+/* Nothing to report yet: the slot stays, its contents step back. */
+.ab-session.is-idle {
+    opacity: 0;
 }
 
-.ab-pill.is-on {
+.ab-session-clock {
+    width: 13px;
+    height: 13px;
+    display: block;
     color: var(--accent-primary);
-    border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
-    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    flex: 0 0 auto;
 }
 
-/* Chapter list: a panel inside the card, over the stage, not a modal — the
-   player must stay playable while you look for a chapter. */
-.ab-chapters {
+.ab-session-time {
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+}
+
+.ab-session-since {
+    font-size: 0.64rem;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* C and L: the two outer buttons, a letter each until they get their icons. */
+.ab-btn-side {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.ab-btn-side:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Quick settings: exactly the cover's box, laid over it. Same surface as the
+   chapter list — opaque, because it sits on a picture. */
+.ab-config {
     position: absolute;
-    inset: 40px 0 8px 0;
-    z-index: 5;
+    inset: 0;
+    z-index: 25;
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    gap: 20px;
+    padding: 20px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+}
+
+.ab-config[hidden] {
+    display: none;
+}
+
+/* Label over control: the panel is as wide as the cover, so each row gets the
+   whole width and the six speed stops split it evenly. */
+.ab-config-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+}
+
+.ab-config-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+}
+
+.ab-seg {
+    display: flex;
     gap: 2px;
-    padding: 6px;
-    border-radius: 12px;
+    padding: 3px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+    width: 100%;
+}
+
+.ab-seg-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 4px;
+    height: 28px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.6rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.ab-seg-btn:hover {
+    color: var(--text-primary);
+}
+
+.ab-seg-btn.is-on {
+    background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+    color: var(--accent-primary);
+}
+
+/* Chapter list: a child of the stage, so it covers the cover and the
+   subtitles and nothing else. The transport stays playable underneath. */
+.ab-chapters {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 8px;
+    border-radius: 10px;
     border: 1px solid var(--border-color);
     /* Opaque on purpose: the list sits over cover art, and a translucent one
        let the art read through the chapter names. Everything else in the app
        can be glass because nothing legible sits on top of an image. */
     background: var(--bg-primary);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
     overflow-y: auto;
     scrollbar-width: thin;
 }
@@ -3467,9 +3560,9 @@ body.theme-wave .wave-bg {
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
-    padding: 6px 8px;
+    padding: 7px 9px;
     border: 0;
-    border-radius: 8px;
+    border-radius: 6px;
     background: transparent;
     color: var(--text-secondary);
     font: inherit;

@@ -191,7 +191,9 @@
                         <div class="panel audiobook-card" id="audiobookCard">
                             <div class="ab-head">
                                 <div class="card-title">AUDIOBOOK</div>
-                                <span class="ab-head-note" id="abHeadNote"></span>
+                                <!-- Everything that is not transport lives in
+                                     here: speed, subtitles, subtitle size. -->
+                                <button type="button" class="ab-config-btn" id="abConfigBtn" title="Player settings">CONFIG</button>
                             </div>
 
                             <div class="ab-stage" id="abStage" data-subs="on" data-size="m">
@@ -206,11 +208,39 @@
                                     <span class="ab-sub" data-depth="1"></span>
                                     <span class="ab-sub" data-depth="0"></span>
                                 </div>
+                                <!-- A child of the stage, so it covers the cover
+                                     and the subtitles and nothing else. -->
+                                <div class="ab-chapters" id="abChapters" hidden></div>
+                                <!-- Quick settings: the size of the cover, laid over
+                                     it, so the panel never has to scroll and
+                                     nothing behind it competes for the eye. -->
+                                <div class="ab-config" id="abConfig" hidden>
+                                    <div class="ab-config-row">
+                                        <span class="ab-config-label">SPEED</span>
+                                        <div class="ab-seg" id="abCfgSpeed"></div>
+                                    </div>
+                                    <div class="ab-config-row">
+                                        <span class="ab-config-label">SUBTITLES</span>
+                                        <div class="ab-seg" id="abCfgSubs"></div>
+                                    </div>
+                                    <div class="ab-config-row">
+                                        <span class="ab-config-label">SIZE</span>
+                                        <div class="ab-seg" id="abCfgSize"></div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="ab-caption">
                                 <div class="ab-title" id="abTitle">Nothing loaded</div>
                                 <div class="ab-meta" id="abMeta"></div>
+                            </div>
+
+                            <!-- The listen itself, not the book: this is the
+                                 space for how long this session has run. -->
+                            <div class="ab-session" id="abSession">
+                                <svg class="ab-session-clock" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.9v3.3l2.1 1.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                                <span class="ab-session-time" id="abSessionTime">0:00</span>
+                                <span class="ab-session-since" id="abSessionSince"></span>
                             </div>
 
                             <div class="ab-scrub" id="abScrub">
@@ -225,6 +255,7 @@
                             </div>
 
                             <div class="ab-transport">
+                                <button type="button" class="ab-btn ab-btn-side" id="abChapterBtn" title="Chapters" aria-label="Chapters">C</button>
                                 <button type="button" class="ab-btn" id="abPrevChapter" title="Previous chapter" aria-label="Previous chapter">
                                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12.5 4.4 6.6 8l5.9 3.6z" fill="currentColor"/></svg>
                                 </button>
@@ -237,19 +268,9 @@
                                 <button type="button" class="ab-btn" id="abNextChapter" title="Next chapter" aria-label="Next chapter">
                                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3.5 4.4 9.4 8l-5.9 3.6z" fill="currentColor"/></svg>
                                 </button>
-                                <button type="button" class="ab-log-btn" id="abLog" hidden>LOG SESSION</button>
+                                <button type="button" class="ab-btn ab-btn-side" id="abLog" title="Log this listen" aria-label="Log this listen" disabled>L</button>
                             </div>
 
-                            <div class="ab-pills">
-                                <button type="button" class="ab-pill" id="abRate" title="Playback speed">1.0&times;</button>
-                                <button type="button" class="ab-pill" id="abSleep" title="Sleep timer">Sleep</button>
-                                <button type="button" class="ab-pill" id="abLoop" title="Loop">Loop off</button>
-                                <button type="button" class="ab-pill" id="abSubsBtn" title="Subtitles">Subs on</button>
-                                <button type="button" class="ab-pill" id="abSize" title="Subtitle size">Tt</button>
-                                <button type="button" class="ab-pill" id="abChapterBtn" title="Chapters">Chapters</button>
-                            </div>
-
-                            <div class="ab-chapters" id="abChapters" hidden></div>
                         </div>
 
                         <!-- Card 3: Recently read -->
