@@ -60,6 +60,7 @@ ipcMain.handle('get-settings', () => {
     goalUnit: settings.goal?.unit || 'minutes',
     goalValue: settings.goal?.value || 60,
     sessionDayEnd: settings.kindle?.sessionDayEnd || '04:00',
+    audioFolders: Array.isArray(settings.audioFolders) ? settings.audioFolders : [],
     // Epoch ms of a stopwatch that is still running, or null. Persisted so a
     // restart doesn't lose a session in progress.
     stopwatchStartedAt: settings.stopwatch?.startedAt ?? null,
@@ -987,6 +988,35 @@ app.whenReady().then(() => {
     saveCoverIndex();
   }
 
+  // ─── Audiobook folders ───────────────────────────────────────────────────
+  //
+  // The folders are remembered, not just scanned: Settings lists them so the
+  // player knows where to look without a dialog every time. A folder is a
+  // bookmark, so removing one only forgets the path — the books it imported and
+  // their files stay on the shelf.
+  function readAudioFolders() {
+    const folders = loadSettings().audioFolders;
+    return Array.isArray(folders) ? folders.filter((entry) => typeof entry === 'string' && entry) : [];
+  }
+
+  function rememberAudioFolder(dir) {
+    const settings = loadSettings();
+    const folders = Array.isArray(settings.audioFolders) ? settings.audioFolders : [];
+    if (folders.includes(dir)) return;
+    settings.audioFolders = [...folders, dir];
+    saveSettings(settings);
+  }
+
+  ipcMain.handle('audio:folders', () => readAudioFolders());
+
+  ipcMain.handle('audio:remove-folder', (_, folder) => {
+    const settings = loadSettings();
+    const folders = Array.isArray(settings.audioFolders) ? settings.audioFolders : [];
+    settings.audioFolders = folders.filter((entry) => entry !== folder);
+    saveSettings(settings);
+    return { success: true, folders: readAudioFolders() };
+  });
+
   ipcMain.handle('audio:pick-folder', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Choose an audiobook folder',
@@ -1002,6 +1032,9 @@ app.whenReady().then(() => {
   ipcMain.handle('audio:import-folder', (_, folder) => {
     const dir = typeof folder === 'string' ? folder.trim() : '';
     if (!dir || !fs.existsSync(dir)) return { success: false, error: 'folder not found' };
+    // Remembered before the scan: an empty folder is still a place the user
+    // pointed at, and the list in Settings is how they notice it is empty.
+    rememberAudioFolder(dir);
     const files = findAudiobooks(dir);
     if (!files.length) return { success: true, imported: [], folder: dir };
 

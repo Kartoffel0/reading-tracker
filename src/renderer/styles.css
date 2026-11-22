@@ -2432,34 +2432,125 @@ input[type="submit"]:focus-visible,
     margin-top: 2px;
 }
 
-/* ===== SETTINGS MODAL (uses base modal classes) ===== */
+/* ===== SETTINGS MODAL =====
+   Four cards on a two-column grid: General and Daily Goal, then Audiobooks and
+   Kindle Sync. The sheet is wider than the stock modal so the cards can sit
+   side by side instead of squeezing the timezone list into a sliver. */
+.settings-modal {
+    max-width: 1000px;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
 .settings-section {
+    display: flex;
+    flex-direction: column;
+    /* A grid item refuses to shrink below its content without this, and one
+       long folder path would then widen the whole sheet. */
+    min-width: 0;
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 16px;
+    border-radius: 14px;
+    padding: 18px 20px 20px;
+    margin: 0;
+    /* The elevated surface token, at full strength: the sheet keeps the frost,
+       the cards are where the fields have to sit legibly. */
+    background: var(--bg-card-hover);
+}
+
+/* The heading is the app's card title (accent bar + letterspaced caps), not a
+   <legend>: a fieldset draws its legend on the border, which put the four
+   labels *outside* their cards instead of in them. */
+.settings-section > .card-title {
     margin-bottom: 16px;
-    background: var(--bg-secondary);
-}
-
-.settings-section:last-child {
-    margin-bottom: 0;
-}
-
-.settings-section legend {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--accent-primary);
-    padding-bottom: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
 
 .settings-section .form-group {
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 }
 
-.settings-section .form-group:last-child {
+/* :last-of-type, not :last-child — the card's action row sits after the last
+   field, and the gap above it is the action row's own padding. */
+.settings-section .form-group:last-of-type {
     margin-bottom: 0;
+}
+
+/* Right-aligned action inside a card (Add New, Test Connection). margin-top
+   auto pins it to the bottom, so two cards in one row line their buttons up. */
+.settings-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 16px;
+}
+
+/* The footer's stock actions carry a -25px nudge from a much older layout. */
+.settings-modal .form-actions {
+    margin-top: 0;
+}
+
+.btn-small {
+    padding: 8px 16px;
+    font-size: 0.76rem;
+}
+
+/* ===== AUDIOBOOK FOLDERS =====
+   The entries card's row, end to end: one path per row, remove on hover. */
+.folder-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 0.78rem;
+    transition: all 0.2s ease;
+}
+
+.folder-item:last-child {
+    margin-bottom: 0;
+}
+
+.folder-item:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-hover);
+}
+
+.folder-path {
+    flex: 1;
+    min-width: 0;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Same affordance as a session row: there until you point at the row, and
+   still reachable by keyboard. */
+.folder-item .entry-del-btn {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.folder-item:hover .entry-del-btn,
+.folder-item .entry-del-btn:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.folder-empty {
+    padding: 10px 12px;
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 0.76rem;
 }
 
 /* Password toggle */

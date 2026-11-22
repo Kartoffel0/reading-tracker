@@ -3605,7 +3605,61 @@ async function openSettingsModal() {
   document.getElementById('goalUnitSelect').value =
     settings.goalUnit === 'characters' ? 'characters' : 'minutes';
   document.getElementById('goalValue').value = settings.goalValue || 60;
+  await renderAudioFolders();
   document.getElementById('settingsModalOverlay')?.classList.add('active');
+}
+
+// ===== Audiobook folders (the Settings card) =====
+// Rows are built with DOM nodes rather than innerHTML: a Windows path is
+// arbitrary text, and this list is the one place the app prints one verbatim.
+async function renderAudioFolders() {
+  const listEl = document.getElementById('audioFolderList');
+  if (!listEl) return;
+  const folders = (await window.electronAPI.listAudioFolders?.()) || [];
+  listEl.textContent = '';
+  if (!folders.length) {
+    const empty = document.createElement('div');
+    empty.className = 'folder-empty';
+    empty.textContent = 'No folders yet — Add New scans one and remembers it.';
+    listEl.appendChild(empty);
+    return;
+  }
+  for (const folder of folders) {
+    const row = document.createElement('div');
+    row.className = 'folder-item';
+    row.title = folder;
+
+    const pathEl = document.createElement('span');
+    pathEl.className = 'folder-path';
+    pathEl.textContent = folder;
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'entry-del-btn';
+    remove.textContent = '✖';
+    remove.title = 'Remove this folder from the list (its books stay)';
+    remove.addEventListener('click', () => removeAudioFolder(folder));
+
+    row.append(pathEl, remove);
+    listEl.appendChild(row);
+  }
+}
+
+// Add New is the library's import, plus a redraw: the import handler is what
+// remembers the path, so the two entry points can never disagree.
+async function addAudioFolder() {
+  await abImportFolder();
+  await renderAudioFolders();
+}
+
+async function removeAudioFolder(folder) {
+  const result = await window.electronAPI.removeAudioFolder?.(folder);
+  if (!result?.success) {
+    showToast('Could not remove that folder');
+    return;
+  }
+  await renderAudioFolders();
+  showToast('Folder removed — imported books stay on the shelf');
 }
 
 function togglePasswordVisibility() {
