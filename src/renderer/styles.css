@@ -3290,6 +3290,16 @@ body.theme-wave .wave-bg {
     border-radius: 0 0 10px 10px;
 }
 
+/* The wash exists to hold subtitle text off the art, so it belongs to the
+   player. Behind the chapter or config panel it is just pink bleeding through,
+   and at the panel's bottom corners it escapes: the stage's clip arc and the
+   panel's border-radius are two separate antialiased curves, and the crescent
+   between them is the wash, not a border. */
+.ab-stage[data-view='chapters']::after,
+.ab-stage[data-view='config']::after {
+    display: none;
+}
+
 .ab-stage-empty {
     position: absolute;
     inset: 0;
@@ -3607,7 +3617,10 @@ body.theme-wave .wave-bg {
     padding: 4px;
     border-radius: 10px;
     border: 1px solid var(--border-color);
-    background: var(--bg-card);
+    /* Nearly solid: with the subtitle wash gone (it only belongs to the player)
+       a text list at --bg-card lets the cover's own letters show through the
+       rows. 4% of the art keeps the frost without competing with the text. */
+    background: color-mix(in srgb, var(--bg-card-hover) 96%, transparent);
     overflow-y: auto;
     scrollbar-width: none;
     animation: dpFadeIn 0.3s ease;
@@ -3672,7 +3685,7 @@ body.theme-wave .wave-bg {
     padding: 16px;
     border: 1px solid var(--border-color);
     border-radius: 10px;
-    background: var(--bg-card);
+    background: color-mix(in srgb, var(--bg-card-hover) 96%, transparent);
     backdrop-filter: blur(2px);
     animation: dpFadeIn 0.3s ease;
 }
