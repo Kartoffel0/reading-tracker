@@ -3271,6 +3271,21 @@ body.theme-wave .wave-bg {
     text-overflow: ellipsis;
 }
 
+/* The player's two overflow-prone lines scroll on hover like the row cards do.
+   The inner span is the one that moves; the box clips. */
+.ab-title-text,
+.ab-meta-text {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+/* Each line scrolls on its own: the title's overflow has nothing to do with the
+   author line's, and starting both at once made the caption look busy. */
+.ab-title:hover .ab-title-text.marquee,
+.ab-meta-left:hover .ab-meta-text.marquee {
+    animation: marquee-scroll var(--marquee-duration, 6s) linear infinite;
+}
+
 /* author · chapter on the left, chapter n/N · runtime on the right. */
 .ab-meta {
     display: flex;

@@ -1440,21 +1440,29 @@ function coverMarkup(title, variant = 'row') {
 // make the title column look wider than it really is. The handler re-reads the
 // text each time, so a row whose title gets rewritten (the book sheet reuses
 // one node) stays in sync, and one row is only ever wired once.
-const marqueeRows = new WeakSet();
+// One entry per text element, not per row: the player card has two titles in one
+// row (the book and the author · chapter line), and a row-level mark would let
+// only the first of them ever attach.
+const marqueeTargets = new WeakSet();
 
 function attachTitleMarquee(container) {
   for (const titleEl of container.querySelectorAll(
-    '.recent-title, .entry-title, .title-suggestion, .book-title',
+    '.recent-title, .entry-title, .title-suggestion, .book-title, .ab-title, .ab-meta-left',
   )) {
     const row = titleEl.closest(
-      '.recent-book, .entry-item, .title-suggestion, .book-card',
+      '.recent-book, .entry-item, .title-suggestion, .book-card, .audiobook-card',
     );
-    if (!row || marqueeRows.has(row)) continue;
-    marqueeRows.add(row);
+    if (!row || marqueeTargets.has(titleEl)) continue;
+    marqueeTargets.add(titleEl);
 
-    row.addEventListener('mouseenter', () => {
-      const inner = row.querySelector(
-        '.book-title-text, .recent-title-text, .entry-title-text, .title-suggestion-text',
+    // On the player the two lines are independent: pointing at the title must
+    // not set the author line scrolling as well. Row cards keep the old rule,
+    // where hovering anywhere in the row scrolls its one title.
+    const perLine = titleEl.classList.contains('ab-title') || titleEl.classList.contains('ab-meta-left');
+    (perLine ? titleEl : row).addEventListener('mouseenter', () => {
+      // The text lives inside its own box, so look there and not at the row.
+      const inner = titleEl.querySelector(
+        '.book-title-text, .recent-title-text, .entry-title-text, .title-suggestion-text, .ab-title-text, .ab-meta-text',
       );
       const column = inner?.parentElement;
       if (!inner || !column || inner.dataset.marqueeReady) return;
@@ -4200,18 +4208,28 @@ function abPaintStage() {
   if (bg) bg.style.backgroundImage = cover ? `url("${cover}")` : '';
 }
 
+// Writing a new title has to forget the old marquee: the cycle width and the
+// duplicated copy were measured against text that is no longer there.
+function abSetText(el, text) {
+  if (!el) return;
+  if (el.textContent === text) return;
+  el.classList.remove('marquee');
+  delete el.dataset.marqueeReady;
+  el.textContent = text;
+}
+
 function abPaintMeta() {
   const titleEl = abNode('abTitle');
   const leftEl = abNode('abMeta');
   const rightEl = abNode('abMetaRight');
   if (!titleEl) return;
   if (!ab.book) {
-    titleEl.textContent = 'Nothing loaded';
-    if (leftEl) leftEl.textContent = '';
-    if (rightEl) rightEl.textContent = '';
+    abSetText(titleEl, 'Nothing loaded');
+    abSetText(leftEl, '');
+    abSetText(rightEl, '');
     return;
   }
-  titleEl.textContent = ab.book.title;
+  abSetText(titleEl, ab.book.title);
   const current = Number.isFinite(ab.el?.currentTime) ? ab.el.currentTime : 0;
   const chapter = abChapterIndexAt(current);
   const left = [];
@@ -4224,8 +4242,8 @@ function abPaintMeta() {
     right.push(`${chapter + 1}/${ab.chapters.length}`);
   }
   if (ab.duration) right.push(abFormatClock(ab.duration));
-  if (leftEl) leftEl.textContent = left.join(' · ');
-  if (rightEl) rightEl.textContent = right.join(' · ');
+  abSetText(leftEl, left.join(' · '));
+  abSetText(rightEl, right.join(' · '));
 }
 
 function abPaintProgress() {
@@ -4397,6 +4415,10 @@ function abPaintChapters() {
 // ─── Playback ──────────────────────────────────────────────────────────────
 function abSaveProgress(force = false) {
   if (!ab.book || !ab.el || !ab.el.src) return;
+  // Swapping the source fires a pause on the way out, and that pause belongs to
+  // the outgoing book. A position of 0 for a file the element has not loaded yet
+  // is not a fact about the incoming one.
+  if (ab.book.url && ab.el.src !== ab.book.url) return;
   const now = Date.now();
   if (!force && now - ab.lastSaveAt < 5000) return;
   ab.lastSaveAt = now;
@@ -4839,6 +4861,7 @@ async function abBoot() {
   abNode('abLog')?.addEventListener('click', () => abSessionButton());
 
   abNode('abStageEmpty')?.addEventListener('click', () => abImportFolder());
+  attachTitleMarquee(card);
 
   abBuildConfig();
   abNode('abTabs')?.querySelectorAll('.rt-tab').forEach((tab) => {

@@ -238,9 +238,12 @@
                                     </div>
 
                                     <div class="ab-caption">
-                                        <div class="ab-title" id="abTitle">Nothing loaded</div>
+                                        <!-- Both of these scroll on hover when they do not
+                                             fit; the inner span is what the marquee helper
+                                             duplicates. -->
+                                        <div class="ab-title"><span class="ab-title-text" id="abTitle">Nothing loaded</span></div>
                                         <div class="ab-meta">
-                                            <span class="ab-meta-left" id="abMeta"></span>
+                                            <span class="ab-meta-left"><span class="ab-meta-text" id="abMeta"></span></span>
                                             <span class="ab-meta-right" id="abMetaRight"></span>
                                         </div>
                                     </div>
@@ -266,7 +269,7 @@
                                         <button type="button" class="ab-btn ab-btn-seek" id="abBack" title="Back 15 seconds" aria-label="Back 15 seconds">&minus;15</button>
                                         <button type="button" class="ab-btn ab-btn-play" id="abPlay" title="Play" aria-label="Play">
                                             <svg class="ab-icon-play" viewBox="0 0 16 16" aria-hidden="true">
-                                                <path d="M5.2 3.4 12.4 8l-7.2 4.6z" fill="currentColor" />
+                                                <path d="M5.6 3.9 12 8l-6.4 4.1z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
                                             </svg>
                                             <svg class="ab-icon-pause" viewBox="0 0 16 16" aria-hidden="true">
                                                 <rect x="4.2" y="3.4" width="2.6" height="9.2" rx="1" fill="currentColor" />
