@@ -15,6 +15,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listBooks: () => ipcRenderer.invoke('list-books'),
   addBook: (title) => ipcRenderer.invoke('add-book', title),
 
+  // Audiobooks
+  pickAudioFolder: () => ipcRenderer.invoke('audio:pick-folder'),
+  importAudioFolder: (folder) => ipcRenderer.invoke('audio:import-folder', folder),
+  listAudiobooks: () => ipcRenderer.invoke('audio:list'),
+  saveAudioProgress: (title, patch) =>
+    ipcRenderer.invoke('audio:progress', title, patch),
+  getAudioChapters: (title) => ipcRenderer.invoke('audio:chapters', title),
+  getAudioSubtitles: (title) => ipcRenderer.invoke('audio:subtitles', title),
+
   // Book covers
   ensureCovers: (requests) => ipcRenderer.invoke('ensure-covers', requests),
   getCoverUrl: (title) => ipcRenderer.invoke('get-cover-url', title),

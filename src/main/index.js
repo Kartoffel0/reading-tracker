@@ -5,9 +5,11 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
+const { readAudiobookMeta, findAudiobooks, findSubtitles } = require('./mp4');
 
 let mainWindow;
 let db = null;
+const audioMetaCache = new Map();
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 
@@ -433,6 +435,11 @@ function openDatabase() {
     db.exec('ALTER TABLE books ADD COLUMN kind_manual INTEGER NOT NULL DEFAULT 0');
   if (!bookColumns.has('series'))
     db.exec('ALTER TABLE books ADD COLUMN series TEXT');
+  // Runtime, read out of the file's own `mvhd` at import. It is the one fact the
+  // shelf needs on every render that would otherwise require opening every
+  // book: `position` is meaningless as a percentage without it.
+  if (!bookColumns.has('audio_duration'))
+    db.exec('ALTER TABLE books ADD COLUMN audio_duration REAL');
 
   // The shelf has exactly three states, and they name what you are doing with
   // the book: reading it, done with it, or off it. The first schema guess
@@ -895,7 +902,7 @@ app.whenReady().then(() => {
   ipcMain.handle('list-books', () => {
     const rows = db
       .prepare(
-        `SELECT b.title, b.kind, b.is_audio, b.status, b.added_at, b.author, b.series,
+        `SELECT b.title, b.kind, b.is_audio, b.audio_path, b.status, b.added_at, b.author, b.series,
                 (SELECT s.language FROM sessions s WHERE s.title = b.title
                   ORDER BY s.date DESC LIMIT 1) AS language,
                 (SELECT MAX(s.date) FROM sessions s WHERE s.title = b.title) AS last_read
@@ -926,6 +933,174 @@ app.whenReady().then(() => {
       row = db.prepare('SELECT * FROM books WHERE title = ?').get(clean);
     }
     return { ...row, cover: getCoverUrl(clean) };
+  });
+
+  // ─── Audiobooks ──────────────────────────────────────────────────────────
+  //
+  // An import is a folder scan, not a file manager: every .m4b under the picked
+  // directory becomes a book row, with the runtime, chapter list, tags and cover
+  // read from the file's own atoms. The shelf is the books table, so an imported
+  // audiobook shows up next to everything else instead of in a private list.
+
+  // Titles arrive as "[author] title [ASIN].m4b" more often than not; the
+  // bracketed bookkeeping is not part of the name anyone searches for.
+  function titleFromAudioFile(filePath) {
+    const base = path.basename(filePath, path.extname(filePath));
+    const cleaned = base
+      .replace(/\[[^\]]*\]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleaned || base.trim();
+  }
+
+  function storeCoverArt(title, cover) {
+    if (!cover || !cover.bytes || !cover.bytes.length) return;
+    const key = coverKey(title);
+    if (!key) return;
+    const index = loadCoverIndex();
+    const existing = index[key];
+    // A manual upload outranks the art inside the file: the user replaced it on
+    // purpose, and re-importing the folder must not paint over that.
+    if (existing && existing.file && fs.existsSync(path.join(COVERS_DIR, existing.file))) return;
+    ensureCoversDir();
+    const hash = crypto.createHash('sha1').update(key).digest('hex');
+    const file = path.join(COVERS_DIR, `${hash}${cover.ext}`);
+    fs.writeFileSync(file, cover.bytes);
+    index[key] = {
+      status: 'found',
+      file: path.basename(file),
+      source: 'm4b',
+      fetchedAt: new Date().toISOString(),
+    };
+    saveCoverIndex();
+  }
+
+  ipcMain.handle('audio:pick-folder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose an audiobook folder',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    return result.filePaths[0];
+  });
+
+  // Imports every audiobook under a folder. Rows that already exist keep their
+  // placement and their cover; only the file facts are refreshed, so importing
+  // the same folder twice is a no-op rather than a duplicate shelf.
+  ipcMain.handle('audio:import-folder', (_, folder) => {
+    const dir = typeof folder === 'string' ? folder.trim() : '';
+    if (!dir || !fs.existsSync(dir)) return { success: false, error: 'folder not found' };
+    const files = findAudiobooks(dir);
+    if (!files.length) return { success: true, imported: [], folder: dir };
+
+    const select = db.prepare('SELECT * FROM books WHERE title = ?');
+    const insert = db.prepare(
+      `INSERT INTO books (title, kind, kind_manual, is_audio, status, added_at, author, audio_path, audio_duration, position, rate)
+       VALUES (?, 'book', 1, 1, 'reading', ?, ?, ?, ?, 0, 1.0)`,
+    );
+    const refresh = db.prepare(
+      `UPDATE books SET is_audio = 1, audio_path = ?, audio_duration = ?,
+                        author = COALESCE(author, ?)
+        WHERE title = ?`,
+    );
+
+    const imported = [];
+    const run = db.transaction(() => {
+      for (const file of files) {
+        const meta = readAudiobookMeta(file);
+        const title = meta.title || meta.album || titleFromAudioFile(file);
+        if (!title) continue;
+        const existing = select.get(title);
+        if (existing) refresh.run(file, meta.duration || null, meta.artist || null, title);
+        else
+          insert.run(
+            title,
+            new Date().toISOString().slice(0, 10),
+            meta.artist || null,
+            file,
+            meta.duration || null,
+          );
+        storeCoverArt(title, meta.cover);
+        imported.push({ title, path: file, duration: meta.duration, chapters: meta.chapters.length });
+      }
+    });
+    run();
+    audioMetaCache.clear();
+    return { success: true, imported, folder: dir };
+  });
+
+  // The shelf of audiobooks only: books with a file, ordered by what you were
+  // last listening to. `position` and `rate` ride along so the player can resume
+  // without a second round trip.
+  ipcMain.handle('audio:list', () => {
+    const rows = db
+      .prepare(
+        `SELECT title, author, audio_path, audio_duration, position, rate, status,
+                (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read
+           FROM books
+          WHERE is_audio = 1 AND audio_path IS NOT NULL
+          ORDER BY COALESCE(position, 0) > 0 DESC, COALESCE(last_read, added_at) DESC,
+                   title COLLATE NOCASE`,
+      )
+      .all();
+    return rows.map((row) => ({
+      ...row,
+      url: fs.existsSync(row.audio_path) ? pathToFileURL(row.audio_path).href : null,
+      cover: getCoverUrl(row.title),
+    }));
+  });
+
+  // Resume position and speed, written while playing. Nothing else in the books
+  // table is touched: `update-book` deliberately refuses these columns, since a
+  // form has no business rewriting playback state.
+  ipcMain.handle('audio:progress', (_, title, patch = {}) => {
+    if (!title) return { success: false };
+    const fields = [];
+    const values = [];
+    if (Number.isFinite(patch.position)) {
+      fields.push('position = ?');
+      values.push(Math.max(0, patch.position));
+    }
+    if (Number.isFinite(patch.rate)) {
+      fields.push('rate = ?');
+      values.push(Math.min(2, Math.max(0.5, patch.rate)));
+    }
+    if (!fields.length) return { success: false };
+    values.push(title);
+    db.prepare(`UPDATE books SET ${fields.join(', ')} WHERE title = ?`).run(...values);
+    return { success: true };
+  });
+
+  // Chapters are read from the file on demand rather than stored: the atom list
+  // is the truth, and re-reading it costs one moov (a few MB) per open. The cache
+  // is keyed by path, so re-importing a file invalidates nothing stale.
+  ipcMain.handle('audio:chapters', (_, title) => {
+    const row = db.prepare('SELECT audio_path FROM books WHERE title = ?').get(title);
+    if (!row || !row.audio_path) return [];
+    if (audioMetaCache.has(row.audio_path)) return audioMetaCache.get(row.audio_path).chapters;
+    const meta = readAudiobookMeta(row.audio_path);
+    audioMetaCache.set(row.audio_path, meta);
+    return meta.chapters;
+  });
+
+  // Subtitles go through main because a renderer cannot read a file:// URL: the
+  // SRT is parsed there, but the bytes arrive here. 8,456 cues is ~700 KB, so it
+  // is one round trip and nothing streams.
+  ipcMain.handle('audio:subtitles', (_, title) => {
+    const row = db.prepare('SELECT audio_path FROM books WHERE title = ?').get(title);
+    if (!row || !row.audio_path) return null;
+    let srtPath = null;
+    try {
+      srtPath = findSubtitles(row.audio_path);
+    } catch {
+      return null;
+    }
+    if (!srtPath) return null;
+    try {
+      return { name: path.basename(srtPath), text: fs.readFileSync(srtPath, 'utf8') };
+    } catch {
+      return null;
+    }
   });
 
   // Get database path for info

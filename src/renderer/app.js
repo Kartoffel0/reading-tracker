@@ -1777,14 +1777,14 @@ function rtColumnKeyFor(granularity, date) {
 // fill the window, but quoting "2,430 chars/h" on a day with no sessions reads
 // as a bug, and the trend only exists to show days that happened.
 function rtSpeedAt(buckets, index, half) {
-  if (!buckets[index] || buckets[index].minutes <= 0) return null;
+  if (!buckets[index] || buckets[index].readMinutes <= 0) return null;
   let chars = 0;
   let minutes = 0;
   for (let i = index - half; i <= index + half; i++) {
     const b = buckets[i];
-    if (!b || b.minutes <= 0) continue;
+    if (!b || b.readMinutes <= 0) continue;
     chars += b.chars;
-    minutes += b.minutes;
+    minutes += b.readMinutes;
   }
   return minutes > 0 ? chars / (minutes / 60) : null;
 }
@@ -1882,7 +1882,7 @@ function buildStatsModel({
   const byKey = new Map();
   if (start !== null) {
     for (const column of rtColumns(start, end, granularity)) {
-      byKey.set(column.key, { ...column, minutes: 0, chars: 0, sessions: 0 });
+      byKey.set(column.key, { ...column, minutes: 0, readMinutes: 0, chars: 0, sessions: 0 });
     }
   }
 
@@ -1904,6 +1904,10 @@ function buildStatsModel({
           scope: 'year',
           clickKey: key,
           minutes: 0,
+          // Minutes that had words in them. Listening is time, not reading, so
+          // it fills `minutes` (the goal, the time bars) and never the divisor
+          // of the characters-per-hour rate.
+          readMinutes: 0,
           chars: 0,
           sessions: 0,
         };
@@ -1913,6 +1917,7 @@ function buildStatsModel({
         const minutes = sessionMinutes(s);
         const chars = s.characters || 0;
         bucket.minutes += minutes;
+        if (s.media !== 'audiobook') bucket.readMinutes += minutes;
         bucket.chars += chars;
         bucket.sessions += 1;
         totalMinutes += minutes;
@@ -2564,6 +2569,7 @@ async function openBookModal(title) {
   setBookCredits(book);
   setBookStatus(book.status);
   setBookKind(book.kind || 'book');
+  abWireListenButton(book, title);
 
   const body = document.getElementById('bookStatsBody');
   if (first) {
@@ -2798,10 +2804,18 @@ function entryRowHtml({ dateKey, session }, deleteCall = null) {
   const title = session.title || 'Untitled';
   const minutes = Math.round(sessionMinutes(session));
   const chars = session.characters || 0;
+  // An audiobook row has no characters and no reading rate. Printing 0 and
+  // 0/h would read as "you read nothing very slowly"; the dash says the number
+  // does not apply instead.
+  const isAudio = session.media === 'audiobook';
   // Same speed math the session modal uses: chars per hour.
   const hours =
     session.unit === 'minutes' ? session.duration / 60 : session.duration;
   const speed = hours > 0 ? Math.round(chars / hours) : 0;
+  const charsValue = isAudio ? '—' : chars.toLocaleString();
+  const charsUnit = isAudio ? '' : 'chr';
+  const speedValue = isAudio ? '—' : speed.toLocaleString();
+  const speedUnit = isAudio ? '' : '/h';
 
   // Highlight the stat that matches the unit of the current goal.
   const goalIsChars = currentGoal.unit === 'characters';
@@ -2820,8 +2834,8 @@ function entryRowHtml({ dateKey, session }, deleteCall = null) {
             <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
             <div class="entry-stats">
                 <div class="entry-stat entry-duration${durationClass}"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
-                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${chars.toLocaleString()}</span><span class="entry-stat-unit">chr</span></div>
-                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speed.toLocaleString()}</span><span class="entry-stat-unit">/h</span></div>
+                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${charsValue}</span><span class="entry-stat-unit">${charsUnit}</span></div>
+                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speedValue}</span><span class="entry-stat-unit">${speedUnit}</span></div>
             </div>
             <button class="entry-del-btn" onclick="${deleteCall || `deleteSession('${dateKey}', ${session.id}, false)`}">✖</button>
           </div>
@@ -3873,13 +3887,23 @@ function libTileHtml(book) {
   const cover =
     coverCache.get(book.title)?.url ?? book.cover ?? null;
   const art = cover
-    ? `<img class="lib-cover" src="${escapeHtml(cover)}" alt="" loading="lazy">`
+    // No `loading="lazy"` here: the pages live in a translateX track, and a
+    // lazy image that is slid off-screen never starts loading — the shelf then
+    // paints 2px slivers because a cover with no intrinsic size has no width.
+    // These are local files, a few hundred KB each; loading them is free.
+    ? `<img class="lib-cover" src="${escapeHtml(cover)}" alt="">`
     : `<div class="lib-cover lib-cover-placeholder">${escapeHtml(
         Array.from(title)[0] || '?',
       )}</div>`;
+  // A book with an .m4b behind it says so on the tile, because the player only
+  // knows the titles you imported and the shelf is where you find them.
+  const audio = book.is_audio && book.audio_path
+    ? `<span class="lib-audio" title="Audiobook">&#9654;</span>`
+    : '';
   return `
     <button type="button" class="lib-item" data-title="${escapeHtml(title)}" data-status="${status}" title="${escapeHtml(title)}">
 ${art}
+${audio}
       <span class="lib-status">${LIB_STATUS_LABELS[status]}</span>
     </button>`;
 }
@@ -3974,6 +3998,10 @@ async function renderLibrary() {
     }
   }
 
+  document
+    .getElementById('libraryImport')
+    ?.addEventListener('click', () => abImportFolder());
+
   const grid = document.getElementById('libraryGrid');
   if (!grid) return;
 
@@ -4037,3 +4065,770 @@ function cancelLibraryAdd(form) {
   if (!form || !form.isConnected) return;
   form.outerHTML = libAddTileHtml();
 }
+
+// ─── Audiobook player ──────────────────────────────────────────────────────
+//
+// One <audio> element for the app's lifetime, owned by this module and never
+// re-created: the card is repainted, the page slides, the element keeps
+// playing. Everything about the *file* comes from main (duration, chapters,
+// cover, tags read out of the m4b's own atoms at import); everything about the
+// *position* is this module's, written back to books.position/rate so a restart
+// resumes where you stopped.
+//
+// A listen is not a wall-clock span: seeking forward over 20 minutes does not
+// add 20 minutes to the session, and pausing for lunch adds nothing. The
+// session accumulates real played seconds from `timeupdate` deltas, and the
+// LOG SESSION button appears next to play the moment you stop with something
+// worth keeping.
+
+const AB_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2];
+const AB_SIZES = ['s', 'm', 'l'];
+const AB_LOOPS = ['off', 'book', 'chapter'];
+const AB_LOOP_LABELS = { off: 'Loop off', book: 'Loop book', chapter: 'Loop chapter' };
+const AB_SLEEP_STEPS = [0, 15, 30, 45, 60];
+// A stop shorter than this is a mis-click on the play button, not a listen:
+// logging it would put a 4-second row in the entries list for nothing.
+const AB_MIN_LOG_SECONDS = 30;
+
+const ab = {
+  el: null,
+  book: null,
+  cues: [],
+  cueIndex: -1,
+  chapters: [],
+  duration: 0,
+  subs: { on: true, size: 'm' },
+  loop: 'off',
+  sleepMinutes: 0,
+  sleepAt: 0,
+  session: null,
+  lastSaveAt: 0,
+  seekTarget: null,
+};
+
+// ─── SRT ───────────────────────────────────────────────────────────────────
+// Cues are [start, end, text] in seconds, sorted by start. A cue's own line
+// breaks are kept: two-line subtitles are two lines on the stage too.
+function abParseSrt(text) {
+  const cues = [];
+  if (!text) return cues;
+  const blocks = String(text).replace(/\r\n?/g, '\n').split(/\n{2,}/);
+  const time = (value) => {
+    const match = /(\d+):(\d{2}):(\d{2})[,.](\d{1,3})/.exec(value || '');
+    if (!match) return null;
+    return (
+      Number(match[1]) * 3600 +
+      Number(match[2]) * 60 +
+      Number(match[3]) +
+      Number(match[4].padEnd(3, '0')) / 1000
+    );
+  };
+  for (const block of blocks) {
+    const lines = block.split('\n').filter((line) => line.trim() !== '');
+    if (!lines.length) continue;
+    let timeLine = lines.findIndex((line) => line.includes('-->'));
+    if (timeLine < 0) continue;
+    const [from, to] = lines[timeLine].split('-->');
+    const start = time(from);
+    const end = time(to);
+    if (start === null) continue;
+    const text = lines
+      .slice(timeLine + 1)
+      .join('\n')
+      // Crude but effective: drop SRT positioning tags and speaker labels that
+      // only exist for players, keeping the words.
+      .replace(/<\/?[^>]+>/g, '')
+      .trim();
+    if (!text) continue;
+    cues.push({ start, end: end === null ? start : end, text });
+  }
+  cues.sort((a, b) => a.start - b.start);
+  return cues;
+}
+
+// The line being spoken is the last one that started: SRT gaps between cues are
+// shorter than a breath, and blanking the stage between them flickers.
+function abCueIndexAt(seconds) {
+  const cues = ab.cues;
+  if (!cues.length) return -1;
+  let low = 0;
+  let high = cues.length - 1;
+  let found = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (cues[mid].start <= seconds) {
+      found = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return found;
+}
+
+function abFormatClock(seconds) {
+  const total = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}:${pad2(m)}:${pad2(s)}`;
+}
+
+// ─── Painting ──────────────────────────────────────────────────────────────
+function abNode(id) {
+  return document.getElementById(id);
+}
+
+function abChapterIndexAt(seconds) {
+  let found = -1;
+  ab.chapters.forEach((chapter, index) => {
+    if (chapter.t <= seconds) found = index;
+  });
+  return found;
+}
+
+function abPaintStage() {
+  const stage = abNode('abStage');
+  const art = abNode('abStageArt');
+  const bg = abNode('abStageBg');
+  if (!stage) return;
+  const cover = ab.book?.cover || coverCache.get(ab.book?.title)?.url || null;
+  stage.classList.toggle('is-empty', !ab.book);
+  stage.classList.toggle('has-art', Boolean(cover));
+  if (art) art.src = cover || '';
+  if (bg) bg.style.backgroundImage = cover ? `url("${cover}")` : '';
+}
+
+function abPaintMeta() {
+  const titleEl = abNode('abTitle');
+  const metaEl = abNode('abMeta');
+  const noteEl = abNode('abHeadNote');
+  if (!titleEl) return;
+  if (!ab.book) {
+    titleEl.textContent = 'Nothing loaded';
+    metaEl.textContent = '';
+    if (noteEl) noteEl.textContent = '';
+    return;
+  }
+  titleEl.textContent = ab.book.title;
+  const bits = [];
+  if (ab.book.author) bits.push(ab.book.author);
+  const chapter = abChapterIndexAt(ab.el?.currentTime || 0);
+  if (chapter >= 0 && ab.chapters[chapter]) {
+    bits.push(
+      `${ab.chapters[chapter].title} ${chapter + 1}/${ab.chapters.length}`,
+    );
+  }
+  if (ab.duration) bits.push(abFormatClock(ab.duration));
+  metaEl.textContent = bits.join(' · ');
+  // The header note is the one fact about the *file* worth a glance: how many
+  // chapters it has. A subtitle line count is bookkeeping the eye skips.
+  if (noteEl) {
+    noteEl.textContent = ab.chapters.length
+      ? `${ab.chapters.length} chapter${ab.chapters.length === 1 ? '' : 's'}`
+      : '';
+  }
+}
+
+function abPaintProgress() {
+  const el = ab.el;
+  if (!el) return;
+  const duration = ab.duration || el.duration || 0;
+  const current = el.currentTime || 0;
+  const ratio = duration > 0 ? Math.min(1, current / duration) : 0;
+  const fill = abNode('abScrubFill');
+  const knob = abNode('abScrubKnob');
+  if (fill) fill.style.width = `${ratio * 100}%`;
+  if (knob) knob.style.left = `${ratio * 100}%`;
+  const elapsed = abNode('abElapsed');
+  const remaining = abNode('abRemaining');
+  if (elapsed) elapsed.textContent = abFormatClock(current);
+  if (remaining) {
+    remaining.textContent = `−${abFormatClock(Math.max(0, duration - current))}`;
+  }
+}
+
+function abPaintSubs() {
+  const wrap = abNode('abSubs');
+  if (!wrap) return;
+  const nodes = {
+    0: wrap.querySelector('.ab-sub[data-depth="0"]'),
+    1: wrap.querySelector('.ab-sub[data-depth="1"]'),
+    2: wrap.querySelector('.ab-sub[data-depth="2"]'),
+  };
+  const cue = ab.cueIndex >= 0 ? ab.cues[ab.cueIndex] : null;
+  const prev = ab.cueIndex - 1 >= 0 ? ab.cues[ab.cueIndex - 1] : null;
+  const prev2 = ab.cueIndex - 2 >= 0 ? ab.cues[ab.cueIndex - 2] : null;
+  for (const [depth, node] of Object.entries(nodes)) {
+    if (!node) continue;
+    const source = depth === '0' ? cue : depth === '1' ? prev : prev2;
+    const text = source ? source.text : '';
+    if (node.textContent !== text) node.textContent = text;
+    node.style.opacity = text ? '' : '0';
+  }
+}
+
+function abPaintPlayState() {
+  const btn = abNode('abPlay');
+  if (!btn) return;
+  const playing = Boolean(ab.el && !ab.el.paused && !ab.el.ended);
+  btn.classList.toggle('is-playing', playing);
+  btn.title = playing ? 'Pause' : 'Play';
+  btn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+}
+
+function abPaintTransportState() {
+  const rate = abNode('abRate');
+  if (rate) rate.textContent = `${(ab.el?.playbackRate || 1).toFixed(2).replace(/0$/, '')}×`;
+  const loop = abNode('abLoop');
+  if (loop) {
+    loop.textContent = AB_LOOP_LABELS[ab.loop];
+    loop.classList.toggle('is-on', ab.loop !== 'off');
+  }
+  const subsBtn = abNode('abSubsBtn');
+  if (subsBtn) {
+    subsBtn.textContent = ab.subs.on ? 'Subs on' : 'Subs off';
+    subsBtn.classList.toggle('is-on', ab.subs.on);
+  }
+  const size = abNode('abSize');
+  if (size) size.textContent = `Tt ${ab.subs.size.toUpperCase()}`;
+  const sleep = abNode('abSleep');
+  if (sleep) {
+    const left = ab.sleepAt ? Math.max(0, Math.ceil((ab.sleepAt - Date.now()) / 60000)) : 0;
+    sleep.textContent = ab.sleepAt ? `Sleep ${left}m` : 'Sleep';
+    sleep.classList.toggle('is-on', Boolean(ab.sleepAt));
+  }
+  const stage = abNode('abStage');
+  if (stage) {
+    stage.dataset.subs = ab.subs.on ? 'on' : 'off';
+    stage.dataset.size = ab.subs.size;
+  }
+}
+
+function abPaintAll() {
+  abPaintStage();
+  abPaintMeta();
+  abPaintProgress();
+  abPaintSubs();
+  abPaintPlayState();
+  abPaintTransportState();
+}
+
+// ─── Chapter list ──────────────────────────────────────────────────────────
+function abPaintChapters() {
+  const list = abNode('abChapters');
+  if (!list) return;
+  if (!ab.chapters.length) {
+    list.innerHTML =
+      '<div class="empty-state"><p>This file has no chapter list.</p></div>';
+    return;
+  }
+  const current = abChapterIndexAt(ab.el?.currentTime || 0);
+  list.innerHTML = ab.chapters
+    .map(
+      (chapter, index) => `
+      <button type="button" class="ab-chapter-row${index === current ? ' is-current' : ''}" data-index="${index}">
+        <span>${escapeHtml(chapter.title || `Chapter ${index + 1}`)}</span>
+        <span class="ab-chapter-time">${abFormatClock(chapter.t)}</span>
+      </button>`,
+    )
+    .join('');
+  const active = list.querySelector('.is-current');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+function abToggleChapters(force) {
+  const list = abNode('abChapters');
+  if (!list) return;
+  const open = force === undefined ? list.hidden : force;
+  list.hidden = !open;
+  if (open) abPaintChapters();
+}
+
+// ─── Playback ──────────────────────────────────────────────────────────────
+function abSaveProgress(force = false) {
+  if (!ab.book || !ab.el || !ab.el.src) return;
+  const now = Date.now();
+  if (!force && now - ab.lastSaveAt < 5000) return;
+  ab.lastSaveAt = now;
+  const position = Number.isFinite(ab.el.currentTime) ? ab.el.currentTime : 0;
+  window.electronAPI.saveAudioProgress?.(ab.book.title, {
+    position,
+    rate: ab.el.playbackRate,
+  });
+}
+
+function abPendingSession() {
+  return ab.session && ab.session.played >= AB_MIN_LOG_SECONDS ? ab.session : null;
+}
+
+function abShowLogButton() {
+  const btn = abNode('abLog');
+  if (!btn) return;
+  const pending = abPendingSession();
+  btn.hidden = !pending;
+  if (pending) {
+    const minutes = Math.max(1, Math.round(pending.played / 60));
+    btn.textContent = `LOG ${formatDuration(minutes)}`;
+    btn.title = `Log ${minutes} minutes of listening`;
+  }
+}
+
+function abStartSession() {
+  if (ab.session) return;
+  ab.session = { startedAt: Date.now(), played: 0, lastClock: ab.el.currentTime };
+}
+
+// Played time is the media that actually passed, not the clock: a seek is a
+// jump and contributes nothing, a pause contributes nothing.
+function abAccumulatePlayed() {
+  const el = ab.el;
+  if (!el) return;
+  const now = el.currentTime;
+  const last = ab.session.lastClock;
+  if (last !== null) {
+    const delta = now - last;
+    if (delta > 0 && delta <= 2) ab.session.played += delta;
+  }
+  ab.session.lastClock = now;
+}
+
+async function abTogglePlay() {
+  if (!ab.book || !ab.el) {
+    await abImportFolder();
+    return;
+  }
+  if (ab.el.paused) {
+    abStartSession();
+    try {
+      await ab.el.play();
+    } catch (err) {
+      showToast(`Could not play: ${err.message}`);
+    }
+  } else {
+    ab.el.pause();
+  }
+}
+
+function abSeek(seconds) {
+  if (!ab.el || !ab.duration) return;
+  const target = Math.min(ab.duration - 0.25, Math.max(0, seconds));
+  ab.el.currentTime = target;
+  ab.cueIndex = abCueIndexAt(target);
+  if (ab.session) ab.session.lastClock = target;
+  abPaintProgress();
+  abPaintSubs();
+  abPaintMeta();
+}
+
+function abSeekChapter(direction) {
+  if (!ab.chapters.length || !ab.el) return;
+  const current = ab.el.currentTime;
+  const index = abChapterIndexAt(current);
+  if (direction > 0) {
+    const next = ab.chapters[index + 1];
+    if (next) abSeek(next.t);
+    else abSeek(ab.duration);
+    return;
+  }
+  // "Previous chapter" restarts the current one unless you are already near its
+  // start, which is what every audiobook player does.
+  const currentChapter = ab.chapters[index];
+  if (currentChapter && current - currentChapter.t > 3) abSeek(currentChapter.t);
+  else if (index > 0) abSeek(ab.chapters[index - 1].t);
+  else abSeek(0);
+}
+
+// ─── Loading a book ────────────────────────────────────────────────────────
+async function abLoadBook(book, { autoplay = false } = {}) {
+  if (!book) return;
+  // Moving to another book ends the current listen. Anything worth keeping is
+  // logged here rather than silently dropped by the switch.
+  if (ab.book && ab.book.title !== book.title) {
+    await abLogSession({ silent: false, keepPlaying: false });
+  }
+  ab.book = book;
+  ab.cues = [];
+  ab.chapters = [];
+  ab.cueIndex = -1;
+  ab.duration = book.audio_duration || 0;
+  if (!ab.el) ab.el = abCreateAudio();
+  const el = ab.el;
+  if (el.src !== book.url) {
+    el.src = book.url || '';
+    el.load();
+  }
+  el.playbackRate = Math.min(2, Math.max(0.5, book.rate || 1));
+  abPaintAll();
+  abPaintChapters();
+
+  const resume = Number.isFinite(book.position) ? book.position : 0;
+  const applyResume = () => {
+    if (resume > 1 && Math.abs(el.currentTime - resume) > 1) el.currentTime = resume;
+    ab.cueIndex = abCueIndexAt(el.currentTime);
+    abPaintProgress();
+    abPaintSubs();
+    abPaintMeta();
+    abPaintTransportState();
+  };
+  if (el.readyState >= 1) applyResume();
+  else el.addEventListener('loadedmetadata', applyResume, { once: true });
+
+  // Chapters and subtitles arrive beside the audio, not before it: both are
+  // reads of other files, and neither is worth delaying the first frame.
+  const [chapters, subs] = await Promise.all([
+    window.electronAPI.getAudioChapters?.(book.title) ?? [],
+    window.electronAPI.getAudioSubtitles?.(book.title) ?? null,
+  ]);
+  if (ab.book !== book) return;
+  ab.chapters = Array.isArray(chapters) ? chapters : [];
+  ab.cues = subs?.text ? abParseSrt(subs.text) : [];
+  ab.cueIndex = abCueIndexAt(el.currentTime || 0);
+  abPaintMeta();
+  abPaintSubs();
+  abPaintChapters();
+  if (autoplay) {
+    abStartSession();
+    try {
+      await el.play();
+    } catch (err) {
+      showToast(`Could not play: ${err.message}`);
+    }
+  }
+}
+
+function abCreateAudio() {
+  const el = new Audio();
+  el.preload = 'metadata';
+
+  el.addEventListener('loadedmetadata', () => {
+    ab.duration = Number.isFinite(el.duration) ? el.duration : ab.duration;
+    abPaintProgress();
+    abPaintMeta();
+  });
+
+  el.addEventListener('timeupdate', () => {
+    if (!ab.book) return;
+    if (ab.session) abAccumulatePlayed();
+    // A 1,000-line chapter moves the cue index in a straight line; the binary
+    // search only ever runs when a cue boundary is behind us.
+    const cue = abCuesForTime(el.currentTime);
+    if (cue !== ab.cueIndex) {
+      ab.cueIndex = cue;
+      abPaintSubs();
+      abPaintMeta();
+    }
+    abPaintProgress();
+    abSaveProgress();
+  });
+
+  el.addEventListener('play', () => {
+    abStartSession();
+    abPaintPlayState();
+    abPaintMeta();
+  });
+
+  el.addEventListener('pause', () => {
+    abSaveProgress(true);
+    abPaintPlayState();
+    abShowLogButton();
+  });
+
+  el.addEventListener('ratechange', abPaintTransportState);
+
+  el.addEventListener('ended', () => {
+    abSaveProgress(true);
+    if (ab.loop === 'book') {
+      ab.el.currentTime = 0;
+      abStartSession();
+      ab.el.play().catch(() => {});
+      return;
+    }
+    if (ab.loop === 'chapter') {
+      const index = abChapterIndexAt(ab.duration - 1);
+      ab.el.currentTime = ab.chapters[index]?.t || 0;
+      ab.el.play().catch(() => {});
+      return;
+    }
+    abPaintPlayState();
+    abShowLogButton();
+  });
+
+  el.addEventListener('error', () => {
+    const code = el.error?.code;
+    showToast(code === 4 ? 'This file cannot be played.' : 'Audio error.');
+  });
+
+  return el;
+}
+
+// During playback the answer is almost always "the same line as a moment ago":
+// it only changes when the next cue starts. That neighbour check keeps the
+// 8,000-cue search off the four-times-a-second path; a seek lands elsewhere and
+// falls back to the binary search.
+function abCuesForTime(seconds) {
+  const cues = ab.cues;
+  if (!cues.length) return -1;
+  if (ab.cueIndex >= 0 && ab.cueIndex < cues.length) {
+    const current = cues[ab.cueIndex];
+    const next = cues[ab.cueIndex + 1];
+    if (current.start <= seconds && (!next || next.start > seconds)) return ab.cueIndex;
+  }
+  return abCueIndexAt(seconds);
+}
+
+// ─── Logging a listen ──────────────────────────────────────────────────────
+// start_at is when playback first started, end_at is when it last stopped, and
+// duration is the media that actually played. A paused hour sits between the
+// two timestamps and inside neither number, which is the honest reading: the
+// session that happened is the listening, not the afternoon.
+function abIsoMinute(ms) {
+  const date = new Date(ms);
+  return (
+    `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}` +
+    `T${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+  );
+}
+
+async function abLogSession({ silent = false, keepPlaying = true } = {}) {
+  const pending = abPendingSession();
+  if (!pending || !ab.book) {
+    if (!keepPlaying) ab.session = null;
+    abShowLogButton();
+    return null;
+  }
+  const playedSeconds = pending.played;
+  const session = {
+    id: Date.now(),
+    date: sessionDayKey(),
+    title: ab.book.title,
+    language: 'Japanese',
+    characters: 0,
+    duration: Math.round((playedSeconds / 60) * 100) / 100,
+    unit: 'minutes',
+    start_at: abIsoMinute(pending.startedAt),
+    end_at: abIsoMinute(Date.now()),
+    media: 'audiobook',
+  };
+  ab.session = null;
+  abShowLogButton();
+  const result = await saveSession(session);
+  if (silent) {
+    if (result?.duplicated) showToast('Already logged — same length, same day');
+    else showToast(`✓ Logged ${formatDuration(Math.round(playedSeconds / 60))} listened`);
+  } else if (result?.duplicated) {
+    showToast('Already logged — same length, same day');
+  } else {
+    showToast(`✓ Logged ${formatDuration(Math.round(playedSeconds / 60))} listened`);
+  }
+  await updateAll();
+  return session;
+}
+
+// ─── Preferences (subtitles + loop + sleep live in settings, rate per book) ─
+async function abLoadPrefs() {
+  try {
+    const settings = await window.electronAPI.getSettings();
+    const saved = settings?.audio || {};
+    if (typeof saved.subs === 'boolean') ab.subs.on = saved.subs;
+    if (AB_SIZES.includes(saved.size)) ab.subs.size = saved.size;
+    if (AB_LOOPS.includes(saved.loop)) ab.loop = saved.loop;
+  } catch {
+    /* first run: the defaults above are the answer */
+  }
+}
+
+function abSavePrefs() {
+  window.electronAPI.updateSettings?.('audio', {
+    subs: ab.subs.on,
+    size: ab.subs.size,
+    loop: ab.loop,
+  });
+}
+
+// ─── Import ────────────────────────────────────────────────────────────────
+async function abImportFolder() {
+  const folder = await window.electronAPI.pickAudioFolder?.();
+  if (!folder) return null;
+  const result = await window.electronAPI.importAudioFolder?.(folder);
+  if (!result?.success) {
+    showToast('Import failed — folder unreadable');
+    return null;
+  }
+  if (!result.imported.length) {
+    showToast('No .m4b files in that folder');
+    return null;
+  }
+  await renderLibrary();
+  const titles = result.imported.map((b) => b.title);
+  showToast(
+    titles.length === 1
+      ? `✓ Imported ${titles[0]}`
+      : `✓ Imported ${titles.length} audiobooks`,
+  );
+  const shelf = (await window.electronAPI.listAudiobooks?.()) || [];
+  const first =
+    shelf.find((b) => result.imported.some((row) => row.title === b.title)) || shelf[0];
+  if (first) await abLoadBook(first);
+  return result;
+}
+
+// The book sheet's LISTEN button: drawn only for a title that has an .m4b, and
+// it hands that row straight to the player, closes the sheet and slides home —
+// the player is a card on the dashboard, so a click here has to move you there.
+function abWireListenButton(book, title) {
+  const btn = document.getElementById('bookListen');
+  if (!btn) return;
+  const playable = Boolean(book && book.audio_path);
+  btn.hidden = !playable;
+  btn.dataset.title = playable ? title : '';
+  if (!playable) return;
+  btn.onclick = async () => {
+    const shelf = (await window.electronAPI.listAudiobooks?.()) || [];
+    const row = shelf.find((entry) => entry.title === title);
+    if (!row) {
+      showToast('That audiobook file is missing');
+      return;
+    }
+    closeBookModal();
+    setPage('dashboard');
+    await abLoadBook(row, { autoplay: true });
+  };
+}
+
+// ─── Boot ──────────────────────────────────────────────────────────────────
+async function abBoot() {
+  const card = abNode('audiobookCard');
+  if (!card) return;
+  await abLoadPrefs();
+  abPaintAll();
+
+  // Resume the book you were last listening to: `audio:list` puts anything with
+  // a position ahead of the rest, so the first row is the one to hand the
+  // player. Nothing imported yet leaves the card in its empty state.
+  const shelf = (await window.electronAPI.listAudiobooks?.()) || [];
+  if (shelf.length) await abLoadBook(shelf[0]);
+
+  abNode('abPlay')?.addEventListener('click', () => abTogglePlay());
+  abNode('abBack')?.addEventListener('click', () => {
+    if (ab.el) abSeek(ab.el.currentTime - 15);
+  });
+  abNode('abForward')?.addEventListener('click', () => {
+    if (ab.el) abSeek(ab.el.currentTime + 15);
+  });
+  abNode('abPrevChapter')?.addEventListener('click', () => abSeekChapter(-1));
+  abNode('abNextChapter')?.addEventListener('click', () => abSeekChapter(1));
+  abNode('abLog')?.addEventListener('click', () => abLogSession({ silent: true }));
+
+  abNode('abStageEmpty')?.addEventListener('click', () => abImportFolder());
+
+  abNode('abRate')?.addEventListener('click', () => {
+    if (!ab.el) return;
+    const index = AB_RATES.indexOf(Number(ab.el.playbackRate));
+    const next = AB_RATES[(index + 1) % AB_RATES.length];
+    ab.el.playbackRate = next;
+    abPaintTransportState();
+    abSaveProgress(true);
+  });
+
+  abNode('abSleep')?.addEventListener('click', () => {
+    const index = AB_SLEEP_STEPS.indexOf(ab.sleepMinutes);
+    ab.sleepMinutes = AB_SLEEP_STEPS[(index + 1) % AB_SLEEP_STEPS.length];
+    ab.sleepAt = ab.sleepMinutes ? Date.now() + ab.sleepMinutes * 60000 : 0;
+    abPaintTransportState();
+    if (ab.sleepMinutes) showToast(`Sleep timer: ${ab.sleepMinutes}m`);
+  });
+
+  abNode('abLoop')?.addEventListener('click', () => {
+    ab.loop = AB_LOOPS[(AB_LOOPS.indexOf(ab.loop) + 1) % AB_LOOPS.length];
+    abSavePrefs();
+    abPaintTransportState();
+  });
+
+  abNode('abSubsBtn')?.addEventListener('click', () => {
+    ab.subs.on = !ab.subs.on;
+    abSavePrefs();
+    abPaintTransportState();
+  });
+
+  abNode('abSize')?.addEventListener('click', () => {
+    ab.subs.size = AB_SIZES[(AB_SIZES.indexOf(ab.subs.size) + 1) % AB_SIZES.length];
+    abSavePrefs();
+    abPaintTransportState();
+  });
+
+  abNode('abChapterBtn')?.addEventListener('click', () => abToggleChapters());
+
+  abNode('abChapters')?.addEventListener('click', (event) => {
+    const row = event.target.closest('.ab-chapter-row');
+    if (!row) return;
+    const chapter = ab.chapters[Number(row.dataset.index)];
+    if (!chapter) return;
+    abSeek(chapter.t);
+    abToggleChapters(false);
+  });
+
+  // Click or drag anywhere on the rail to seek. Pointer capture keeps the drag
+  // working when the cursor leaves the 3px track, which it always does.
+  const scrub = abNode('abScrub');
+  const track = scrub?.querySelector('.ab-scrub-track');
+  if (scrub && track) {
+    const seekToPointer = (event) => {
+      const box = track.getBoundingClientRect();
+      const ratio = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+      if (ab.duration) abSeek(ratio * ab.duration);
+    };
+    scrub.addEventListener('pointerdown', (event) => {
+      if (!ab.book) return;
+      scrub.classList.add('is-dragging');
+      scrub.setPointerCapture(event.pointerId);
+      seekToPointer(event);
+    });
+    scrub.addEventListener('pointermove', (event) => {
+      if (scrub.classList.contains('is-dragging')) seekToPointer(event);
+    });
+    const endDrag = (event) => {
+      if (!scrub.classList.contains('is-dragging')) return;
+      scrub.classList.remove('is-dragging');
+      scrub.releasePointerCapture?.(event.pointerId);
+      abSaveProgress(true);
+    };
+    scrub.addEventListener('pointerup', endDrag);
+    scrub.addEventListener('pointercancel', endDrag);
+  }
+
+  // Closing the chapter panel: a click outside the card, or Escape.
+  document.addEventListener('pointerdown', (event) => {
+    if (!abChaptersOpen()) return;
+    if (event.target.closest('#abChapters') || event.target.closest('#abChapterBtn')) {
+      return;
+    }
+    abToggleChapters(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && abChaptersOpen()) abToggleChapters(false);
+  });
+
+  // The sleep timer is the only clock in the player: it exists to stop
+  // playback, so it is checked once a second and does nothing until then.
+  setInterval(() => {
+    if (!ab.sleepAt) return;
+    abPaintTransportState();
+    if (Date.now() < ab.sleepAt) return;
+    ab.sleepAt = 0;
+    ab.sleepMinutes = 0;
+    if (ab.el && !ab.el.paused) {
+      ab.el.pause();
+      showToast('Sleep timer — playback stopped');
+    }
+    abPaintTransportState();
+  }, 1000);
+
+  // Position is saved on a timer while playing, on pause, and here on the way
+  // out — a window closed mid-chapter must not lose the last few minutes.
+  window.addEventListener('beforeunload', () => abSaveProgress(true));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  abBoot();
+});

@@ -187,22 +187,69 @@
                 <div class="dashboard-grid">
                     <!-- Left column: player on top, recently read below -->
                     <div class="dash-col dash-col-left">
-                        <!-- Card 5: Audiobook player (placeholder) -->
-                        <div class="panel audiobook-card">
-                            <div class="card-title">AUDIOBOOK PLAYER</div>
-                            <div class="audiobook-placeholder">
-                                <div class="audiobook-cover-art"></div>
-                                <div class="audiobook-title">No audiobook loaded</div>
-                                <div class="audiobook-progress">
-                                    <div class="audiobook-progress-fill"></div>
-                                </div>
-                                <div class="audiobook-controls">
-                                    <button type="button" class="audiobook-btn" title="Previous">&#9198;</button>
-                                    <button type="button" class="audiobook-btn audiobook-btn-play" title="Play">&#9654;</button>
-                                    <button type="button" class="audiobook-btn" title="Next">&#9197;</button>
-                                </div>
-                                <div class="audiobook-idle">Continue playing</div>
+                        <!-- Card 5: Audiobook player -->
+                        <div class="panel audiobook-card" id="audiobookCard">
+                            <div class="ab-head">
+                                <div class="card-title">AUDIOBOOK</div>
+                                <span class="ab-head-note" id="abHeadNote"></span>
                             </div>
+
+                            <div class="ab-stage" id="abStage" data-subs="on" data-size="m">
+                                <div class="ab-stage-bg" id="abStageBg"></div>
+                                <img class="ab-stage-art" id="abStageArt" alt="">
+                                <button type="button" class="ab-stage-empty" id="abStageEmpty">
+                                    <span class="ab-empty-plus">+</span>
+                                    <span class="ab-empty-label">ADD AUDIOBOOK FOLDER</span>
+                                </button>
+                                <div class="ab-subs" id="abSubs" aria-hidden="true">
+                                    <span class="ab-sub" data-depth="2"></span>
+                                    <span class="ab-sub" data-depth="1"></span>
+                                    <span class="ab-sub" data-depth="0"></span>
+                                </div>
+                            </div>
+
+                            <div class="ab-caption">
+                                <div class="ab-title" id="abTitle">Nothing loaded</div>
+                                <div class="ab-meta" id="abMeta"></div>
+                            </div>
+
+                            <div class="ab-scrub" id="abScrub">
+                                <div class="ab-scrub-track">
+                                    <div class="ab-scrub-fill" id="abScrubFill"></div>
+                                    <div class="ab-scrub-knob" id="abScrubKnob"></div>
+                                </div>
+                                <div class="ab-times">
+                                    <span id="abElapsed">0:00:00</span>
+                                    <span id="abRemaining">&minus;0:00:00</span>
+                                </div>
+                            </div>
+
+                            <div class="ab-transport">
+                                <button type="button" class="ab-btn" id="abPrevChapter" title="Previous chapter" aria-label="Previous chapter">
+                                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12.5 4.4 6.6 8l5.9 3.6z" fill="currentColor"/></svg>
+                                </button>
+                                <button type="button" class="ab-btn ab-btn-seek" id="abBack" title="Back 15 seconds" aria-label="Back 15 seconds">&minus;15</button>
+                                <button type="button" class="ab-btn ab-btn-play" id="abPlay" title="Play" aria-label="Play">
+                                    <svg class="ab-icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.2 3.4 12.4 8l-7.2 4.6z" fill="currentColor"/></svg>
+                                    <svg class="ab-icon-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="4.2" y="3.4" width="2.6" height="9.2" rx="1" fill="currentColor"/><rect x="9.2" y="3.4" width="2.6" height="9.2" rx="1" fill="currentColor"/></svg>
+                                </button>
+                                <button type="button" class="ab-btn ab-btn-seek" id="abForward" title="Forward 15 seconds" aria-label="Forward 15 seconds">+15</button>
+                                <button type="button" class="ab-btn" id="abNextChapter" title="Next chapter" aria-label="Next chapter">
+                                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3.5 4.4 9.4 8l-5.9 3.6z" fill="currentColor"/></svg>
+                                </button>
+                                <button type="button" class="ab-log-btn" id="abLog" hidden>LOG SESSION</button>
+                            </div>
+
+                            <div class="ab-pills">
+                                <button type="button" class="ab-pill" id="abRate" title="Playback speed">1.0&times;</button>
+                                <button type="button" class="ab-pill" id="abSleep" title="Sleep timer">Sleep</button>
+                                <button type="button" class="ab-pill" id="abLoop" title="Loop">Loop off</button>
+                                <button type="button" class="ab-pill" id="abSubsBtn" title="Subtitles">Subs on</button>
+                                <button type="button" class="ab-pill" id="abSize" title="Subtitle size">Tt</button>
+                                <button type="button" class="ab-pill" id="abChapterBtn" title="Chapters">Chapters</button>
+                            </div>
+
+                            <div class="ab-chapters" id="abChapters" hidden></div>
                         </div>
 
                         <!-- Card 3: Recently read -->
@@ -306,6 +353,7 @@
                             <div class="library-header">
                                 <div class="card-title">LIBRARY</div>
                                 <span class="library-count" id="libraryCount"></span>
+                                <button type="button" class="library-import" id="libraryImport" title="Import every .m4b under a folder">+ ADD FOLDER</button>
                                 <div class="rt-tabs library-tabs" id="libraryTabs"></div>
                             </div>
                             <div class="library-scroll" id="libraryScroll">
@@ -365,6 +413,12 @@
                             <button class="book-status-btn" type="button" data-kind="vn" title="Visual novel">VN</button>
                         </div>
                     </div>
+                    <!-- Only drawn for a title that has an .m4b behind it: an audio
+                         play button on a text-only book would be a button that
+                         cannot do anything. -->
+                    <button class="book-listen-btn" type="button" id="bookListen" hidden>
+                        <span aria-hidden="true">&#9654;</span> LISTEN
+                    </button>
                 </aside>
                 <div class="book-sheet-right">
                     <div class="panel reading-time-card book-stats">
