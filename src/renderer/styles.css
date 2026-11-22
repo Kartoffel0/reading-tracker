@@ -3080,13 +3080,14 @@ body.theme-wave .wave-bg {
 }
 
 /* ===== AUDIOBOOK PLAYER =====
-   400 x 636 in the left column: a portrait player, stage on top, console under
-   it. The stage is the only elastic row — everything else is a fixed height so
-   the card cannot jump between books with different titles. */
+   400 x 636 in the left column. Header with three view tabs, a square stage that
+   the tabs swap into, then the console: caption, scrubber, transport, session.
+   Nothing here is a circle and nothing is a pill — the card speaks the same
+   rounded-rectangle language as the rest of the app. */
 .audiobook-card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     position: relative;
 }
 
@@ -3101,35 +3102,23 @@ body.theme-wave .wave-bg {
     margin-bottom: 0;
 }
 
-/* The one door to everything that is not transport. */
-.ab-config-btn {
-    padding: 3px 7px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted);
-    font: inherit;
+/* PLAYER · CHAPTERS · CONFIG: the app's underline tabs, small enough to sit
+   beside the card's own title. */
+.ab-tabs {
+    margin-left: auto;
+    gap: 0;
+}
+
+.ab-tabs .rt-tab {
     font-size: 0.6rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease;
+    letter-spacing: 0.08em;
+    padding: 1px 6px 4px;
 }
 
-.ab-config-btn:hover,
-.ab-config-btn.is-open {
-    color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
-}
-
-/* The stage: art contained over a blurred copy of itself, framed like a video
-   surface rather than a book tile. Subtitles live inside it, so the scrim is
-   part of the stage and never covers the console. */
+/* The stage: a fixed square, so the art is never cropped to a shape the file
+   does not have and the card stops growing with the cover. */
 .ab-stage {
     position: relative;
-    /* Square, always: the art is a square as often as not, and a square frame
-       means the cover is never cropped to fit a shape the file does not have. */
     aspect-ratio: 1 / 1;
     flex: 0 0 auto;
     width: 100%;
@@ -3164,15 +3153,17 @@ body.theme-wave .wave-bg {
     opacity: 1;
 }
 
-/* Bottom scrim so white subtitle text survives a bright cover. */
+/* Bottom wash so the subtitle text separates from the art without blacking it
+   out. */
 .ab-stage::after {
     content: '';
     position: absolute;
     inset: auto 0 0 0;
     height: 46%;
-    background: linear-gradient(to top, rgba(8, 6, 10, 0.84) 12%, rgba(8, 6, 10, 0));
+    background: linear-gradient(to top, var(--bg-card), transparent);
     pointer-events: none;
     z-index: 1;
+    border-radius: 0 0 10px 10px;
 }
 
 .ab-stage-empty {
@@ -3183,7 +3174,7 @@ body.theme-wave .wave-bg {
     justify-items: center;
     gap: 8px;
     border: 1px dashed var(--border-color);
-    border-radius: 12px;
+    border-radius: 10px;
     background: transparent;
     color: var(--text-muted);
     font: inherit;
@@ -3215,10 +3206,9 @@ body.theme-wave .wave-bg {
     letter-spacing: 0.14em;
 }
 
-/* Three lines, newest at the bottom. The two before it stay in place and only
-   step back in opacity: no tilt, no scale, nothing that makes a reader chase
-   the text. The stack grows upward from the bottom edge, so a long line takes
-   the room it needs and pushes the older ones up rather than clipping. */
+/* Three lines, newest at the bottom. The two before it stay where they are and
+   only step back in opacity: no tilt, no scale, nothing that makes a reader
+   chase the text. */
 .ab-subs {
     position: absolute;
     inset: auto 16px 16px 16px;
@@ -3244,12 +3234,14 @@ body.theme-wave .wave-bg {
     font-weight: 600;
 }
 
+/* The wash behind the text is a light one, so the two older lines need more
+   than a token opacity to survive on a bright cover. */
 .ab-sub[data-depth='1'] {
-    color: rgba(255, 255, 255, 0.52);
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .ab-sub[data-depth='2'] {
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.58);
 }
 
 .ab-stage[data-subs='off'] .ab-subs {
@@ -3263,7 +3255,7 @@ body.theme-wave .wave-bg {
 .ab-caption {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     min-width: 0;
 }
 
@@ -3277,29 +3269,43 @@ body.theme-wave .wave-bg {
     text-overflow: ellipsis;
 }
 
+/* author · chapter on the left, chapter n/N · runtime on the right. */
 .ab-meta {
-    font-size: 0.68rem;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.66rem;
     color: var(--text-muted);
     line-height: 1.3;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
-/* Scrubber — one 3px rail, a knob that only exists while the pointer is over
+.ab-meta-left {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ab-meta-right {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Scrubber — one 6px rail, a knob that only exists while the pointer is over
    the card. Clicking or dragging anywhere on the rail seeks. */
 .ab-scrub {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 2px 0;
+    padding-top: 4px;
     cursor: pointer;
 }
 
 .ab-scrub-track {
     position: relative;
-    height: 3px;
-    border-radius: 2px;
+    height: 6px;
+    border-radius: 3px;
     background: color-mix(in srgb, var(--text-primary) 12%, transparent);
 }
 
@@ -3307,7 +3313,7 @@ body.theme-wave .wave-bg {
     position: absolute;
     inset: 0 auto 0 0;
     width: 0%;
-    border-radius: 2px;
+    border-radius: 3px;
     background: var(--accent-primary);
 }
 
@@ -3315,11 +3321,12 @@ body.theme-wave .wave-bg {
     position: absolute;
     top: 50%;
     left: 0%;
-    width: 9px;
-    height: 9px;
-    margin: -4.5px 0 0 -4.5px;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
     border-radius: 50%;
     background: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--bg-primary);
     opacity: 0;
     transition: opacity 0.15s ease;
 }
@@ -3337,12 +3344,14 @@ body.theme-wave .wave-bg {
     color: var(--text-muted);
 }
 
+/* Transport: five bare glyphs, no boxes. The button is the hit area, not a
+   shape — the icons carry the row. */
 .ab-transport {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    min-height: 44px;
+    gap: 16px;
+    min-height: 40px;
 }
 
 .ab-btn {
@@ -3351,14 +3360,13 @@ body.theme-wave .wave-bg {
     width: 34px;
     height: 34px;
     padding: 0;
-    /* The app has no circles: every control is a rounded rectangle. */
+    border: 0;
     border-radius: 9px;
-    border: 1px solid var(--border-color);
-    background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+    background: none;
     color: var(--text-secondary);
     font: inherit;
     cursor: pointer;
-    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    transition: color 0.15s ease;
 }
 
 .ab-btn svg {
@@ -3369,33 +3377,22 @@ body.theme-wave .wave-bg {
 
 .ab-btn:hover {
     color: var(--text-primary);
-    border-color: var(--border-hover);
 }
 
 .ab-btn-seek {
-    width: 38px;
     font-size: 0.62rem;
     font-weight: 600;
     letter-spacing: 0.02em;
 }
 
 .ab-btn-play {
-    width: 44px;
-    height: 44px;
-    border-color: transparent;
-    border-radius: 11px;
-    background: var(--accent-primary);
-    color: #fff;
-}
-
-.ab-btn-play:hover {
-    background: color-mix(in srgb, var(--accent-primary) 88%, #fff);
-    color: #fff;
+    width: 40px;
+    height: 40px;
 }
 
 .ab-btn-play svg {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
 }
 
 /* Two icons in one button: the play triangle is the default, the pause bars are
@@ -3405,68 +3402,126 @@ body.theme-wave .wave-bg {
 .ab-btn-play.is-playing .ab-icon-play { display: none; }
 .ab-btn-play.is-playing .ab-icon-pause { display: block; }
 
-/* The session band: the listen, not the book. A fixed slot so the card does
-   not breathe when a session starts or is logged. */
+/* ── Current session ──────────────────────────────────────────────────────
+   The listen is a stretch of the *book*: the two small numbers are positions in
+   it, the big one is how far apart they are. */
 .ab-session {
     display: flex;
-    /* The only slack in the card: the stage is a fixed square, so whatever
-       height is left over lands here, above the scrubber. */
     align-items: flex-end;
-    gap: 8px;
+    gap: 14px;
+    padding-top: 2px;
+}
+
+.ab-session-col {
     flex: 1 1 auto;
-    min-height: 44px;
-    padding: 0 2px 6px;
-    color: var(--text-secondary);
+    gap: 1px;
 }
 
-/* Nothing to report yet: the slot stays, its contents step back. */
-.ab-session.is-idle {
-    opacity: 0;
+.ab-session .rt-big {
+    font-size: 1.35rem;
+    line-height: 1.15;
 }
 
-.ab-session-clock {
-    width: 13px;
-    height: 13px;
-    display: block;
-    color: var(--accent-primary);
-    flex: 0 0 auto;
-}
-
-.ab-session-time {
-    font-size: 0.95rem;
-    font-weight: 600;
+.ab-session-range {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
     font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.ab-log-btn {
+    flex: 0 0 50%;
+    height: 44px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--accent-primary);
+    color: #fff;
+    font: inherit;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.ab-log-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-primary) 88%, #fff);
+}
+
+.ab-log-btn:disabled {
+    background: color-mix(in srgb, var(--text-muted) 22%, transparent);
+    color: var(--text-muted);
+    cursor: default;
+}
+
+/* Chapter list: the CHAPTERS view. It fills the stage, so it replaces the cover
+   rather than floating over it. */
+.ab-chapters {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    /* Opaque on purpose: this covers cover art, and a translucent surface would
+       let the art read through the chapter names. */
+    background: var(--bg-primary);
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.ab-chapters[hidden] {
+    display: none;
+}
+
+.ab-chapter-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 0.72rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ab-chapter-row:hover {
+    background: color-mix(in srgb, var(--text-primary) 7%, transparent);
     color: var(--text-primary);
 }
 
-.ab-session-since {
-    font-size: 0.64rem;
-    letter-spacing: 0.04em;
+.ab-chapter-row.is-current {
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.ab-chapter-time {
+    font-size: 0.62rem;
+    font-variant-numeric: tabular-nums;
     color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex: 0 0 auto;
 }
 
-/* C and L: the two outer buttons, a letter each until they get their icons. */
-.ab-btn-side {
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-}
-
-.ab-btn-side:disabled {
-    opacity: 0.4;
-    cursor: default;
+.ab-chapter-row.is-current .ab-chapter-time {
+    color: var(--accent-primary);
 }
 
 /* ===== AUDIOBOOK QUICK SETTINGS =====
    Same surface as the calendar date picker: a --bg-card wash, 8px corners, the
    same 16px padding, the same drop shadow, the same fade-in, JetBrains Mono for
    anything that reads as a value, and a bordered header strip. The one
-   difference the picture forces: the picker floats over a form, this floats
-   over cover art, so the wash is layered over a solid page tone instead of
-   letting the art read through the labels. */
+   difference the picture forces: the picker floats over a form, this fills the
+   cover's own box, over cover art — so the wash is layered over a solid page
+   tone instead of letting the art read through the labels. */
 .ab-config {
     position: absolute;
     inset: 0;
@@ -3491,8 +3546,8 @@ body.theme-wave .wave-bg {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
-    padding-bottom: 12px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -3544,7 +3599,7 @@ body.theme-wave .wave-bg {
 .ab-seg-btn {
     flex: 1 1 0;
     min-width: 0;
-    height: 32px;
+    height: 30px;
     padding: 0 4px;
     border: 1px solid transparent;
     border-radius: 8px;
@@ -3571,65 +3626,25 @@ body.theme-wave .wave-bg {
     font-weight: 700;
 }
 
-/* Chapter list: a child of the stage, so it covers the cover and the
-   subtitles and nothing else. The transport stays playable underneath. */
-.ab-chapters {
-    position: absolute;
-    inset: 0;
-    z-index: 4;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    padding: 8px;
-    border-radius: 10px;
-    border: 1px solid var(--border-color);
-    /* Opaque on purpose: the list sits over cover art, and a translucent one
-       let the art read through the chapter names. Everything else in the app
-       can be glass because nothing legible sits on top of an image. */
-    background: var(--bg-primary);
-    overflow-y: auto;
-    scrollbar-width: thin;
-}
-
-.ab-chapters[hidden] {
-    display: none;
-}
-
-.ab-chapter-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 7px 9px;
-    border: 0;
-    border-radius: 6px;
+/* An action inside the settings sheet: same box as a segment, but it does
+   something instead of choosing a value. */
+.ab-config-action {
+    width: 100%;
+    height: 30px;
+    border: 1px dashed color-mix(in srgb, var(--accent-primary) 40%, transparent);
+    border-radius: 8px;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--accent-primary);
     font: inherit;
-    font-size: 0.72rem;
-    text-align: left;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
     cursor: pointer;
+    transition: background 0.15s ease;
 }
 
-.ab-chapter-row:hover {
-    background: color-mix(in srgb, var(--text-primary) 7%, transparent);
-    color: var(--text-primary);
-}
-
-.ab-chapter-row.is-current {
-    color: var(--accent-primary);
+.ab-config-action:hover {
     background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
-}
-
-.ab-chapter-time {
-    font-size: 0.62rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-muted);
-    flex: 0 0 auto;
-}
-
-.ab-chapter-row.is-current .ab-chapter-time {
-    color: var(--accent-primary);
 }
 
 /* ===== DAILY GOAL CARD ===== */

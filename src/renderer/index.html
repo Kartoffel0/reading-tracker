@@ -159,217 +159,226 @@
                      measures zero. -->
                 <div class="page-track" id="pageTrack" data-active="dashboard">
                     <section class="page" data-page="dashboard">
-                <!-- Stats Grid -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="kanji-bg-icon">続</div>
-                        <div class="value" id="currentStreak">0</div>
-                        <div class="label">CURRENT STREAK</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="kanji-bg-icon">最</div>
-                        <div class="value" id="bestStreak">0</div>
-                        <div class="label">LONGEST STREAK</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="kanji-bg-icon">日</div>
-                        <div class="value" id="totalDays">0</div>
-                        <div class="label">TOTAL DAYS</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="kanji-bg-icon">時</div>
-                        <div class="value" id="totalHours">0</div>
-                        <div class="label">TOTAL HOURS</div>
-                    </div>
-                </div>
-
-                <!-- Right Panel - Dashboard Grid (4 sections) -->
-                <div class="dashboard-grid">
-                    <!-- Left column: player on top, recently read below -->
-                    <div class="dash-col dash-col-left">
-                        <!-- Card 5: Audiobook player -->
-                        <div class="panel audiobook-card" id="audiobookCard">
-                            <div class="ab-head">
-                                <div class="card-title">AUDIOBOOK</div>
-                                <!-- Everything that is not transport lives in
-                                     here: speed, subtitles, subtitle size. -->
-                                <button type="button" class="ab-config-btn" id="abConfigBtn" title="Player settings">CONFIG</button>
+                        <!-- Stats Grid -->
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="kanji-bg-icon">続</div>
+                                <div class="value" id="currentStreak">0</div>
+                                <div class="label">CURRENT STREAK</div>
                             </div>
-
-                            <div class="ab-stage" id="abStage" data-subs="on" data-size="m">
-                                <div class="ab-stage-bg" id="abStageBg"></div>
-                                <img class="ab-stage-art" id="abStageArt" alt="">
-                                <button type="button" class="ab-stage-empty" id="abStageEmpty">
-                                    <span class="ab-empty-plus">+</span>
-                                    <span class="ab-empty-label">ADD AUDIOBOOK FOLDER</span>
-                                </button>
-                                <div class="ab-subs" id="abSubs" aria-hidden="true">
-                                    <span class="ab-sub" data-depth="2"></span>
-                                    <span class="ab-sub" data-depth="1"></span>
-                                    <span class="ab-sub" data-depth="0"></span>
-                                </div>
-                                <!-- A child of the stage, so it covers the cover
-                                     and the subtitles and nothing else. -->
-                                <div class="ab-chapters" id="abChapters" hidden></div>
-                                <!-- Quick settings: the size of the cover, laid over
-                                     it, so the panel never has to scroll and
-                                     nothing behind it competes for the eye. -->
-                                <div class="ab-config" id="abConfig" hidden>
-                                    <div class="ab-config-head">
-                                        <span class="ab-config-title">Playback</span>
-                                        <span class="ab-config-hint">PLAYER</span>
-                                    </div>
-                                    <div class="ab-config-body">
-                                        <div class="ab-config-row">
-                                            <span class="ab-config-label">Speed</span>
-                                            <div class="ab-seg" id="abCfgSpeed"></div>
-                                        </div>
-                                        <div class="ab-config-row">
-                                            <span class="ab-config-label">Subtitles</span>
-                                            <div class="ab-seg" id="abCfgSubs"></div>
-                                        </div>
-                                        <div class="ab-config-row">
-                                            <span class="ab-config-label">Size</span>
-                                            <div class="ab-seg" id="abCfgSize"></div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div class="stat-card">
+                                <div class="kanji-bg-icon">最</div>
+                                <div class="value" id="bestStreak">0</div>
+                                <div class="label">LONGEST STREAK</div>
                             </div>
-
-                            <div class="ab-caption">
-                                <div class="ab-title" id="abTitle">Nothing loaded</div>
-                                <div class="ab-meta" id="abMeta"></div>
+                            <div class="stat-card">
+                                <div class="kanji-bg-icon">日</div>
+                                <div class="value" id="totalDays">0</div>
+                                <div class="label">TOTAL DAYS</div>
                             </div>
-
-                            <!-- The listen itself, not the book: this is the
-                                 space for how long this session has run. -->
-                            <div class="ab-session" id="abSession">
-                                <svg class="ab-session-clock" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.9v3.3l2.1 1.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-                                <span class="ab-session-time" id="abSessionTime">0:00</span>
-                                <span class="ab-session-since" id="abSessionSince"></span>
-                            </div>
-
-                            <div class="ab-scrub" id="abScrub">
-                                <div class="ab-scrub-track">
-                                    <div class="ab-scrub-fill" id="abScrubFill"></div>
-                                    <div class="ab-scrub-knob" id="abScrubKnob"></div>
-                                </div>
-                                <div class="ab-times">
-                                    <span id="abElapsed">0:00:00</span>
-                                    <span id="abRemaining">&minus;0:00:00</span>
-                                </div>
-                            </div>
-
-                            <div class="ab-transport">
-                                <button type="button" class="ab-btn ab-btn-side" id="abChapterBtn" title="Chapters" aria-label="Chapters">C</button>
-                                <button type="button" class="ab-btn" id="abPrevChapter" title="Previous chapter" aria-label="Previous chapter">
-                                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12.5 4.4 6.6 8l5.9 3.6z" fill="currentColor"/></svg>
-                                </button>
-                                <button type="button" class="ab-btn ab-btn-seek" id="abBack" title="Back 15 seconds" aria-label="Back 15 seconds">&minus;15</button>
-                                <button type="button" class="ab-btn ab-btn-play" id="abPlay" title="Play" aria-label="Play">
-                                    <svg class="ab-icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.2 3.4 12.4 8l-7.2 4.6z" fill="currentColor"/></svg>
-                                    <svg class="ab-icon-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="4.2" y="3.4" width="2.6" height="9.2" rx="1" fill="currentColor"/><rect x="9.2" y="3.4" width="2.6" height="9.2" rx="1" fill="currentColor"/></svg>
-                                </button>
-                                <button type="button" class="ab-btn ab-btn-seek" id="abForward" title="Forward 15 seconds" aria-label="Forward 15 seconds">+15</button>
-                                <button type="button" class="ab-btn" id="abNextChapter" title="Next chapter" aria-label="Next chapter">
-                                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3.5 4.4 9.4 8l-5.9 3.6z" fill="currentColor"/></svg>
-                                </button>
-                                <button type="button" class="ab-btn ab-btn-side" id="abLog" title="Log this listen" aria-label="Log this listen" disabled>L</button>
-                            </div>
-
-                        </div>
-
-                        <!-- Card 3: Recently read -->
-                        <div class="panel recently-read-card">
-                            <div class="card-title">RECENTLY READ</div>
-                            <div id="recentlyReadList"></div>
-                        </div>
-                    </div>
-
-                    <!-- Right column: stats, goal, entries -->
-                    <div class="dash-col dash-col-right">
-                        <!-- Card 2: Reading time -->
-                        <div class="panel reading-time-card" id="readingTimeCard">
-                            <div class="rt-header">
-                                <div class="card-title">READING STATS</div>
-                                <div class="rt-tabs" id="readingTimeTabs"></div>
-                            </div>
-                            <div class="reading-time-content">
-                                <div class="reading-time-body" id="readingTimeBody"></div>
+                            <div class="stat-card">
+                                <div class="kanji-bg-icon">時</div>
+                                <div class="value" id="totalHours">0</div>
+                                <div class="label">TOTAL HOURS</div>
                             </div>
                         </div>
 
-                        <!-- Card 4: Goal + activity calendar (merged) -->
-                        <div class="panel goal-card">
-                            <div class="card-title">ACTIVITY CALENDAR</div>
-                            <div id="goalCard">
-                                <div class="goal-top">
-                                    <div class="goal-gauge" id="goalGauge"></div>
-                                    <div class="goal-stats">
-                                        <div class="goal-stat" id="goalStatStreak">
-                                            <span class="goal-stat-label">CURRENT GOAL STREAK</span>
-                                            <span class="goal-stat-value" id="goalStreak">0</span>
-                                        </div>
-                                        <div class="goal-stat" id="goalStatLongest">
-                                            <span class="goal-stat-label">LONGEST GOAL STREAK</span>
-                                            <span class="goal-stat-value" id="goalLongestStreak">0</span>
-                                        </div>
-                                        <div class="goal-stat" id="goalStatDays">
-                                            <span class="goal-stat-label">TOTAL GOAL MET DAYS</span>
-                                            <span class="goal-stat-value" id="goalDaysMet">0</span>
-                                        </div>
-                                        <div class="goal-stat" id="goalStatBestDay">
-                                            <span class="goal-stat-label" id="goalBestDayLabel">BEST DAY</span>
-                                            <span class="goal-stat-value" id="goalBestDay">0</span>
-                                        </div>
-                                        <div class="goal-stat" id="goalStatBestWeek">
-                                            <span class="goal-stat-label" id="goalBestWeekLabel">BEST WEEK</span>
-                                            <span class="goal-stat-value" id="goalBestWeek">0</span>
-                                        </div>
-                                        <div class="goal-stat" id="goalStatFastest">
-                                            <span class="goal-stat-label">FASTEST DAY</span>
-                                            <span class="goal-stat-value" id="goalFastestDay">0</span>
+                        <!-- Right Panel - Dashboard Grid (4 sections) -->
+                        <div class="dashboard-grid">
+                            <!-- Left column: player on top, recently read below -->
+                            <div class="dash-col dash-col-left">
+                                <!-- Card 5: Audiobook player -->
+                                <div class="panel audiobook-card" id="audiobookCard">
+                                    <div class="ab-head">
+                                        <div class="card-title">AUDIOBOOK</div>
+                                        <!-- Three views of one square: the cover,
+                                             the chapter list, the settings. -->
+                                        <div class="rt-tabs ab-tabs" id="abTabs">
+                                            <div class="rt-tab active" data-view="player">PLAYER</div>
+                                            <div class="rt-tab" data-view="chapters">CHAPTERS</div>
+                                            <div class="rt-tab" data-view="config">CONFIG</div>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="goal-calendar-wrap">
-                                    <div class="gc-body" id="goalCalendarBody">
-                                        <div class="gc-day-labels" aria-hidden="true">
-                                            <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
-                                        </div>
-                                        <div class="goal-calendar" id="goalCalendar"></div>
-                                    </div>
-                                    <div class="goal-calendar-legend">
-                                        <div class="gc-nav">
-                                            <button class="month-arrow" onclick="scrollGoalCalendar(-1)" title="Older weeks">‹</button>
-                                            <button class="month-arrow" onclick="scrollGoalCalendar(1)" title="Newer weeks">›</button>
-                                        </div>
-                                        <span class="gc-legend-label">less</span>
-                                        <div class="gc-legend-scale">
-                                            <div class="gc-legend-cell level-1"></div>
-                                            <div class="gc-legend-cell level-2"></div>
-                                            <div class="gc-legend-cell level-3"></div>
-                                            <div class="gc-legend-cell level-4"></div>
-                                            <div class="gc-legend-cell level-5"></div>
-                                        </div>
-                                        <span class="gc-legend-label">more</span>
-                                        <div class="gc-legend-cell gc-met"></div>
-                                        <span class="gc-legend-label">goal met</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- Recent Entries -->
-                        <div class="panel entries-section">
-                            <div class="entries-header">
-                                <h2 class="card-title" style="margin-bottom: 0; margin-top: 0;">RECENT ENTRIES</h2>
-                                <span class="entry-count" id="entryCount">0 entries</span>
+                                    <div class="ab-stage" id="abStage" data-view="player" data-subs="on" data-size="m">
+                                        <div class="ab-stage-bg" id="abStageBg"></div>
+                                        <img class="ab-stage-art" id="abStageArt" alt="">
+                                        <button type="button" class="ab-stage-empty" id="abStageEmpty">
+                                            <span class="ab-empty-plus">+</span>
+                                            <span class="ab-empty-label">ADD AUDIOBOOK FOLDER</span>
+                                        </button>
+                                        <div class="ab-subs" id="abSubs" aria-hidden="true">
+                                            <span class="ab-sub" data-depth="2"></span>
+                                            <span class="ab-sub" data-depth="1"></span>
+                                            <span class="ab-sub" data-depth="0"></span>
+                                        </div>
+                                        <!-- Both live in the stage: they are the
+                                             other two views of the same square. -->
+                                        <div class="ab-chapters" id="abChapters" hidden></div>
+                                        <div class="ab-config" id="abConfig" hidden>
+                                            <div class="ab-config-head">
+                                                <span class="ab-config-title">Playback</span>
+                                                <span class="ab-config-hint">PLAYER</span>
+                                            </div>
+                                            <div class="ab-config-body">
+                                                <div class="ab-config-row">
+                                                    <span class="ab-config-label">Speed</span>
+                                                    <div class="ab-seg" id="abCfgSpeed"></div>
+                                                </div>
+                                                <div class="ab-config-row">
+                                                    <span class="ab-config-label">Subtitles</span>
+                                                    <div class="ab-seg" id="abCfgSubs"></div>
+                                                </div>
+                                                <div class="ab-config-row">
+                                                    <span class="ab-config-label">Size</span>
+                                                    <div class="ab-seg" id="abCfgSize"></div>
+                                                </div>
+                                                <div class="ab-config-row">
+                                                    <span class="ab-config-label">Session</span>
+                                                    <button type="button" class="ab-config-action" id="abCfgReset">RESET SESSION</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ab-caption">
+                                        <div class="ab-title" id="abTitle">Nothing loaded</div>
+                                        <div class="ab-meta">
+                                            <span class="ab-meta-left" id="abMeta"></span>
+                                            <span class="ab-meta-right" id="abMetaRight"></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="ab-scrub" id="abScrub">
+                                        <div class="ab-scrub-track">
+                                            <div class="ab-scrub-fill" id="abScrubFill"></div>
+                                            <div class="ab-scrub-knob" id="abScrubKnob"></div>
+                                        </div>
+                                        <div class="ab-times">
+                                            <span id="abElapsed">0:00:00</span>
+                                            <span id="abRemaining">&minus;0:00:00</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="ab-transport">
+                                        <button type="button" class="ab-btn" id="abPrevChapter" title="Previous chapter" aria-label="Previous chapter">
+                                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><path d="M12.5 4.4 6.6 8l5.9 3.6z" fill="currentColor" /></svg>
+                                        </button>
+                                        <button type="button" class="ab-btn ab-btn-seek" id="abBack" title="Back 15 seconds" aria-label="Back 15 seconds">&minus;15</button>
+                                        <button type="button" class="ab-btn ab-btn-play" id="abPlay" title="Play" aria-label="Play">
+                                            <svg class="ab-icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.2 3.4 12.4 8l-7.2 4.6z" fill="currentColor" /></svg>
+                                            <svg class="ab-icon-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="4.2" y="3.4" width="2.6" height="9.2" rx="1" fill="currentColor" /><rect x="9.2" y="3.4" width="2.6" height="9.2" rx="1" fill="currentColor" /></svg>
+                                        </button>
+                                        <button type="button" class="ab-btn ab-btn-seek" id="abForward" title="Forward 15 seconds" aria-label="Forward 15 seconds">+15</button>
+                                        <button type="button" class="ab-btn" id="abNextChapter" title="Next chapter" aria-label="Next chapter">
+                                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><path d="M3.5 4.4 9.4 8l-5.9 3.6z" fill="currentColor" /></svg>
+                                        </button>
+                                    </div>
+
+                                    <!-- The session is a stretch of the book: the two
+                                         small numbers are positions in it, the big one
+                                         is how far apart they are. -->
+                                    <div class="ab-session">
+                                        <div class="rt-stat-col ab-session-col">
+                                            <span class="rt-stat-label">CURRENT SESSION</span>
+                                            <span class="rt-big" id="abSessionBig">0m</span>
+                                            <span class="ab-session-range" id="abSessionRange">0:00:00 &ndash; 0:00:00</span>
+                                        </div>
+                                        <button type="button" class="ab-log-btn" id="abLog" disabled>LOG SESSION</button>
+                                    </div>
+                                </div>
+
+                                <!-- Card 3: Recently read -->
+                                <div class="panel recently-read-card">
+                                    <div class="card-title">RECENTLY READ</div>
+                                    <div id="recentlyReadList"></div>
+                                </div>
                             </div>
-                            <div id="entryList"></div>
+
+                            <!-- Right column: stats, goal, entries -->
+                            <div class="dash-col dash-col-right">
+                                <!-- Card 2: Reading time -->
+                                <div class="panel reading-time-card" id="readingTimeCard">
+                                    <div class="rt-header">
+                                        <div class="card-title">READING STATS</div>
+                                        <div class="rt-tabs" id="readingTimeTabs"></div>
+                                    </div>
+                                    <div class="reading-time-content">
+                                        <div class="reading-time-body" id="readingTimeBody"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Card 4: Goal + activity calendar (merged) -->
+                                <div class="panel goal-card">
+                                    <div class="card-title">ACTIVITY CALENDAR</div>
+                                    <div id="goalCard">
+                                        <div class="goal-top">
+                                            <div class="goal-gauge" id="goalGauge"></div>
+                                            <div class="goal-stats">
+                                                <div class="goal-stat" id="goalStatStreak">
+                                                    <span class="goal-stat-label">CURRENT GOAL STREAK</span>
+                                                    <span class="goal-stat-value" id="goalStreak">0</span>
+                                                </div>
+                                                <div class="goal-stat" id="goalStatLongest">
+                                                    <span class="goal-stat-label">LONGEST GOAL STREAK</span>
+                                                    <span class="goal-stat-value" id="goalLongestStreak">0</span>
+                                                </div>
+                                                <div class="goal-stat" id="goalStatDays">
+                                                    <span class="goal-stat-label">TOTAL GOAL MET DAYS</span>
+                                                    <span class="goal-stat-value" id="goalDaysMet">0</span>
+                                                </div>
+                                                <div class="goal-stat" id="goalStatBestDay">
+                                                    <span class="goal-stat-label" id="goalBestDayLabel">BEST DAY</span>
+                                                    <span class="goal-stat-value" id="goalBestDay">0</span>
+                                                </div>
+                                                <div class="goal-stat" id="goalStatBestWeek">
+                                                    <span class="goal-stat-label" id="goalBestWeekLabel">BEST WEEK</span>
+                                                    <span class="goal-stat-value" id="goalBestWeek">0</span>
+                                                </div>
+                                                <div class="goal-stat" id="goalStatFastest">
+                                                    <span class="goal-stat-label">FASTEST DAY</span>
+                                                    <span class="goal-stat-value" id="goalFastestDay">0</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="goal-calendar-wrap">
+                                            <div class="gc-body" id="goalCalendarBody">
+                                                <div class="gc-day-labels" aria-hidden="true">
+                                                    <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+                                                </div>
+                                                <div class="goal-calendar" id="goalCalendar"></div>
+                                            </div>
+                                            <div class="goal-calendar-legend">
+                                                <div class="gc-nav">
+                                                    <button class="month-arrow" onclick="scrollGoalCalendar(-1)" title="Older weeks">‹</button>
+                                                    <button class="month-arrow" onclick="scrollGoalCalendar(1)" title="Newer weeks">›</button>
+                                                </div>
+                                                <span class="gc-legend-label">less</span>
+                                                <div class="gc-legend-scale">
+                                                    <div class="gc-legend-cell level-1"></div>
+                                                    <div class="gc-legend-cell level-2"></div>
+                                                    <div class="gc-legend-cell level-3"></div>
+                                                    <div class="gc-legend-cell level-4"></div>
+                                                    <div class="gc-legend-cell level-5"></div>
+                                                </div>
+                                                <span class="gc-legend-label">more</span>
+                                                <div class="gc-legend-cell gc-met"></div>
+                                                <span class="gc-legend-label">goal met</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Recent Entries -->
+                                <div class="panel entries-section">
+                                    <div class="entries-header">
+                                        <h2 class="card-title" style="margin-bottom: 0; margin-top: 0;">RECENT ENTRIES</h2>
+                                        <span class="entry-count" id="entryCount">0 entries</span>
+                                    </div>
+                                    <div id="entryList"></div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
                     </section>
 
                     <!-- Page 2: the whole shelf. One scroll area, rows of

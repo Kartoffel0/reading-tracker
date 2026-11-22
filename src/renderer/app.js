@@ -4095,7 +4095,11 @@ const ab = {
   chapters: [],
   duration: 0,
   subs: { on: true, size: 'm' },
-  session: null,
+  view: 'player',
+  // Where this book's current session began, as a position in the file. The
+  // session runs from here to wherever playback has got to, which is why
+  // skipping forward counts and pausing does not.
+  sessionStart: 0,
   lastSaveAt: 0,
 };
 
@@ -4194,24 +4198,30 @@ function abPaintStage() {
 
 function abPaintMeta() {
   const titleEl = abNode('abTitle');
-  const metaEl = abNode('abMeta');
+  const leftEl = abNode('abMeta');
+  const rightEl = abNode('abMetaRight');
   if (!titleEl) return;
   if (!ab.book) {
     titleEl.textContent = 'Nothing loaded';
-    metaEl.textContent = '';
+    if (leftEl) leftEl.textContent = '';
+    if (rightEl) rightEl.textContent = '';
     return;
   }
   titleEl.textContent = ab.book.title;
-  const bits = [];
-  if (ab.book.author) bits.push(ab.book.author);
-  const chapter = abChapterIndexAt(ab.el?.currentTime || 0);
+  const current = Number.isFinite(ab.el?.currentTime) ? ab.el.currentTime : 0;
+  const chapter = abChapterIndexAt(current);
+  const left = [];
+  if (ab.book.author) left.push(ab.book.author);
   if (chapter >= 0 && ab.chapters[chapter]) {
-    bits.push(
-      `${ab.chapters[chapter].title} ${chapter + 1}/${ab.chapters.length}`,
-    );
+    left.push(ab.chapters[chapter].title || `Chapter ${chapter + 1}`);
   }
-  if (ab.duration) bits.push(abFormatClock(ab.duration));
-  metaEl.textContent = bits.join(' · ');
+  const right = [];
+  if (chapter >= 0 && ab.chapters.length) {
+    right.push(`${chapter + 1}/${ab.chapters.length}`);
+  }
+  if (ab.duration) right.push(abFormatClock(ab.duration));
+  if (leftEl) leftEl.textContent = left.join(' · ');
+  if (rightEl) rightEl.textContent = right.join(' · ');
 }
 
 function abPaintProgress() {
@@ -4330,14 +4340,21 @@ function abPaintConfig() {
   }
 }
 
-function abToggleConfig(force) {
-  const panel = abNode('abConfig');
-  const btn = abNode('abConfigBtn');
-  if (!panel) return;
-  const open = force === undefined ? panel.hidden : force;
-  panel.hidden = !open;
-  btn?.classList.toggle('is-open', open);
-  if (open) abToggleChapters(false);
+// The three tabs are three views of the one square. They are mutually exclusive
+// by construction, so there is no outside-click dance to get wrong.
+function abSetView(view) {
+  const stage = abNode('abStage');
+  if (!stage) return;
+  ab.view = view;
+  stage.dataset.view = view;
+  document.querySelectorAll('#abTabs .rt-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.view === view);
+  });
+  const chapters = abNode('abChapters');
+  const config = abNode('abConfig');
+  if (chapters) chapters.hidden = view !== 'chapters';
+  if (config) config.hidden = view !== 'config';
+  if (view === 'chapters') abPaintChapters();
 }
 
 function abPaintAll() {
@@ -4347,7 +4364,7 @@ function abPaintAll() {
   abPaintSubs();
   abPaintPlayState();
   abPaintConfig();
-  abPaintLog();
+  abPaintSession();
 }
 
 // ─── Chapter list ──────────────────────────────────────────────────────────
@@ -4373,17 +4390,6 @@ function abPaintChapters() {
   if (active) active.scrollIntoView({ block: 'nearest' });
 }
 
-function abToggleChapters(force) {
-  const list = abNode('abChapters');
-  if (!list) return;
-  const open = force === undefined ? list.hidden : force;
-  list.hidden = !open;
-  if (open) {
-    abToggleConfig(false);
-    abPaintChapters();
-  }
-}
-
 // ─── Playback ──────────────────────────────────────────────────────────────
 function abSaveProgress(force = false) {
   if (!ab.book || !ab.el || !ab.el.src) return;
@@ -4397,67 +4403,37 @@ function abSaveProgress(force = false) {
   });
 }
 
-function abPendingSession() {
-  return ab.session && ab.session.played >= AB_MIN_LOG_SECONDS ? ab.session : null;
+// The listen is a stretch of the book, not of the day: distance between the
+// session's start position and the current one. A pause moves nothing.
+function abSessionDelta() {
+  const current = Number.isFinite(ab.el?.currentTime) ? ab.el.currentTime : 0;
+  return Math.max(0, current - ab.sessionStart);
 }
 
-// "2:06" while a listen is in progress — the session's own duration, not the
-// book's position. Hovering the pill swaps in the words that say what a click
-// does (CSS), so the label can be a clock without hiding the button's job.
-function abClockShort(seconds) {
-  const total = Math.max(0, Math.floor(seconds || 0));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const sec = total % 60;
-  return h > 0 ? `${h}:${pad2(m)}:${pad2(sec)}` : `${m}:${pad2(sec)}`;
-}
-
-// The session band shows the listen; L is the button that files it.
-function abPaintLog() {
-  const band = abNode('abSession');
+function abPaintSession() {
+  const big = abNode('abSessionBig');
+  const range = abNode('abSessionRange');
   const btn = abNode('abLog');
-  const played = ab.session ? ab.session.played : 0;
-  const has = Boolean(ab.session) && played >= AB_MIN_LOG_SECONDS;
-  // The band never collapses: it is the card's slack, and a card that changes
-  // height the moment a listen starts is worse than one with an empty slot.
-  if (band) band.classList.toggle('is-idle', !ab.session);
-  const time = abNode('abSessionTime');
-  if (time) time.textContent = abClockShort(played);
-  const since = abNode('abSessionSince');
-  if (since) {
-    since.textContent = ab.session
-      ? `playing since ${new Date(ab.session.startedAt).toTimeString().slice(0, 5)}`
-      : '';
+  const current = Number.isFinite(ab.el?.currentTime) ? ab.el.currentTime : 0;
+  const delta = abSessionDelta();
+  if (big) big.textContent = formatDuration(Math.round(delta / 60));
+  if (range) {
+    range.textContent = `${abFormatClock(ab.sessionStart)} - ${abFormatClock(current)}`;
   }
-  if (btn) {
-    btn.disabled = !has;
-    btn.title = has ? 'Log this listen' : 'Nothing to log yet';
-  }
+  if (btn) btn.disabled = delta < 1 || !ab.book;
 }
 
-// One repaint for everything the config panel can change.
-function abPaintAllControls() {
-  abPaintConfig();
-  abPaintLog();
-}
-
-function abStartSession() {
-  if (ab.session) return;
-  ab.session = { startedAt: Date.now(), played: 0, lastClock: ab.el.currentTime };
-}
-
-// Played time is the media that actually passed, not the clock: a seek is a
-// jump and contributes nothing, a pause contributes nothing.
-function abAccumulatePlayed() {
-  const el = ab.el;
-  if (!el) return;
-  const now = el.currentTime;
-  const last = ab.session.lastClock;
-  if (last !== null) {
-    const delta = now - last;
-    if (delta > 0 && delta <= 2) ab.session.played += delta;
+// Moving the start point: after logging, and from the settings sheet. Written
+// to the row so it survives a restart — logging a session is not something a
+// window close should undo.
+function abSetSessionStart(seconds) {
+  ab.sessionStart = Math.max(0, seconds || 0);
+  if (ab.book) {
+    window.electronAPI.saveAudioProgress?.(ab.book.title, {
+      sessionStart: ab.sessionStart,
+    });
   }
-  ab.session.lastClock = now;
+  abPaintSession();
 }
 
 async function abTogglePlay() {
@@ -4466,7 +4442,6 @@ async function abTogglePlay() {
     return;
   }
   if (ab.el.paused) {
-    abStartSession();
     try {
       await ab.el.play();
     } catch (err) {
@@ -4482,7 +4457,6 @@ function abSeek(seconds) {
   const target = Math.min(ab.duration - 0.25, Math.max(0, seconds));
   ab.el.currentTime = target;
   ab.cueIndex = abCueIndexAt(target);
-  if (ab.session) ab.session.lastClock = target;
   abPaintProgress();
   abPaintSubs();
   abPaintMeta();
@@ -4519,6 +4493,10 @@ async function abLoadBook(book, { autoplay = false } = {}) {
   ab.chapters = [];
   ab.cueIndex = -1;
   ab.duration = book.audio_duration || 0;
+  // A row with no start point yet has never been listened to in this scheme:
+  // its session begins where the book does, not where the resume point is, so a
+  // freshly imported file starts its first session at 00:00:00.
+  ab.sessionStart = Number.isFinite(book.session_start) ? book.session_start : 0;
   if (!ab.el) ab.el = abCreateAudio();
   const el = ab.el;
   if (el.src !== book.url) {
@@ -4537,6 +4515,7 @@ async function abLoadBook(book, { autoplay = false } = {}) {
     abPaintSubs();
     abPaintMeta();
     abPaintConfig();
+    abPaintSession();
   };
   if (el.readyState >= 1) applyResume();
   else el.addEventListener('loadedmetadata', applyResume, { once: true });
@@ -4555,7 +4534,6 @@ async function abLoadBook(book, { autoplay = false } = {}) {
   abPaintSubs();
   abPaintChapters();
   if (autoplay) {
-    abStartSession();
     try {
       await el.play();
     } catch (err) {
@@ -4576,7 +4554,6 @@ function abCreateAudio() {
 
   el.addEventListener('timeupdate', () => {
     if (!ab.book) return;
-    if (ab.session) abAccumulatePlayed();
     // A 1,000-line chapter moves the cue index in a straight line; the binary
     // search only ever runs when a cue boundary is behind us.
     const cue = abCuesForTime(el.currentTime);
@@ -4586,22 +4563,21 @@ function abCreateAudio() {
       abPaintMeta();
     }
     abPaintProgress();
-    // The session band counts this listen up, so it belongs on the same tick.
-    abPaintLog();
+    // The session is a distance, so it moves with the position, not the clock.
+    abPaintSession();
     abSaveProgress();
   });
 
   el.addEventListener('play', () => {
-    abStartSession();
     abPaintPlayState();
     abPaintMeta();
-    abPaintLog();
+    abPaintSession();
   });
 
   el.addEventListener('pause', () => {
     abSaveProgress(true);
     abPaintPlayState();
-    abPaintLog();
+    abPaintSession();
   });
 
   el.addEventListener('ratechange', abPaintConfig);
@@ -4609,7 +4585,7 @@ function abCreateAudio() {
   el.addEventListener('ended', () => {
     abSaveProgress(true);
     abPaintPlayState();
-    abPaintLog();
+    abPaintSession();
     abPaintMeta();
   });
 
@@ -4649,35 +4625,37 @@ function abIsoMinute(ms) {
   );
 }
 
-async function abLogSession({ keepPlaying = true } = {}) {
-  const pending = abPendingSession();
-  if (!pending || !ab.book) {
-    if (!keepPlaying) ab.session = null;
-    abPaintLog();
+// Logging is also the end of the listen: it pauses, files the stretch between
+// the session's start position and where playback is now, and moves the start
+// point to here so the next listen begins at zero.
+async function abLogSession() {
+  if (!ab.book) return null;
+  const delta = abSessionDelta();
+  if (delta < 1) {
+    showToast('Nothing to log yet');
     return null;
   }
-  const playedSeconds = pending.played;
+  if (ab.el && !ab.el.paused) ab.el.pause();
+  const current = ab.el?.currentTime || 0;
+  const now = Date.now();
+  // The row's clock range describes the same stretch as its duration: it starts
+  // as long ago as you have listened, and ends now.
   const session = {
-    id: Date.now(),
+    id: now,
     date: sessionDayKey(),
     title: ab.book.title,
     language: 'Japanese',
     characters: 0,
-    duration: Math.round((playedSeconds / 60) * 100) / 100,
+    duration: Math.round((delta / 60) * 100) / 100,
     unit: 'minutes',
-    start_at: abIsoMinute(pending.startedAt),
-    end_at: abIsoMinute(Date.now()),
+    start_at: abIsoMinute(now - delta * 1000),
+    end_at: abIsoMinute(now),
     media: 'audiobook',
   };
-  ab.session = null;
-  abPaintLog();
   const result = await saveSession(session);
-  // A listen short enough to be under a minute still gets a sentence that says
-  // something: formatDuration would round it to "0m".
-  const label =
-    playedSeconds < 60
-      ? `${Math.round(playedSeconds)}s`
-      : formatDuration(Math.round(playedSeconds / 60));
+  abSetSessionStart(current);
+  // Under a minute, "0m" would be the whole message; seconds say something.
+  const label = delta < 60 ? `${Math.round(delta)}s` : formatDuration(Math.round(delta / 60));
   showToast(
     result?.duplicated
       ? 'Already logged — same length, same day'
@@ -4783,8 +4761,13 @@ async function abBoot() {
   abNode('abStageEmpty')?.addEventListener('click', () => abImportFolder());
 
   abBuildConfig();
-  abNode('abConfigBtn')?.addEventListener('click', () => abToggleConfig());
-  abNode('abChapterBtn')?.addEventListener('click', () => abToggleChapters());
+  abNode('abTabs')?.querySelectorAll('.rt-tab').forEach((tab) => {
+    tab.addEventListener('click', () => abSetView(tab.dataset.view));
+  });
+  abNode('abCfgReset')?.addEventListener('click', () => {
+    abSetSessionStart(ab.el?.currentTime || 0);
+    showToast('Session start moved here');
+  });
 
   abNode('abChapters')?.addEventListener('click', (event) => {
     const row = event.target.closest('.ab-chapter-row');
@@ -4792,7 +4775,6 @@ async function abBoot() {
     const chapter = ab.chapters[Number(row.dataset.index)];
     if (!chapter) return;
     abSeek(chapter.t);
-    abToggleChapters(false);
   });
 
   // Click or drag anywhere on the rail to seek. Pointer capture keeps the drag
@@ -4823,22 +4805,6 @@ async function abBoot() {
     scrub.addEventListener('pointerup', endDrag);
     scrub.addEventListener('pointercancel', endDrag);
   }
-
-  // Both popovers close the same way: a pointer down on something that is not
-  // them, or Escape. They are never open at once — opening one closes the other.
-  document.addEventListener('pointerdown', (event) => {
-    if (abChaptersOpen() && !event.target.closest('#abChapters') && !event.target.closest('#abChapterBtn')) {
-      abToggleChapters(false);
-    }
-    if (!abNode('abConfig')?.hidden && !event.target.closest('#abConfig') && !event.target.closest('#abConfigBtn')) {
-      abToggleConfig(false);
-    }
-  });
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    if (abChaptersOpen()) abToggleChapters(false);
-    else if (!abNode('abConfig')?.hidden) abToggleConfig(false);
-  });
 
   // Position is saved on a timer while playing, on pause, and here on the way
   // out — a window closed mid-chapter must not lose the last few minutes.

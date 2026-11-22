@@ -440,6 +440,13 @@ function openDatabase() {
   // book: `position` is meaningless as a percentage without it.
   if (!bookColumns.has('audio_duration'))
     db.exec('ALTER TABLE books ADD COLUMN audio_duration REAL');
+  // Where this book's current listening session began, as a position inside the
+  // file. The session lasts until it is logged (or reset), and a session is a
+  // stretch of the book rather than a stretch of the day, so the value survives
+  // restarts and is only moved by LOG SESSION or an explicit reset.
+  if (!bookColumns.has('session_start'))
+    db.exec('ALTER TABLE books ADD COLUMN session_start REAL');
+
 
   // The shelf has exactly three states, and they name what you are doing with
   // the book: reading it, done with it, or off it. The first schema guess
@@ -1035,7 +1042,8 @@ app.whenReady().then(() => {
   ipcMain.handle('audio:list', () => {
     const rows = db
       .prepare(
-        `SELECT title, author, audio_path, audio_duration, position, rate, status,
+        `SELECT title, author, audio_path, audio_duration, position, rate,
+                session_start, status,
                 (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read
            FROM books
           WHERE is_audio = 1 AND audio_path IS NOT NULL
@@ -1064,6 +1072,12 @@ app.whenReady().then(() => {
     if (Number.isFinite(patch.rate)) {
       fields.push('rate = ?');
       values.push(Math.min(2, Math.max(0.5, patch.rate)));
+    }
+    // The session start is a position, not a duration: it moves only when a
+    // session is logged or reset, never while playing.
+    if (Number.isFinite(patch.sessionStart)) {
+      fields.push('session_start = ?');
+      values.push(Math.max(0, patch.sessionStart));
     }
     if (!fields.length) return { success: false };
     values.push(title);
