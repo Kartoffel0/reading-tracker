@@ -446,6 +446,11 @@ function openDatabase() {
   // restarts and is only moved by LOG SESSION or an explicit reset.
   if (!bookColumns.has('session_start'))
     db.exec('ALTER TABLE books ADD COLUMN session_start REAL');
+  // When that session began, in epoch milliseconds. A session is a stopwatch,
+  // not a stretch of audio: it runs on the wall clock and survives a restart,
+  // so both halves — where in the book, and when — belong on the row.
+  if (!bookColumns.has('session_started_at'))
+    db.exec('ALTER TABLE books ADD COLUMN session_started_at INTEGER');
 
 
   // The shelf has exactly three states, and they name what you are doing with
@@ -1043,7 +1048,7 @@ app.whenReady().then(() => {
     const rows = db
       .prepare(
         `SELECT title, author, audio_path, audio_duration, position, rate,
-                session_start, status,
+                session_start, session_started_at, status,
                 (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read
            FROM books
           WHERE is_audio = 1 AND audio_path IS NOT NULL
@@ -1078,6 +1083,13 @@ app.whenReady().then(() => {
     if (Number.isFinite(patch.sessionStart)) {
       fields.push('session_start = ?');
       values.push(Math.max(0, patch.sessionStart));
+    }
+    // null ends a session; any finite number starts one.
+    if (patch.sessionStartedAt === null) {
+      fields.push('session_started_at = NULL');
+    } else if (Number.isFinite(patch.sessionStartedAt)) {
+      fields.push('session_started_at = ?');
+      values.push(patch.sessionStartedAt);
     }
     if (!fields.length) return { success: false };
     values.push(title);

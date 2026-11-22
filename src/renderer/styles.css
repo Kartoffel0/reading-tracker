@@ -3643,8 +3643,14 @@ body.theme-wave .wave-bg {
     transition: background 0.15s ease;
 }
 
-.ab-config-action:hover {
+.ab-config-action:hover:not(:disabled) {
     background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.ab-config-action:disabled {
+    border-color: var(--border-color);
+    color: var(--text-muted);
+    cursor: default;
 }
 
 /* ===== DAILY GOAL CARD ===== */

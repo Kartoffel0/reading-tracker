@@ -4094,10 +4094,11 @@ const ab = {
   duration: 0,
   subs: { on: true, size: 'm' },
   view: 'player',
-  // Where this book's current session began, as a position in the file. The
-  // session runs from here to wherever playback has got to, which is why
-  // skipping forward counts and pausing does not.
-  sessionStart: 0,
+  // The running session, or null. It is a stopwatch pair: when it started on
+  // the wall clock, and where in the book playback stood at that moment. Pausing
+  // the audio does not stop it — only LOG SESSION (which files it) or CLEAR
+  // SESSION (which drops it) do.
+  session: null,
   lastSaveAt: 0,
 };
 
@@ -4401,34 +4402,69 @@ function abSaveProgress(force = false) {
   });
 }
 
-// The listen is a stretch of the book, not of the day: distance between the
-// session's start position and the current one. A pause moves nothing.
-function abSessionDelta() {
-  const current = Number.isFinite(ab.el?.currentTime) ? ab.el.currentTime : 0;
-  return Math.max(0, current - ab.sessionStart);
+// The session is a stopwatch: real time since it was started, whatever the
+// audio is doing. Pausing does not stop the clock; only logging or clearing does.
+function abSessionElapsedMs() {
+  return ab.session ? Math.max(0, Date.now() - ab.session.startedAt) : 0;
+}
+
+// Positions read as HH:MM:SS in a fixed width so the two ends of the range line
+// up while the second one moves.
+function abClockPadded(seconds) {
+  const total = Math.max(0, Math.floor(seconds || 0));
+  return `${pad2(Math.floor(total / 3600))}:${pad2(Math.floor((total % 3600) / 60))}:${pad2(total % 60)}`;
 }
 
 function abPaintSession() {
   const big = abNode('abSessionBig');
   const range = abNode('abSessionRange');
   const btn = abNode('abLog');
+  const clear = abNode('abCfgClear');
   const current = Number.isFinite(ab.el?.currentTime) ? ab.el.currentTime : 0;
-  const delta = abSessionDelta();
-  if (big) big.textContent = formatDuration(Math.round(delta / 60));
-  if (range) {
-    range.textContent = `${abFormatClock(ab.sessionStart)} - ${abFormatClock(current)}`;
+  const elapsed = abSessionElapsedMs();
+  if (big) {
+    // Under a minute the big number would read "0m" while a session is running;
+    // seconds say what the minute count cannot yet.
+    big.textContent =
+      elapsed === 0
+        ? formatDuration(0)
+        : elapsed < 60000
+          ? `${Math.floor(elapsed / 1000)}s`
+          : formatDuration(Math.round(elapsed / 60000));
   }
-  if (btn) btn.disabled = delta < 1 || !ab.book;
+  if (range) {
+    // With no session running both ends are simply where playback is.
+    const startPos = ab.session ? ab.session.startPos : current;
+    range.textContent = `${abClockPadded(startPos)} - ${abClockPadded(current)}`;
+  }
+  if (btn) {
+    btn.textContent = ab.session ? 'LOG SESSION' : 'NEW SESSION';
+    btn.disabled = !ab.book;
+  }
+  if (clear) clear.disabled = !ab.session;
 }
 
-// Moving the start point: after logging, and from the settings sheet. Written
-// to the row so it survives a restart — logging a session is not something a
-// window close should undo.
-function abSetSessionStart(seconds) {
-  ab.sessionStart = Math.max(0, seconds || 0);
+// Starting writes both halves to the row: the stopwatch survives a restart the
+// same way the clock card's does.
+function abStartSession() {
+  if (!ab.book) return;
+  const startPos = Number.isFinite(ab.el?.currentTime) ? ab.el.currentTime : 0;
+  ab.session = { startedAt: Date.now(), startPos };
+  window.electronAPI.saveAudioProgress?.(ab.book.title, {
+    sessionStart: startPos,
+    sessionStartedAt: ab.session.startedAt,
+  });
+  abPaintSession();
+}
+
+// Clearing drops the session without filing it.
+function abClearSession() {
+  if (!ab.session) return;
+  ab.session = null;
   if (ab.book) {
     window.electronAPI.saveAudioProgress?.(ab.book.title, {
-      sessionStart: ab.sessionStart,
+      sessionStart: ab.el?.currentTime || 0,
+      sessionStartedAt: null,
     });
   }
   abPaintSession();
@@ -4491,10 +4527,14 @@ async function abLoadBook(book, { autoplay = false } = {}) {
   ab.chapters = [];
   ab.cueIndex = -1;
   ab.duration = book.audio_duration || 0;
-  // A row with no start point yet has never been listened to in this scheme:
-  // its session begins where the book does, not where the resume point is, so a
-  // freshly imported file starts its first session at 00:00:00.
-  ab.sessionStart = Number.isFinite(book.session_start) ? book.session_start : 0;
+  // A session that was running when the window closed is still running: it is a
+  // stopwatch, and the clock card does the same. Both halves came off the row.
+  ab.session = Number.isFinite(book.session_started_at)
+    ? {
+        startedAt: book.session_started_at,
+        startPos: Number.isFinite(book.session_start) ? book.session_start : 0,
+      }
+    : null;
   if (!ab.el) ab.el = abCreateAudio();
   const el = ab.el;
   if (el.src !== book.url) {
@@ -4623,37 +4663,35 @@ function abIsoMinute(ms) {
   );
 }
 
-// Logging is also the end of the listen: it pauses, files the stretch between
-// the session's start position and where playback is now, and moves the start
-// point to here so the next listen begins at zero.
+// Logging files the stopwatch: real time from the session's start to now, with
+// the wall clock written into the row exactly as the clock card does. It also
+// stops playback and drops the session, so the button goes back to NEW SESSION.
 async function abLogSession() {
-  if (!ab.book) return null;
-  const delta = abSessionDelta();
-  if (delta < 1) {
-    showToast('Nothing to log yet');
-    return null;
-  }
-  if (ab.el && !ab.el.paused) ab.el.pause();
-  const current = ab.el?.currentTime || 0;
+  if (!ab.book || !ab.session) return null;
+  const startedAt = ab.session.startedAt;
   const now = Date.now();
-  // The row's clock range describes the same stretch as its duration: it starts
-  // as long ago as you have listened, and ends now.
+  const elapsedMs = Math.max(0, now - startedAt);
+  if (ab.el && !ab.el.paused) ab.el.pause();
+  const minutes = Math.round((elapsedMs / 60000) * 100) / 100;
   const session = {
     id: now,
     date: sessionDayKey(),
     title: ab.book.title,
     language: 'Japanese',
     characters: 0,
-    duration: Math.round((delta / 60) * 100) / 100,
+    duration: minutes,
     unit: 'minutes',
-    start_at: abIsoMinute(now - delta * 1000),
+    start_at: abIsoMinute(startedAt),
     end_at: abIsoMinute(now),
     media: 'audiobook',
   };
   const result = await saveSession(session);
-  abSetSessionStart(current);
+  abClearSession();
   // Under a minute, "0m" would be the whole message; seconds say something.
-  const label = delta < 60 ? `${Math.round(delta)}s` : formatDuration(Math.round(delta / 60));
+  const label =
+    elapsedMs < 60000
+      ? `${Math.round(elapsedMs / 1000)}s`
+      : formatDuration(Math.round(elapsedMs / 60000));
   showToast(
     result?.duplicated
       ? 'Already logged — same length, same day'
@@ -4661,6 +4699,13 @@ async function abLogSession() {
   );
   await updateAll();
   return session;
+}
+
+// The footer button is both verbs: it starts the stopwatch when none is running
+// and files it when one is.
+function abSessionButton() {
+  if (ab.session) abLogSession();
+  else abStartSession();
 }
 
 // ─── Preferences (subtitles live in settings, speed per book) ──────────────
@@ -4754,7 +4799,7 @@ async function abBoot() {
   });
   abNode('abPrevChapter')?.addEventListener('click', () => abSeekChapter(-1));
   abNode('abNextChapter')?.addEventListener('click', () => abSeekChapter(1));
-  abNode('abLog')?.addEventListener('click', () => abLogSession());
+  abNode('abLog')?.addEventListener('click', () => abSessionButton());
 
   abNode('abStageEmpty')?.addEventListener('click', () => abImportFolder());
 
@@ -4762,9 +4807,10 @@ async function abBoot() {
   abNode('abTabs')?.querySelectorAll('.rt-tab').forEach((tab) => {
     tab.addEventListener('click', () => abSetView(tab.dataset.view));
   });
-  abNode('abCfgReset')?.addEventListener('click', () => {
-    abSetSessionStart(ab.el?.currentTime || 0);
-    showToast('Session start moved here');
+  abNode('abCfgClear')?.addEventListener('click', () => {
+    if (!ab.session) return;
+    abClearSession();
+    showToast('Session cleared');
   });
 
   abNode('abChapters')?.addEventListener('click', (event) => {
@@ -4803,6 +4849,12 @@ async function abBoot() {
     scrub.addEventListener('pointerup', endDrag);
     scrub.addEventListener('pointercancel', endDrag);
   }
+
+  // The stopwatch ticks on its own clock: `timeupdate` only fires while audio is
+  // playing, and a paused session still has a running duration.
+  setInterval(() => {
+    if (ab.session) abPaintSession();
+  }, 1000);
 
   // Position is saved on a timer while playing, on pause, and here on the way
   // out — a window closed mid-chapter must not lose the last few minutes.

@@ -235,7 +235,7 @@
                                                 </div>
                                                 <div class="ab-config-row">
                                                     <span class="ab-config-label">Session</span>
-                                                    <button type="button" class="ab-config-action" id="abCfgReset">RESET SESSION</button>
+                                                    <button type="button" class="ab-config-action" id="abCfgClear">CLEAR SESSION</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -284,7 +284,9 @@
                                             <span class="rt-big" id="abSessionBig">0m</span>
                                             <span class="ab-session-range" id="abSessionRange">0:00:00 &ndash; 0:00:00</span>
                                         </div>
-                                        <button type="button" class="ab-log-btn" id="abLog" disabled>LOG SESSION</button>
+                                        <!-- One button, two verbs: it starts the stopwatch
+                                             when none is running, and files it otherwise. -->
+                                        <button type="button" class="ab-log-btn" id="abLog" disabled>NEW SESSION</button>
                                     </div>
                                 </div>
 
