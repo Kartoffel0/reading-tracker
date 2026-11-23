@@ -1035,6 +1035,13 @@ app.whenReady().then(() => {
 
   ipcMain.handle('audio:folders', () => readAudioFolders());
 
+  // Asked when the audio element reports an error: the element knows it could not
+  // decode, but only the disk knows whether the file is still there.
+  ipcMain.handle('audio:exists', (_, title) => {
+    const row = db.prepare('SELECT is_audio, audio_path FROM books WHERE title = ?').get(title);
+    return audioFileFound(row);
+  });
+
   ipcMain.handle('audio:remove-folder', (_, folder) => {
     const settings = loadSettings();
     const folders = Array.isArray(settings.audioFolders) ? settings.audioFolders : [];
@@ -1162,28 +1169,45 @@ app.whenReady().then(() => {
   // The shelf of audiobooks only: books with a file, ordered by what you were
   // last listening to. `position` and `rate` ride along so the player can resume
   // without a second round trip.
+  // One ordering, two questions: the shelf asks "what can I play" and the card
+  // asks "what was I last listening to". Those differ exactly when a file went
+  // away, and that is the case the card has to answer honestly.
+  const AUDIO_ROWS = `
+      SELECT title, author, audio_path, audio_duration, position, rate,
+             session_start, session_started_at, status,
+             (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read
+        FROM books
+       WHERE is_audio = 1 AND audio_path IS NOT NULL
+       ORDER BY COALESCE(position, 0) > 0 DESC, COALESCE(last_read, added_at) DESC,
+                title COLLATE NOCASE`;
+
+  const audioRowPayload = (row) => {
+    const found = fs.existsSync(row.audio_path);
+    return {
+      ...row,
+      found,
+      url: found ? pathToFileURL(row.audio_path).href : null,
+      cover: getCoverUrl(row.title),
+    };
+  };
+
   ipcMain.handle('audio:list', () => {
-    const rows = db
-      .prepare(
-        `SELECT title, author, audio_path, audio_duration, position, rate,
-                session_start, session_started_at, status,
-                (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read
-           FROM books
-          WHERE is_audio = 1 AND audio_path IS NOT NULL
-          ORDER BY COALESCE(position, 0) > 0 DESC, COALESCE(last_read, added_at) DESC,
-                   title COLLATE NOCASE`,
-      )
-      .all();
     // The shelf is the list of things the player can open, so a row whose file
     // is gone does not belong on it: it would load a null source and toast an
     // error on every click.
-    return rows
-      .filter((row) => fs.existsSync(row.audio_path))
-      .map((row) => ({
-        ...row,
-        url: pathToFileURL(row.audio_path).href,
-        cover: getCoverUrl(row.title),
-      }));
+    return db
+      .prepare(AUDIO_ROWS)
+      .all()
+      .map(audioRowPayload)
+      .filter((row) => row.found);
+  });
+
+  // What the card resumes on launch — the last thing listened to, even if its
+  // file is gone since. Falling back to another book would hide both the missing
+  // file and any session still running against it.
+  ipcMain.handle('audio:last', () => {
+    const row = db.prepare(`${AUDIO_ROWS} LIMIT 1`).get();
+    return row ? audioRowPayload(row) : null;
   });
 
   // Resume position and speed, written while playing. Nothing else in the books
@@ -1227,9 +1251,17 @@ app.whenReady().then(() => {
     const row = db.prepare('SELECT audio_path FROM books WHERE title = ?').get(title);
     if (!row || !row.audio_path) return [];
     if (audioMetaCache.has(row.audio_path)) return audioMetaCache.get(row.audio_path).chapters;
-    const meta = readAudiobookMeta(row.audio_path);
-    audioMetaCache.set(row.audio_path, meta);
-    return meta.chapters;
+    // A row can outlive its file. Reading the atoms of a path that is not there
+    // throws, and the renderer's Promise.all would then take the whole load down
+    // with it — a missing file must cost chapters, nothing more.
+    if (!fs.existsSync(row.audio_path)) return [];
+    try {
+      const meta = readAudiobookMeta(row.audio_path);
+      audioMetaCache.set(row.audio_path, meta);
+      return meta.chapters;
+    } catch {
+      return [];
+    }
   });
 
   // Subtitles go through main because a renderer cannot read a file:// URL: the

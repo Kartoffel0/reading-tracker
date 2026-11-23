@@ -259,6 +259,15 @@
                                         </div>
                                     </div>
 
+                                    <!-- Replaces everything below the scrub when
+                                         the .m4b behind the row is gone: there is
+                                         nothing to seek and nothing to play, so the
+                                         only useful action is finding the file. -->
+                                    <button type="button" class="ab-missing" id="abMissing" hidden>
+                                        <span aria-hidden="true">&#9888;</span>
+                                        FILE NOT FOUND &middot; ADD NEW FOLDER
+                                    </button>
+
                                     <div class="ab-transport">
                                         <button type="button" class="ab-btn" id="abPrevChapter" title="Previous chapter" aria-label="Previous chapter">
                                             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -440,32 +449,33 @@
                 <button class="modal-close-btn" type="button" onclick="closeBookModal()" aria-label="Close">&minus;</button>
             </div>
             <div class="book-sheet">
-                <aside class="panel book-card">
-                    <div class="book-cover-slot" id="bookCoverSlot"></div>
-                    <div class="book-identity">
-                        <h3 class="book-title" id="bookTitle"><span class="book-title-text" id="bookTitleText"></span></h3>
-                        <div class="book-byline">
-                            <span class="book-credit" id="bookAuthor" data-field="author" role="button" tabindex="0">Add author</span>
-                            <span class="book-credit" id="bookSeries" data-field="series" role="button" tabindex="0">Add series</span>
+                <aside class="panel book-card" id="bookCardAside">
+                    <!-- An audiobook shows the dashboard's player here, moved in
+                         whole rather than copied: one element, so the position,
+                         the running session and the chapter list cannot disagree
+                         between the two surfaces. -->
+                    <div class="book-audio-mount" id="bookAudioMount" hidden></div>
+                    <div class="book-text-card" id="bookTextCard">
+                        <div class="book-cover-slot" id="bookCoverSlot"></div>
+                        <div class="book-identity">
+                            <h3 class="book-title" id="bookTitle"><span class="book-title-text" id="bookTitleText"></span></h3>
+                            <div class="book-byline">
+                                <span class="book-credit" id="bookAuthor" data-field="author" role="button" tabindex="0">Add author</span>
+                                <span class="book-credit" id="bookSeries" data-field="series" role="button" tabindex="0">Add series</span>
+                            </div>
+                        </div>
+                        <div class="book-card-foot">
+                            <div class="book-status" id="bookStatus" role="group" aria-label="Reading status">
+                                <button class="book-status-btn" type="button" data-status="reading">READING</button>
+                                <button class="book-status-btn" type="button" data-status="read">READ</button>
+                                <button class="book-status-btn" type="button" data-status="dropped">DROPPED</button>
+                            </div>
+                            <div class="book-status book-kind" id="bookKind" role="group" aria-label="Shelf">
+                                <button class="book-status-btn" type="button" data-kind="book" title="Light novel">LN</button>
+                                <button class="book-status-btn" type="button" data-kind="vn" title="Visual novel">VN</button>
+                            </div>
                         </div>
                     </div>
-                    <div class="book-card-foot">
-                        <div class="book-status" id="bookStatus" role="group" aria-label="Reading status">
-                            <button class="book-status-btn" type="button" data-status="reading">READING</button>
-                            <button class="book-status-btn" type="button" data-status="read">READ</button>
-                            <button class="book-status-btn" type="button" data-status="dropped">DROPPED</button>
-                        </div>
-                        <div class="book-status book-kind" id="bookKind" role="group" aria-label="Shelf">
-                            <button class="book-status-btn" type="button" data-kind="book" title="Light novel">LN</button>
-                            <button class="book-status-btn" type="button" data-kind="vn" title="Visual novel">VN</button>
-                        </div>
-                    </div>
-                    <!-- Only drawn for a title that has an .m4b behind it: an audio
-                         play button on a text-only book would be a button that
-                         cannot do anything. -->
-                    <button class="book-listen-btn" type="button" id="bookListen" hidden>
-                        <span aria-hidden="true">&#9654;</span> LISTEN
-                    </button>
                 </aside>
                 <div class="book-sheet-right">
                     <div class="panel reading-time-card book-stats">

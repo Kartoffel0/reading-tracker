@@ -2516,6 +2516,8 @@ const BOOK_STATUSES = ['reading', 'read', 'dropped'];
 function closeBookModal(event) {
   if (!event || event.target.id === 'bookModalOverlay') {
     document.getElementById('bookModalOverlay').classList.remove('active');
+    // The player belongs to the dashboard; the sheet only borrowed it.
+    unmountAudioCard();
     // Status and cover are edited inside the sheet, so the shelf behind it is
     // stale the moment it closes.
     if (document.getElementById('pageTrack')?.dataset.active === 'library') {
@@ -2577,7 +2579,7 @@ async function openBookModal(title) {
   setBookCredits(book);
   setBookStatus(book.status);
   setBookKind(book.kind || 'book');
-  abWireListenButton(book, title);
+  await mountBookPlayer(book, title);
 
   const body = document.getElementById('bookStatsBody');
   if (first) {
@@ -4441,6 +4443,10 @@ function abPaintAll() {
   abPaintPlayState();
   abPaintConfig();
   abPaintSession();
+  // A row without a source has no transport to offer. Deriving it from the row
+  // on every paint is what puts the warning on the dashboard card too, not only
+  // inside the book sheet.
+  abSetMissingFile(!ab.book?.url);
 }
 
 // ─── Chapter list ──────────────────────────────────────────────────────────
@@ -4641,8 +4647,12 @@ async function abLoadBook(book, { autoplay = false } = {}) {
     : null;
   if (!ab.el) ab.el = abCreateAudio();
   const el = ab.el;
-  if (el.src !== book.url) {
-    el.src = book.url || '';
+  const src = book.url || '';
+  if (el.src !== src) {
+    // `el.src = ''` would resolve to the page itself and try to decode the app as
+    // audio. A book whose file is gone has no source at all until it is found.
+    if (src) el.src = src;
+    else el.removeAttribute('src');
     el.load();
   }
   el.playbackRate = Math.min(2, Math.max(0.5, book.rate || 1));
@@ -4695,6 +4705,18 @@ function abCreateAudio() {
     ab.duration = Number.isFinite(el.duration) ? el.duration : ab.duration;
     abPaintProgress();
     abPaintMeta();
+  });
+
+  // The file can disappear under a loaded book — the element reports the decode
+  // failure, and the disk says whether it is really gone. Only then does the card
+  // swap itself for the warning.
+  el.addEventListener('error', async () => {
+    if (!ab.book) return;
+    const exists = await window.electronAPI.audioFileExists?.(ab.book.title);
+    if (exists === false) {
+      ab.book = { ...ab.book, url: null };
+      abSetMissingFile(true);
+    }
   });
 
   el.addEventListener('timeupdate', () => {
@@ -4896,46 +4918,72 @@ async function scanAudioFoldersOnce() {
   }
 }
 
-// The book sheet's LISTEN button: drawn only for a title that has an .m4b, and
-// it hands that row straight to the player, closes the sheet and slides home —
-// the player is a card on the dashboard, so a click here has to move you there.
-function abWireListenButton(book, title) {
-  const btn = document.getElementById('bookListen');
-  if (!btn) return;
-  // Only an audiobook row gets a play button at all: `is_audio` is the flag the
-  // library badges on, so a stray `audio_path` on a text book cannot put a play
-  // action on something the rest of the app calls a book.
+// ─── The player inside the book sheet ─────────────────────────────────────
+//
+// An audiobook's sheet shows the dashboard's own card, moved in whole rather than
+// copied: the scrub position, the running session, the chapter list and the
+// player preferences are one DOM, so the two surfaces cannot disagree about
+// them. Moving it back is the whole teardown.
+let audioCardHome = null;
+
+function mountAudioCardInSheet() {
+  const card = abNode('audiobookCard');
+  const mount = abNode('bookAudioMount');
+  if (!card || !mount || card.parentElement === mount) return;
+  audioCardHome = { parent: card.parentElement, next: card.nextSibling };
+  mount.appendChild(card);
+  mount.hidden = false;
+  abNode('bookCardAside')?.classList.add('is-audio');
+}
+
+function unmountAudioCard() {
+  const card = abNode('audiobookCard');
+  if (card && audioCardHome) {
+    audioCardHome.parent.insertBefore(card, audioCardHome.next);
+    audioCardHome = null;
+  }
+  const mount = abNode('bookAudioMount');
+  if (mount) mount.hidden = true;
+  abNode('bookCardAside')?.classList.remove('is-audio');
+  const text = abNode('bookTextCard');
+  if (text) text.hidden = false;
+  // Whatever row the card is holding decides the warning, not the sheet: a book
+  // whose file is gone stays warned on the dashboard after the sheet closes.
+  abSetMissingFile(!ab.book?.url);
+}
+
+// A missing file is not a state the card can play out of: the transport and the
+// session row go, and the one action that can help takes their place.
+function abSetMissingFile(missing) {
+  abNode('audiobookCard')?.classList.toggle('is-missing', Boolean(missing));
+}
+
+// Puts the right face on the sheet's left slot: the player for an audiobook, the
+// cover and the status pills for everything else.
+async function mountBookPlayer(book, title) {
   const isAudio = Boolean(book && book.is_audio);
-  // `file_found` is main's answer about the disk. A row from a surface that does
-  // not carry it can only be judged by its path, which is why the test is not a
-  // plain truthiness check on `file_found`.
-  const found = Boolean(book && book.audio_path && book.file_found !== false);
-  const playable = isAudio && found;
-  btn.hidden = !isAudio;
-  btn.dataset.title = playable ? title : '';
-  btn.disabled = isAudio && !found;
-  btn.title = isAudio && !found
-    ? 'The audiobook file behind this row is no longer on disk'
-    : '';
-  btn.innerHTML =
-    isAudio && !found
-      ? '<span aria-hidden="true">&#9888;</span> FILE NOT FOUND'
-      : '<span aria-hidden="true">&#9654;</span> LISTEN';
-  if (!playable) {
-    btn.onclick = null;
+  if (!isAudio) {
+    unmountAudioCard();
     return;
   }
-  btn.onclick = async () => {
+  const text = abNode('bookTextCard');
+  if (text) text.hidden = true;
+  mountAudioCardInSheet();
+
+  if (ab.book?.title !== title) {
+    // The shelf is the list of playable files. A row that is not on it (its file
+    // is gone) still has to reach the card, so its own book row stands in with no
+    // source — the card then shows the warning instead of the transport.
     const shelf = (await window.electronAPI.listAudiobooks?.()) || [];
-    const row = shelf.find((entry) => entry.title === title);
-    if (!row) {
-      showToast('That audiobook file is missing');
-      return;
-    }
-    closeBookModal();
-    setPage('dashboard');
-    await abLoadBook(row, { autoplay: true });
-  };
+    const row =
+      shelf.find((entry) => entry.title === title) || {
+        ...book,
+        url: null,
+        cover: book.cover || coverCache.get(title)?.url || null,
+      };
+    await abLoadBook(row);
+  }
+  abSetMissingFile(book.file_found === false);
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────────
@@ -4945,11 +4993,12 @@ async function abBoot() {
   await abLoadPrefs();
   abPaintAll();
 
-  // Resume the book you were last listening to: `audio:list` puts anything with
-  // a position ahead of the rest, so the first row is the one to hand the
-  // player. Nothing imported yet leaves the card in its empty state.
-  const shelf = (await window.electronAPI.listAudiobooks?.()) || [];
-  if (shelf.length) await abLoadBook(shelf[0]);
+  // Resume the book you were last listening to, whether or not its file is still
+  // there: `audio:last` answers from the ordering before the filter, so a
+  // deleted file surfaces as the card's warning instead of being silently
+  // swapped for another book. Nothing imported yet leaves the card empty.
+  const last = (await window.electronAPI.lastAudiobook?.()) || null;
+  if (last) await abLoadBook(last);
 
   abNode('abPlay')?.addEventListener('click', () => abTogglePlay());
   abNode('abBack')?.addEventListener('click', () => {
@@ -4961,6 +5010,23 @@ async function abBoot() {
   abNode('abPrevChapter')?.addEventListener('click', () => abSeekChapter(-1));
   abNode('abNextChapter')?.addEventListener('click', () => abSeekChapter(1));
   abNode('abLog')?.addEventListener('click', () => abSessionButton());
+  // The missing-file row runs the same folder flow as Settings → Audiobooks →
+  // Add New, then re-opens the sheet: if the file arrived, the card comes back
+  // with its transport.
+  abNode('abMissing')?.addEventListener('click', async () => {
+    const title = ab.book?.title;
+    await addAudioFolder();
+    if (!title) return;
+    // If that folder held the file, reload the row so the transport comes back
+    // without a restart; the sheet, if it is what showed the warning, reopens on
+    // the same book either way.
+    const shelf = (await window.electronAPI.listAudiobooks?.()) || [];
+    const row = shelf.find((entry) => entry.title === title);
+    if (row) await abLoadBook(row);
+    if (abNode('bookModalOverlay')?.classList.contains('active')) {
+      await openBookModal(title);
+    }
+  });
 
   abNode('abStageEmpty')?.addEventListener('click', () => abImportFolder());
   attachTitleMarquee(card);
