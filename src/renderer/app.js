@@ -437,6 +437,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await settingsReady;
   alignToSessionDay();
   await updateAll();
+  // Mount the routed page now that there is data to draw: a reload on
+  // #/library has to land on a shelf with books in it, not an empty grid.
+  applyPage(pageFromHash());
   // A stopwatch restored from settings must start ticking with the app, not
   // only after the first click.
   initClock();
@@ -3986,17 +3989,60 @@ function libMediaOf(book) {
   return book.kind === 'vn' ? 'vn' : 'book';
 }
 
-function setPage(page) {
+// Only one page is ever in the layout (the other is display:none), so nothing
+// sits parked at the window's edge to bleed, ghost or swallow a click. What is
+// left to contain is the entry animation: the arriving page starts 120px into
+// the rail's gap, so the main area clips for exactly those 0.34s and then goes
+// back to no clip at all — a standing clip shaves the stat cards' hover.
+let slideClipTimer = 0;
+function clipDuringSlide(track) {
+  const main = document.querySelector('.main-area');
+  if (!main) return;
+  main.classList.add('is-sliding');
+  track.classList.add('is-switching');
+  clearTimeout(slideClipTimer);
+  slideClipTimer = setTimeout(() => {
+    main.classList.remove('is-sliding');
+    track.classList.remove('is-switching');
+  }, 360);
+}
+
+// Which page you are on lives in the URL: #/dashboard or #/library. One page
+// is in the layout at a time (the other is display:none), so this is the only
+// place that decides it — the tab strip, the hash and the DOM cannot drift
+// apart, a reload lands where you left off, and back/forward work.
+const PAGE_ROUTES = ['dashboard', 'library'];
+function pageFromHash() {
+  const match = /^#\/([a-z]+)$/.exec(location.hash);
+  return PAGE_ROUTES.includes(match?.[1]) ? match[1] : 'dashboard';
+}
+
+function applyPage(page, { paint = true } = {}) {
   const track = document.getElementById('pageTrack');
   if (!track) return;
+  const moved = track.dataset.active !== page;
   track.dataset.active = page;
   document
     .querySelectorAll('.page-tab')
     .forEach((tab) => tab.classList.toggle('is-active', tab.dataset.page === page));
+  if (moved) clipDuringSlide(track);
   // The shelf is rebuilt on every visit: status and covers are edited from the
   // book sheet, and a stale grid is worse than a cheap re-read.
-  if (page === 'library') renderLibrary();
+  if (page === 'library' && paint) renderLibrary();
 }
+
+function setPage(page) {
+  const next = `#/${page}`;
+  if (location.hash === next) {
+    applyPage(page);
+    return;
+  }
+  // The hash change routes back through applyPage, so a click and a reload end
+  // in the same place by the same code.
+  location.hash = next;
+}
+
+window.addEventListener('hashchange', () => applyPage(pageFromHash()));
 
 function libTileHtml(book) {
   const title = book.title || 'Untitled';
@@ -4102,6 +4148,16 @@ async function renderLibrary() {
   document.querySelectorAll('.page-tab').forEach((tab) => {
     tab.addEventListener('click', () => setPage(tab.dataset.page));
   });
+  // Normalise the URL before the first paint so the address bar and the tab
+  // strip start from the same value. The page itself is mounted by the boot
+  // below, once the data it renders is in hand — rendering the shelf this early
+  // reads an empty book list.
+  const start = pageFromHash();
+  if (location.hash !== `#/${start}`) {
+    history.replaceState(null, '', `#/${start}`);
+  } else {
+    applyPage(start, { paint: false });
+  }
 
   const tabs = document.getElementById('libraryTabs');
   if (tabs) {
@@ -5010,20 +5066,53 @@ async function scanAudioFoldersOnce() {
 // player preferences are one DOM, so the two surfaces cannot disagree about
 // them. Moving it back is the whole teardown.
 let audioCardHome = null;
+let audioGhost = null;
+
+// The dashboard keeps a still of the card while the real one is over in the
+// sheet: without it the left column loses 636px and RECENT MEDIA jumps up into
+// the player's slot, which reads as the media card vanishing. It is a clone
+// with every id stripped and its media elements dropped — ids would make
+// getElementById hand the player the still's buttons — and it is inert, so it
+// is a picture, not a second player.
+function buildAudioGhost(card) {
+  const ghost = card.cloneNode(true);
+  ghost.removeAttribute('id');
+  ghost.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+  ghost.querySelectorAll('audio, video, source').forEach((el) => el.remove());
+  ghost.classList.add('ab-ghost');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.setAttribute('inert', '');
+  return ghost;
+}
 
 function mountAudioCardInSheet() {
   const card = abNode('audiobookCard');
   const mount = abNode('bookAudioMount');
   if (!card || !mount || card.parentElement === mount) return;
   audioCardHome = { parent: card.parentElement, next: card.nextSibling };
+  audioGhost = buildAudioGhost(card);
+  audioCardHome.parent.insertBefore(audioGhost, audioCardHome.next);
   mount.appendChild(card);
   mount.hidden = false;
   abNode('bookCardAside')?.classList.add('is-audio');
 }
 
+// The mount happens before the sheet loads its book, so the still is taken
+// while the card still shows the previous one. Redraw it once the book is in,
+// and the dashboard's copy matches the sheet's player.
+function refreshAudioGhost() {
+  const card = abNode('audiobookCard');
+  if (!card || !audioGhost) return;
+  const fresh = buildAudioGhost(card);
+  audioGhost.replaceWith(fresh);
+  audioGhost = fresh;
+}
+
 function unmountAudioCard() {
   const card = abNode('audiobookCard');
   if (card && audioCardHome) {
+    audioGhost?.remove();
+    audioGhost = null;
     audioCardHome.parent.insertBefore(card, audioCardHome.next);
     audioCardHome = null;
   }
@@ -5107,6 +5196,7 @@ async function mountBookPlayer(book, title) {
     await abLoadBook(row);
   }
   abSetMissingFile(book.file_found === false);
+  refreshAudioGhost();
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────────

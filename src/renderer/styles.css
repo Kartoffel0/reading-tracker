@@ -411,9 +411,11 @@ button.theme-select {
    simply shows on the sides that have a gap and is clipped on the sides that do
    not, with nothing visibly cut. */
 .stat-card:hover {
+    transform: scale(1.02);
     border-color: var(--border-hover);
     background: var(--bg-card-hover);
     box-shadow: 0 0 20px var(--accent-primary-glow);
+    z-index: 3;
 }
 
 .stat-card::before {
@@ -465,7 +467,11 @@ button.theme-select {
     min-height: 0;
     gap: 16px;
     /* Design width is 1632 (1680 minus 24px padding each side). Wider windows
-       centre the fixed-track layout instead of leaving dead space on the right. */
+       centre the fixed-track layout instead of leaving dead space on the right.
+       width: 100% is load-bearing: auto side margins stop the flex parent from
+       stretching this item, so it would otherwise size to its content and the
+       whole shell would shrink around an empty shelf. */
+    width: 100%;
     max-width: 1632px;
     margin: 0 auto;
 }
@@ -489,25 +495,70 @@ button.theme-select {
    its scroll offset, so coming back to the dashboard lands where it was left.
    Sliding, not display:none: a hidden panel measures zero width, and the goal
    calendar and streak map both measure themselves. */
+/* Never clipped at rest: a card on the first row that grows or glows has to be
+   able to paint past the page's edges, and a permanent clip either shaved that
+   hover or let the parked page bleed through as a sliver at the seam. The clip
+   is only needed while the track slides one page over the other, so it goes on
+   for the 0.34s of a switch (see clipDuringSlide) and comes straight back off. */
 .main-area {
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
     display: flex;
+}
+
+.main-area.is-sliding {
     overflow: hidden;
 }
 
+/* One page is in the layout at a time; the other is display:none. A track of
+   two side-by-side pages had to be handled at every edge — the parked page
+   bled a sliver at the window, its composited layers left a ghost over the
+   rail once it was hidden, and the clip that fixed those shaved the cards'
+   hover. None of that exists when there is only one page to paint. A switch is
+   an entry animation on the page arriving. */
 .page-track {
     display: flex;
     width: 100%;
     height: 100%;
-    /* 1px of bleed: subpixel widths would otherwise leave a hairline of the
-       outgoing page along the edge. */
-    transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.page-track[data-active='library'] {
-    transform: translateX(-100%);
+.page-track[data-active='dashboard'] .page[data-page='library'],
+.page-track[data-active='library'] .page[data-page='dashboard'] {
+    display: none;
+}
+
+/* The arriving page comes in from the side it lives on. The 120px start
+   reaches into the rail's gap — .main-area carries a clip for these 0.34s so
+   the slide can't paint over the rail. */
+.page-track.is-switching[data-active='library'] .page[data-page='library'] {
+    animation: page-in-right 0.34s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-track.is-switching[data-active='dashboard'] .page[data-page='dashboard'] {
+    animation: page-in-left 0.34s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes page-in-right {
+    from {
+        transform: translateX(120px);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+
+@keyframes page-in-left {
+    from {
+        transform: translateX(-120px);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
 }
 
 .page {
@@ -517,11 +568,12 @@ button.theme-select {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    /* The scrollbar is a sliver, not a gutter: the pages are laid out to the
-       same 1216 as the rail beside them. */
-    scrollbar-width: thin;
+    /* No clip and no scroll: the window is fixed at 1680x1260 and the page's
+       content is laid out to fill it exactly, so there is nothing to scroll. A
+       clip here was cutting the hover on the first row — a card that grows or
+       glows has to be able to paint past the box. Anything that does scroll
+       (the shelf, the entries list) owns its own scroller. */
+    overflow: visible;
 }
 
 /* ===== LIBRARY ===== */
@@ -2917,6 +2969,13 @@ body.theme-wave .wave-bg {
 
 /* Fixed card heights — a card never resizes, only its column changes */
 .audiobook-card { height: 636px; }
+
+/* The dashboard's copy of the player while the real card is in the book sheet:
+   same size, same look, nothing to click or focus. */
+.ab-ghost {
+    pointer-events: none;
+    user-select: none;
+}
 .recently-read-card { height: 400px; }
 .reading-time-card { height: 400px; }
 .goal-card { height: 400px; }
