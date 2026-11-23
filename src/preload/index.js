@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   importAudioFolder: (folder) => ipcRenderer.invoke('audio:import-folder', folder),
   listAudiobooks: () => ipcRenderer.invoke('audio:list'),
   lastAudiobook: () => ipcRenderer.invoke('audio:last'),
+  markAudiobookPlayed: (title) => ipcRenderer.invoke('audio:played', title),
   scanAudioFolders: () => ipcRenderer.invoke('audio:scan'),
   audioFileExists: (title) => ipcRenderer.invoke('audio:exists', title),
   listAudioFolders: () => ipcRenderer.invoke('audio:folders'),

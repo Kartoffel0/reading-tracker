@@ -3930,8 +3930,23 @@ const LIB_FILTERS = [
 ];
 const LIB_STATUS_LABELS = { reading: 'Reading', read: 'Read', dropped: 'Dropped' };
 
+// The shelf's other axis: what the thing is, not what you are doing with it.
+// Audiobook is the is_audio flag; book and visual novel are the kind column.
+const LIB_MEDIA_FILTERS = [
+  { key: 'all', label: 'ALL' },
+  { key: 'audiobook', label: 'AUDIOBOOK' },
+  { key: 'book', label: 'BOOK' },
+  { key: 'vn', label: 'VISUAL NOVEL' },
+];
+
 let libFilter = 'all';
+let libMedia = 'all';
 let libBooks = [];
+
+function libMediaOf(book) {
+  if (book.is_audio) return 'audiobook';
+  return book.kind === 'vn' ? 'vn' : 'book';
+}
 
 function setPage(page) {
   const track = document.getElementById('pageTrack');
@@ -3999,10 +4014,11 @@ function paintLibrary() {
   const scroll = document.getElementById('libraryScroll');
   const offset = scroll?.scrollTop ?? 0;
 
-  const shown =
-    libFilter === 'all'
-      ? libBooks
-      : libBooks.filter((b) => b.status === libFilter);
+  const shown = libBooks.filter(
+    (b) =>
+      (libMedia === 'all' || libMediaOf(b) === libMedia) &&
+      (libFilter === 'all' || b.status === libFilter),
+  );
   if (countEl) {
     const titles = shown.length === 1 ? 'title' : 'titles';
     countEl.textContent = `${shown.length} ${titles}`;
@@ -4011,11 +4027,14 @@ function paintLibrary() {
   document.querySelectorAll('#libraryTabs .rt-tab').forEach((tab) => {
     tab.classList.toggle('active', tab.dataset.key === libFilter);
   });
+  document.querySelectorAll('#libraryMediaTabs .rt-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.key === libMedia);
+  });
 
   grid.innerHTML =
     shown.map(libTileHtml).join('') +
-    (shown.length === 0 && libFilter !== 'all'
-      ? `<div class="library-empty">No books marked ${LIB_STATUS_LABELS[libFilter].toLowerCase()} yet.</div>`
+    (shown.length === 0 && (libFilter !== 'all' || libMedia !== 'all')
+      ? `<div class="library-empty">Nothing here yet.</div>`
       : '') +
     libAddTileHtml();
 
@@ -4059,6 +4078,21 @@ async function renderLibrary() {
         paintLibrary();
       });
       tabs.appendChild(tab);
+    }
+  }
+
+  const mediaTabs = document.getElementById('libraryMediaTabs');
+  if (mediaTabs) {
+    for (const filter of LIB_MEDIA_FILTERS) {
+      const tab = document.createElement('div');
+      tab.className = 'rt-tab' + (filter.key === libMedia ? ' active' : '');
+      tab.dataset.key = filter.key;
+      tab.textContent = filter.label;
+      tab.addEventListener('click', () => {
+        libMedia = filter.key;
+        paintLibrary();
+      });
+      mediaTabs.appendChild(tab);
     }
   }
 
@@ -4707,6 +4741,14 @@ function abCreateAudio() {
     abPaintMeta();
   });
 
+  // What the card resumes on launch is the book you last *played*, which is a
+  // fact only the element knows: opening a sheet loads a book without touching
+  // playback, and should not move the resume point.
+  el.addEventListener('play', () => {
+    const title = ab.book?.title;
+    if (title) void window.electronAPI.markAudiobookPlayed?.(title);
+  });
+
   // The file can disappear under a loaded book — the element reports the decode
   // failure, and the disk says whether it is really gone. Only then does the card
   // swap itself for the warning.
@@ -4963,6 +5005,30 @@ function unmountAudioCard() {
   abSetMissingFile(false);
 }
 
+// The empty card's door to the shelf: the library, filtered to audiobooks.
+function openAudiobookShelf() {
+  libMedia = 'audiobook';
+  setPage('library');
+}
+
+// Eject. A stopwatch still running is filed first — closing a card is not a
+// reason to lose a session — and then the card forgets the book entirely.
+async function abCloseBook() {
+  if (!ab.book) return;
+  if (ab.session) await abLogSession();
+  ab.el?.pause();
+  ab.el?.removeAttribute('src');
+  ab.el?.load();
+  ab.book = null;
+  ab.chapters = [];
+  ab.cues = [];
+  ab.cueIndex = -1;
+  ab.duration = 0;
+  abPaintAll();
+  abPaintChapters();
+  abSetMissingFile(false);
+}
+
 // A missing file is not a state the card can play out of: the transport and the
 // session row go, and the one action that can help takes their place.
 function abSetMissingFile(missing) {
@@ -5022,6 +5088,14 @@ async function abBoot() {
   abNode('abPrevChapter')?.addEventListener('click', () => abSeekChapter(-1));
   abNode('abNextChapter')?.addEventListener('click', () => abSeekChapter(1));
   abNode('abLog')?.addEventListener('click', () => abSessionButton());
+  // The empty card's two doors. Both land on the shelf filtered to audiobooks,
+  // which is the only thing the player can open.
+  abNode('abOpenLibrary')?.addEventListener('click', () => openAudiobookShelf());
+  abNode('abAddFolder')?.addEventListener('click', async () => {
+    await abImportFolder();
+    openAudiobookShelf();
+  });
+  abNode('abStageClose')?.addEventListener('click', () => abCloseBook());
 
   // Space is the player's key anywhere in the app — the sheet, the library, the
   // settings — except where it is already a control: typing in a field, or
@@ -5061,7 +5135,6 @@ async function abBoot() {
     }
   });
 
-  abNode('abStageEmpty')?.addEventListener('click', () => abImportFolder());
   attachTitleMarquee(card);
 
   abBuildConfig();

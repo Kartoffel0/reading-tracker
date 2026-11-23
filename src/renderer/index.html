@@ -203,10 +203,22 @@
                                     <div class="ab-stage" id="abStage" data-view="player" data-subs="on" data-size="m">
                                         <div class="ab-stage-bg" id="abStageBg"></div>
                                         <img class="ab-stage-art" id="abStageArt" alt="">
-                                        <button type="button" class="ab-stage-empty" id="abStageEmpty">
-                                            <span class="ab-empty-plus">+</span>
-                                            <span class="ab-empty-label">ADD AUDIOBOOK FOLDER</span>
-                                        </button>
+                                        <!-- Eject: the card forgets the book and
+                                             drops back to its empty state. -->
+                                        <button type="button" class="ab-stage-close" id="abStageClose" title="Close this audiobook" aria-label="Close this audiobook">&#10005;</button>
+                                        <!-- Two doors out of the empty card: the
+                                             shelf, and the folder dialog that feeds
+                                             it. Both end on the audiobook filter. -->
+                                        <div class="ab-stage-empty" id="abStageEmpty">
+                                            <button type="button" class="ab-empty-half" id="abOpenLibrary">
+                                                <span class="ab-empty-lesser" aria-hidden="true">&#9670;</span>
+                                                <span class="ab-empty-label">OPEN LIBRARY</span>
+                                            </button>
+                                            <button type="button" class="ab-empty-half" id="abAddFolder">
+                                                <span class="ab-empty-plus" aria-hidden="true">+</span>
+                                                <span class="ab-empty-label">ADD FOLDER</span>
+                                            </button>
+                                        </div>
                                         <div class="ab-subs" id="abSubs" aria-hidden="true">
                                             <span class="ab-sub" data-depth="2"></span>
                                             <span class="ab-sub" data-depth="1"></span>
@@ -410,6 +422,7 @@
                             <div class="library-header">
                                 <div class="card-title">LIBRARY</div>
                                 <span class="library-count" id="libraryCount"></span>
+                                <div class="rt-tabs library-media-tabs" id="libraryMediaTabs"></div>
                                 <div class="rt-tabs library-tabs" id="libraryTabs"></div>
                             </div>
                             <div class="library-scroll" id="libraryScroll">

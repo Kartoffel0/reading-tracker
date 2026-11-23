@@ -457,6 +457,11 @@ function openDatabase() {
   // load — and so a subtitle sitting in a folder of its own is still found.
   if (!bookColumns.has('subs_path'))
     db.exec('ALTER TABLE books ADD COLUMN subs_path TEXT');
+  // Epoch ms of the last time playback started on this row. The card resumes
+  // from here: position alone cannot say which book you listened to last, since
+  // every book keeps a position.
+  if (!bookColumns.has('last_played_at'))
+    db.exec('ALTER TABLE books ADD COLUMN last_played_at INTEGER');
 
 
   // The shelf has exactly three states, and they name what you are doing with
@@ -1201,13 +1206,13 @@ app.whenReady().then(() => {
   // away, and that is the case the card has to answer honestly.
   const AUDIO_ROWS = `
       SELECT title, author, is_audio, audio_path, audio_duration, position, rate,
-             session_start, session_started_at, status,
+             session_start, session_started_at, last_played_at, status,
              (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read,
              EXISTS (SELECT 1 FROM sessions WHERE sessions.title = books.title) AS has_sessions
         FROM books
        WHERE is_audio = 1 AND audio_path IS NOT NULL
-       ORDER BY COALESCE(position, 0) > 0 DESC, COALESCE(last_read, added_at) DESC,
-                title COLLATE NOCASE`;
+       ORDER BY COALESCE(last_played_at, 0) DESC, COALESCE(position, 0) > 0 DESC,
+                COALESCE(last_read, added_at) DESC, title COLLATE NOCASE`;
 
   const audioRowPayload = (row, folders = readAudioFolders()) => {
     const found = audioFileFound(row, folders);
@@ -1218,6 +1223,16 @@ app.whenReady().then(() => {
       cover: getCoverUrl(row.title),
     };
   };
+
+  // Written when the element actually starts playing — not when a book is loaded
+  // into the card — so the resume point follows listening, not browsing.
+  ipcMain.handle('audio:played', (_, title) => {
+    if (!title) return { success: false };
+    const result = db
+      .prepare('UPDATE books SET last_played_at = ? WHERE title = ?')
+      .run(Date.now(), title);
+    return { success: result.changes > 0 };
+  });
 
   ipcMain.handle('audio:list', () => {
     const folders = readAudioFolders();
@@ -1234,11 +1249,17 @@ app.whenReady().then(() => {
   // file is gone since. Falling back to another book would hide both the missing
   // file and any session still running against it.
   ipcMain.handle('audio:last', () => {
-    // Deliberately unfiltered: the card shows the last thing you listened to even
-    // after its folder was removed, with the missing-file warning instead of a
-    // transport. Silently resuming a different book would hide both.
-    const row = db.prepare(`${AUDIO_ROWS} LIMIT 1`).get();
-    return row ? audioRowPayload(row) : null;
+    const folders = readAudioFolders();
+    const rows = db.prepare(AUDIO_ROWS).all();
+    // The most recently played row decides, playable or not: a book you listened
+    // to and then deleted is the last thing you listened to, and the card says so
+    // by staying empty rather than resuming something else.
+    if (rows[0]?.last_played_at) return audioRowPayload(rows[0], folders);
+    // Nothing has ever been played — a fresh install, or every listen happened
+    // before this column existed. Fall back to the first row that can be opened,
+    // so the unfiltered order cannot park the card on a dead file.
+    const playable = rows.map((row) => audioRowPayload(row, folders)).find((row) => row.found);
+    return playable || null;
   });
 
   // Resume position and speed, written while playing. Nothing else in the books

@@ -587,6 +587,15 @@ button.theme-select {
     pointer-events: none;
 }
 
+/* Media filter first, then status: two axes of the same shelf, so they read as
+   one row with a divider instead of two unrelated controls. */
+.library-media-tabs {
+    align-self: center;
+    margin-left: auto;
+    padding-right: 10px;
+    border-right: 1px solid var(--border-color);
+}
+
 .library-tabs {
     align-self: center;
 }
@@ -3347,19 +3356,24 @@ body.theme-wave .wave-bg {
     display: none;
 }
 
+/* The empty card has its own two doors and no art to separate from: the wash
+   would just tint the lower half pink. */
+.ab-stage.is-empty::after {
+    display: none;
+}
+
+/* Empty card: the cover area is split in two — browse what you own, or add a
+   folder that feeds the shelf. Both land on the audiobook filter. */
 .ab-stage-empty {
     position: absolute;
     inset: 0;
     display: none;
-    place-content: center;
-    justify-items: center;
-    gap: 8px;
+    grid-template-rows: 1fr 1fr;
     border: 1px dashed var(--border-color);
     border-radius: 10px;
     background: transparent;
     color: var(--text-muted);
-    font: inherit;
-    cursor: pointer;
+    overflow: hidden;
     z-index: 2;
 }
 
@@ -3372,9 +3386,28 @@ body.theme-wave .wave-bg {
     opacity: 0;
 }
 
-.ab-stage-empty:hover {
+.ab-empty-half {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ab-empty-half + .ab-empty-half {
+    border-top: 1px dashed var(--border-color);
+}
+
+.ab-empty-half:hover,
+.ab-empty-half:focus-visible {
+    background: color-mix(in srgb, var(--accent-primary) 7%, transparent);
     color: var(--text-primary);
-    border-color: var(--border-hover);
 }
 
 .ab-empty-plus {
@@ -3382,9 +3415,52 @@ body.theme-wave .wave-bg {
     line-height: 1;
 }
 
+.ab-empty-lesser {
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
 .ab-empty-label {
     font-size: 0.62rem;
     letter-spacing: 0.14em;
+}
+
+/* Eject, on the cover's top-right corner: there while you point at the cover,
+   and gone in the book sheet, where the sheet's own close button is the exit. */
+.ab-stage-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--bg-primary) 78%, transparent);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    z-index: 3;
+}
+
+.ab-stage:hover .ab-stage-close,
+.ab-stage-close:focus-visible {
+    opacity: 1;
+}
+
+.ab-stage-close:hover {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.ab-stage.is-empty .ab-stage-close,
+.book-audio-mount .ab-stage-close {
+    display: none;
 }
 
 /* Three lines, newest at the bottom. The two before it stay where they are and
