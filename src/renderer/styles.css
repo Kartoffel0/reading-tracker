@@ -4981,6 +4981,14 @@ body.theme-wave .wave-bg {
     justify-content: space-between;
 }
 
+/* An audiobook's sessions carry no characters and no rate, so the sheet's footer
+   drops those two stats instead of printing a zero and a dash beside the two
+   that mean something. */
+#bookStatsBody.is-audio .rt-stat-col[data-series='chars'],
+#bookStatsBody.is-audio .rt-stat-col[data-series='speed'] {
+    display: none;
+}
+
 .rt-stat-col {
     display: flex;
     flex-direction: column;

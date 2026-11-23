@@ -1542,6 +1542,12 @@ async function renderRecentlyRead(data) {
     shown.map(([title, entry]) => ({ title, language: entry.language })),
   );
 
+  // An audiobook is measured in the file, not in characters: where the playhead
+  // sits against the runtime is the only progress it has. Those facts live on
+  // the book row, so one read answers for every row on the card.
+  const bookRows = (await window.electronAPI.listBooks?.()) || [];
+  const bookByTitle = new Map(bookRows.map((row) => [row.title, row]));
+
   list.innerHTML = shown
     .map(([title, entry]) => {
       const hours = entry.totalMinutes / 60;
@@ -1550,14 +1556,39 @@ async function renderRecentlyRead(data) {
       const goalIsChars = currentGoal.unit === 'characters';
       const charsClass = goalIsChars ? ' recent-stat-chars' : '';
       const timeClass = goalIsChars ? '' : ' recent-stat-time';
+
+      const book = bookByTitle.get(title);
+      const totalTime = `<span class="recent-stat"><span class="recent-stat-label">Total Time</span> <span class="recent-stat-value${timeClass}">${formatDuration(entry.totalMinutes)}</span></span>`;
+
+      const stats = book?.is_audio
+        ? (() => {
+            const runtime = Number(book.audio_duration) || 0;
+            const position = Math.min(Number(book.position) || 0, runtime);
+            // A book you have opened is not at 0%: rounding 95s of seven hours
+            // down to nothing reads as "never played".
+            const percent =
+              runtime > 0 && position > 0
+                ? Math.max(1, Math.round((position / runtime) * 100))
+                : 0;
+            const remaining = Math.max(0, runtime - position) / 60;
+            return `
+              <span class="recent-stat"><span class="recent-stat-label">Listening Progress</span> <span class="recent-stat-value">${percent}%</span></span>
+              <span class="recent-stat"><span class="recent-stat-label">Remaining Time</span> <span class="recent-stat-value">${runtime > 0 ? formatDuration(remaining) : '—'}</span></span>
+              ${totalTime}
+            `;
+          })()
+        : `
+            <span class="recent-stat"><span class="recent-stat-label">Characters Read</span> <span class="recent-stat-value${charsClass}">${entry.totalChars.toLocaleString()}</span></span>
+            <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span> <span class="recent-stat-value">${Math.round(speed).toLocaleString()}/h</span></span>
+            ${totalTime}
+          `;
+
       return `
         <div class="recent-book" data-book-title="${escapeHtml(title)}">
           ${coverMarkup(title)}
           <div class="recent-info">
             <span class="recent-title"><span class="recent-title-text">${escapeHtml(title)}</span></span>
-            <span class="recent-stat"><span class="recent-stat-label">Characters Read</span> <span class="recent-stat-value${charsClass}">${entry.totalChars.toLocaleString()}</span></span>
-            <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span> <span class="recent-stat-value">${Math.round(speed).toLocaleString()}/h</span></span>
-            <span class="recent-stat"><span class="recent-stat-label">Total Time</span> <span class="recent-stat-value${timeClass}">${formatDuration(entry.totalMinutes)}</span></span>
+            ${stats}
           </div>
         </div>
       `;
@@ -2582,6 +2613,9 @@ async function openBookModal(title) {
   await mountBookPlayer(book, title);
 
   const body = document.getElementById('bookStatsBody');
+  // An audiobook has no characters read and no reading rate: those two footer
+  // stats would be a zero and a dash on every page of the sheet.
+  body.classList.toggle('is-audio', Boolean(book.is_audio));
   if (first) {
     body.replaceChildren(
       buildStatsBody(
@@ -2822,10 +2856,10 @@ function entryRowHtml({ dateKey, session }, deleteCall = null) {
   const hours =
     session.unit === 'minutes' ? session.duration / 60 : session.duration;
   const speed = hours > 0 ? Math.round(chars / hours) : 0;
-  const charsValue = isAudio ? '—' : chars.toLocaleString();
-  const charsUnit = isAudio ? '' : 'chr';
-  const speedValue = isAudio ? '—' : speed.toLocaleString();
-  const speedUnit = isAudio ? '' : '/h';
+  const charsValue = chars.toLocaleString();
+  const charsUnit = 'chr';
+  const speedValue = speed.toLocaleString();
+  const speedUnit = '/h';
 
   // Highlight the stat that matches the unit of the current goal.
   const goalIsChars = currentGoal.unit === 'characters';
@@ -2844,8 +2878,12 @@ function entryRowHtml({ dateKey, session }, deleteCall = null) {
             <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
             <div class="entry-stats">
                 <div class="entry-stat entry-duration${durationClass}"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
-                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${charsValue}</span><span class="entry-stat-unit">${charsUnit}</span></div>
-                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speedValue}</span><span class="entry-stat-unit">${speedUnit}</span></div>
+                ${
+                  isAudio
+                    ? ''
+                    : `<div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${charsValue}</span><span class="entry-stat-unit">${charsUnit}</span></div>
+                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speedValue}</span><span class="entry-stat-unit">${speedUnit}</span></div>`
+                }
             </div>
             <button class="entry-del-btn" onclick="${deleteCall || `deleteSession('${dateKey}', ${session.id}, false)`}">✖</button>
           </div>

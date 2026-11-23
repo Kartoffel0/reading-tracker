@@ -970,7 +970,8 @@ app.whenReady().then(() => {
   ipcMain.handle('list-books', () => {
     const rows = db
       .prepare(
-        `SELECT b.title, b.kind, b.is_audio, b.audio_path, b.status, b.added_at, b.author, b.series,
+        `SELECT b.title, b.kind, b.is_audio, b.audio_path, b.position, b.audio_duration,
+                b.status, b.added_at, b.author, b.series,
                 (SELECT s.language FROM sessions s WHERE s.title = b.title
                   ORDER BY s.date DESC LIMIT 1) AS language,
                 (SELECT MAX(s.date) FROM sessions s WHERE s.title = b.title) AS last_read,
