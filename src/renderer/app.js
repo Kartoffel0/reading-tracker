@@ -4443,10 +4443,10 @@ function abPaintAll() {
   abPaintPlayState();
   abPaintConfig();
   abPaintSession();
-  // A row without a source has no transport to offer. Deriving it from the row
-  // on every paint is what puts the warning on the dashboard card too, not only
-  // inside the book sheet.
-  abSetMissingFile(!ab.book?.url);
+  // A row without a source has no transport to offer. Deriving it from the row on
+  // every paint keeps the sheet honest; an empty card is not a broken one, so the
+  // warning needs a book to be about.
+  abSetMissingFile(Boolean(ab.book) && !ab.book.url);
 }
 
 // ─── Chapter list ──────────────────────────────────────────────────────────
@@ -4947,9 +4947,20 @@ function unmountAudioCard() {
   abNode('bookCardAside')?.classList.remove('is-audio');
   const text = abNode('bookTextCard');
   if (text) text.hidden = false;
-  // Whatever row the card is holding decides the warning, not the sheet: a book
-  // whose file is gone stays warned on the dashboard after the sheet closes.
-  abSetMissingFile(!ab.book?.url);
+  // The sheet is where an unplayable book gets named and warned about. Back on
+  // the dashboard there is nothing to say about it, so the card goes empty
+  // instead of keeping a warning the empty state already implies.
+  if (ab.book && !ab.book.url) {
+    ab.el?.pause();
+    ab.el?.removeAttribute('src');
+    ab.el?.load();
+    ab.book = null;
+    ab.chapters = [];
+    ab.cues = [];
+    abPaintAll();
+    abPaintChapters();
+  }
+  abSetMissingFile(false);
 }
 
 // A missing file is not a state the card can play out of: the transport and the
@@ -4993,12 +5004,13 @@ async function abBoot() {
   await abLoadPrefs();
   abPaintAll();
 
-  // Resume the book you were last listening to, whether or not its file is still
-  // there: `audio:last` answers from the ordering before the filter, so a
-  // deleted file surfaces as the card's warning instead of being silently
-  // swapped for another book. Nothing imported yet leaves the card empty.
+  // Resume the book you were last listening to, but only if it can be played. A
+  // book whose file is gone — or whose folder left Settings — is not the card's
+  // business on the dashboard: the empty state says "add a folder" without
+  // naming a book the app cannot open. The sheet still warns when you reach it
+  // from the library.
   const last = (await window.electronAPI.lastAudiobook?.()) || null;
-  if (last) await abLoadBook(last);
+  if (last?.found) await abLoadBook(last);
 
   abNode('abPlay')?.addEventListener('click', () => abTogglePlay());
   abNode('abBack')?.addEventListener('click', () => {
