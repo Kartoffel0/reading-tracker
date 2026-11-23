@@ -5010,6 +5010,27 @@ async function abBoot() {
   abNode('abPrevChapter')?.addEventListener('click', () => abSeekChapter(-1));
   abNode('abNextChapter')?.addEventListener('click', () => abSeekChapter(1));
   abNode('abLog')?.addEventListener('click', () => abSessionButton());
+
+  // Space is the player's key anywhere in the app — the sheet, the library, the
+  // settings — except where it is already a control: typing in a field, or
+  // activating whatever button happens to have focus. A missing file has nothing
+  // to toggle, so its card keeps the key inert.
+  document.addEventListener('keydown', (event) => {
+    if (event.code !== 'Space' || event.repeat) return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    const focused = document.activeElement;
+    if (
+      focused &&
+      (focused.isContentEditable ||
+        /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName) ||
+        focused.closest?.('button, [role="button"]'))
+    ) {
+      return;
+    }
+    if (!ab.book?.url) return;
+    event.preventDefault();
+    abTogglePlay();
+  });
   // The missing-file row runs the same folder flow as Settings → Audiobooks →
   // Add New, then re-opens the sheet: if the file arrived, the card comes back
   // with its transport.

@@ -876,6 +876,29 @@ app.whenReady().then(() => {
   const audioFileFound = (row) =>
     Boolean(row && row.is_audio && row.audio_path && fs.existsSync(row.audio_path));
 
+  // Whether a file sits inside one of the folders the user added. Removing a
+  // folder is how a collection leaves the app, so ownership has to be about the
+  // path: the files are still on disk, they are just no longer managed.
+  const insideAudioFolders = (file, folders) => {
+    if (!file) return false;
+    const target = path.resolve(file).toLowerCase();
+    return folders.some((folder) => {
+      const root = path.resolve(folder).toLowerCase();
+      return target.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
+    });
+  };
+
+  // An audiobook belongs to the library when its file is *there*, inside a folder
+  // the user kept, or when a session proves it was read. Anything else is a
+  // leftover: a file whose folder was removed from Settings, or a row whose file
+  // was deleted.
+  const audioOwned = (row, folders) =>
+    !row.is_audio ||
+    Boolean(row.has_sessions) ||
+    (Boolean(row.audio_path) &&
+      insideAudioFolders(row.audio_path, folders) &&
+      fs.existsSync(row.audio_path));
+
   ipcMain.handle('get-book', (_, title) => {
     const row = db.prepare('SELECT * FROM books WHERE title = ?').get(title);
     return row ? { ...row, file_found: audioFileFound(row) } : null;
@@ -938,19 +961,18 @@ app.whenReady().then(() => {
                    b.title COLLATE NOCASE`,
       )
       .all();
-    return (
-      rows
-        .map((row) => ({
-          ...row,
-          file_found: audioFileFound(row),
-          cover: getCoverUrl(row.title),
-        }))
-        // An audiobook with no file left and no session behind it is a leftover
-        // from a folder that no longer holds it — nothing to read, nothing to
-        // play. Everything else stays: a book can be owned before it is read,
-        // and a logged session is proof it was.
-        .filter((row) => !(row.is_audio && !row.file_found && !row.has_sessions))
-    );
+    const folders = readAudioFolders();
+    return rows
+      .map((row) => ({
+        ...row,
+        file_found: audioFileFound(row),
+        cover: getCoverUrl(row.title),
+      }))
+      // A book can be owned before it is read, and a logged session is proof it
+      // was — but an audiobook whose folder the user removed and that was never
+      // read is not part of the shelf any more, even though its file is still on
+      // disk.
+      .filter((row) => audioOwned(row, folders));
   });
 
   // A book can exist before it is read: the grid's add tile writes the title and
@@ -1173,9 +1195,10 @@ app.whenReady().then(() => {
   // asks "what was I last listening to". Those differ exactly when a file went
   // away, and that is the case the card has to answer honestly.
   const AUDIO_ROWS = `
-      SELECT title, author, audio_path, audio_duration, position, rate,
+      SELECT title, author, is_audio, audio_path, audio_duration, position, rate,
              session_start, session_started_at, status,
-             (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read
+             (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read,
+             EXISTS (SELECT 1 FROM sessions WHERE sessions.title = books.title) AS has_sessions
         FROM books
        WHERE is_audio = 1 AND audio_path IS NOT NULL
        ORDER BY COALESCE(position, 0) > 0 DESC, COALESCE(last_read, added_at) DESC,
@@ -1192,21 +1215,26 @@ app.whenReady().then(() => {
   };
 
   ipcMain.handle('audio:list', () => {
-    // The shelf is the list of things the player can open, so a row whose file
-    // is gone does not belong on it: it would load a null source and toast an
-    // error on every click.
+    const folders = readAudioFolders();
+    // The shelf is the list of things the player can open: the file has to be
+    // there, and the row has to still be owned — either its folder is one the
+    // user kept, or a session says it was read.
     return db
       .prepare(AUDIO_ROWS)
       .all()
       .map(audioRowPayload)
-      .filter((row) => row.found);
+      .filter((row) => row.found && audioOwned(row, folders));
   });
 
   // What the card resumes on launch — the last thing listened to, even if its
   // file is gone since. Falling back to another book would hide both the missing
   // file and any session still running against it.
   ipcMain.handle('audio:last', () => {
-    const row = db.prepare(`${AUDIO_ROWS} LIMIT 1`).get();
+    const folders = readAudioFolders();
+    const row = db
+      .prepare(AUDIO_ROWS)
+      .all()
+      .find((entry) => audioOwned(entry, folders));
     return row ? audioRowPayload(row) : null;
   });
 
