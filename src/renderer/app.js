@@ -4902,10 +4902,29 @@ async function scanAudioFoldersOnce() {
 function abWireListenButton(book, title) {
   const btn = document.getElementById('bookListen');
   if (!btn) return;
-  const playable = Boolean(book && book.audio_path);
-  btn.hidden = !playable;
+  // Only an audiobook row gets a play button at all: `is_audio` is the flag the
+  // library badges on, so a stray `audio_path` on a text book cannot put a play
+  // action on something the rest of the app calls a book.
+  const isAudio = Boolean(book && book.is_audio);
+  // `file_found` is main's answer about the disk. A row from a surface that does
+  // not carry it can only be judged by its path, which is why the test is not a
+  // plain truthiness check on `file_found`.
+  const found = Boolean(book && book.audio_path && book.file_found !== false);
+  const playable = isAudio && found;
+  btn.hidden = !isAudio;
   btn.dataset.title = playable ? title : '';
-  if (!playable) return;
+  btn.disabled = isAudio && !found;
+  btn.title = isAudio && !found
+    ? 'The audiobook file behind this row is no longer on disk'
+    : '';
+  btn.innerHTML =
+    isAudio && !found
+      ? '<span aria-hidden="true">&#9888;</span> FILE NOT FOUND'
+      : '<span aria-hidden="true">&#9654;</span> LISTEN';
+  if (!playable) {
+    btn.onclick = null;
+    return;
+  }
   btn.onclick = async () => {
     const shelf = (await window.electronAPI.listAudiobooks?.()) || [];
     const row = shelf.find((entry) => entry.title === title);

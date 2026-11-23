@@ -869,8 +869,16 @@ app.whenReady().then(() => {
   // status, author, series. Everything else on the row is derived from sessions
   // (added_at, is_audio, kind) or belongs to a later phase (audio_path, position,
   // rate), so it is deliberately not writable from here.
+  // An audiobook row is a claim that a file exists, and the file can move or be
+  // deleted after the row was written. Every surface that offers to play one
+  // asks the disk through this, so the shelf, the grid and the book sheet agree
+  // about what is missing instead of each guessing from `audio_path`.
+  const audioFileFound = (row) =>
+    Boolean(row && row.is_audio && row.audio_path && fs.existsSync(row.audio_path));
+
   ipcMain.handle('get-book', (_, title) => {
-    return db.prepare('SELECT * FROM books WHERE title = ?').get(title) || null;
+    const row = db.prepare('SELECT * FROM books WHERE title = ?').get(title);
+    return row ? { ...row, file_found: audioFileFound(row) } : null;
   });
 
   const BOOK_STATUSES = new Set(['reading', 'read', 'dropped']);
@@ -923,13 +931,26 @@ app.whenReady().then(() => {
         `SELECT b.title, b.kind, b.is_audio, b.audio_path, b.status, b.added_at, b.author, b.series,
                 (SELECT s.language FROM sessions s WHERE s.title = b.title
                   ORDER BY s.date DESC LIMIT 1) AS language,
-                (SELECT MAX(s.date) FROM sessions s WHERE s.title = b.title) AS last_read
+                (SELECT MAX(s.date) FROM sessions s WHERE s.title = b.title) AS last_read,
+                EXISTS (SELECT 1 FROM sessions s WHERE s.title = b.title) AS has_sessions
            FROM books b
           ORDER BY COALESCE((SELECT MAX(s.date) FROM sessions s WHERE s.title = b.title), b.added_at) DESC,
                    b.title COLLATE NOCASE`,
       )
       .all();
-    return rows.map((row) => ({ ...row, cover: getCoverUrl(row.title) }));
+    return (
+      rows
+        .map((row) => ({
+          ...row,
+          file_found: audioFileFound(row),
+          cover: getCoverUrl(row.title),
+        }))
+        // An audiobook with no file left and no session behind it is a leftover
+        // from a folder that no longer holds it — nothing to read, nothing to
+        // play. Everything else stays: a book can be owned before it is read,
+        // and a logged session is proof it was.
+        .filter((row) => !(row.is_audio && !row.file_found && !row.has_sessions))
+    );
   });
 
   // A book can exist before it is read: the grid's add tile writes the title and
@@ -1153,11 +1174,16 @@ app.whenReady().then(() => {
                    title COLLATE NOCASE`,
       )
       .all();
-    return rows.map((row) => ({
-      ...row,
-      url: fs.existsSync(row.audio_path) ? pathToFileURL(row.audio_path).href : null,
-      cover: getCoverUrl(row.title),
-    }));
+    // The shelf is the list of things the player can open, so a row whose file
+    // is gone does not belong on it: it would load a null source and toast an
+    // error on every click.
+    return rows
+      .filter((row) => fs.existsSync(row.audio_path))
+      .map((row) => ({
+        ...row,
+        url: pathToFileURL(row.audio_path).href,
+        cover: getCoverUrl(row.title),
+      }));
   });
 
   // Resume position and speed, written while playing. Nothing else in the books

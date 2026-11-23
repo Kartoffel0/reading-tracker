@@ -3108,6 +3108,19 @@ body.theme-wave .wave-bg {
     display: none;
 }
 
+/* The sessions are real even when the file is gone, so the sheet keeps its play
+   button — greyed, labelled with the reason — instead of hiding it and leaving
+   the row unexplained. */
+.book-listen-btn[disabled],
+.book-listen-btn[disabled]:hover {
+    border-color: var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 .book-card-foot {
     margin-top: auto;
     display: flex;
