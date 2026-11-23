@@ -3104,6 +3104,13 @@ body.theme-wave .wave-bg {
 }
 
 .book-audio-mount .audiobook-card {
+    /* A flex item sizes to its content unless told otherwise, and the caption is
+       as wide as the longest title: the same card measured 327px for one book and
+       435px for the next, spilling past the sheet's own column. It now fills the
+       column and the caption truncates instead. */
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
     height: 100%;
     min-height: 0;
 }
