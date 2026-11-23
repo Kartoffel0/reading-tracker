@@ -3982,7 +3982,6 @@ function libTileHtml(book) {
   return `
     <button type="button" class="lib-item" data-title="${escapeHtml(title)}" data-status="${status}" title="${escapeHtml(title)}">
 ${art}
-${audio}
       <span class="lib-status">${LIB_STATUS_LABELS[status]}</span>
     </button>`;
 }

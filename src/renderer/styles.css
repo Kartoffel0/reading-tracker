@@ -569,24 +569,6 @@ button.theme-select {
     border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
 }
 
-/* A book that has an .m4b. Top-left, where nothing else on the tile lives. */
-.lib-audio {
-    position: absolute;
-    left: 8px;
-    top: 8px;
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--accent-primary) 16%, var(--bg-primary));
-    border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, transparent);
-    color: var(--accent-primary);
-    font-size: 0.6rem;
-    line-height: 1;
-    pointer-events: none;
-}
-
 /* Media filter first, then status: two axes of the same shelf, so they read as
    one row with a divider instead of two unrelated controls. */
 .library-media-tabs {
@@ -2978,6 +2960,14 @@ body.theme-wave .wave-bg {
        credits reachable on a short window instead. */
     overflow-y: auto;
     scrollbar-width: none;
+}
+
+.book-text-card {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .book-cover-slot {
