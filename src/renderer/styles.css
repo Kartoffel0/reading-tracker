@@ -388,6 +388,11 @@ button.theme-select {
     grid-template-columns: repeat(4, 292px);
     gap: 16px;
     height: 102px;
+    /* The page is a scroll container, so its first row has no room above it and
+       the card's 2px hover lift was being clipped off at the top. Three pixels of
+       padding inside the same 102px row give the lift somewhere to go, with one
+       to spare for the antialiased border. */
+    padding-top: 3px;
 }
 
 .stat-card {
