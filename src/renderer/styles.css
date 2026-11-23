@@ -403,13 +403,17 @@ button.theme-select {
     transition: all 0.3s ease;
 }
 
-/* No lift: .page is a scroll container, so its first row has no room above it
-   and any translate was clipped at the top — and padding the grid moved the row
-   out of line with the rail beside it. The card answers the pointer by changing
-   surface instead. */
+/* The library's hover (accent edge + glow) without its 4% zoom. That zoom is
+   possible there because .library-scroll carries 24px of padding; here the row is
+   flush against .page's clip on all three sides, and the two columns have exactly
+   zero vertical slack (scrollHeight === clientHeight), so the grown card would
+   lose its top border and its outer side borders. Colour needs no room: the glow
+   simply shows on the sides that have a gap and is clipped on the sides that do
+   not, with nothing visibly cut. */
 .stat-card:hover {
     border-color: var(--border-hover);
     background: var(--bg-card-hover);
+    box-shadow: 0 0 20px var(--accent-primary-glow);
 }
 
 .stat-card::before {
