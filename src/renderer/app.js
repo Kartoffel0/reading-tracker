@@ -2856,10 +2856,14 @@ function entryRowHtml({ dateKey, session }, deleteCall = null) {
   const hours =
     session.unit === 'minutes' ? session.duration / 60 : session.duration;
   const speed = hours > 0 ? Math.round(chars / hours) : 0;
-  const charsValue = chars.toLocaleString();
-  const charsUnit = 'chr';
-  const speedValue = speed.toLocaleString();
-  const speedUnit = '/h';
+  // An audiobook row has no characters and no reading rate. Printing 0 and
+  // 0/h would read as "you read nothing very slowly", and dropping the cells
+  // pulls every number out of line with the rows above — the dash holds the
+  // column and says the number does not apply.
+  const charsValue = isAudio ? '—' : chars.toLocaleString();
+  const charsUnit = isAudio ? '' : 'chr';
+  const speedValue = isAudio ? '—' : speed.toLocaleString();
+  const speedUnit = isAudio ? '' : '/h';
 
   // Highlight the stat that matches the unit of the current goal.
   const goalIsChars = currentGoal.unit === 'characters';
@@ -2878,12 +2882,8 @@ function entryRowHtml({ dateKey, session }, deleteCall = null) {
             <span class="entry-title"><span class="entry-title-text">${escapeHtml(title)}</span></span>
             <div class="entry-stats">
                 <div class="entry-stat entry-duration${durationClass}"><span class="entry-stat-value">${minutes}</span><span class="entry-stat-unit">min</span></div>
-                ${
-                  isAudio
-                    ? ''
-                    : `<div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${charsValue}</span><span class="entry-stat-unit">${charsUnit}</span></div>
-                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speedValue}</span><span class="entry-stat-unit">${speedUnit}</span></div>`
-                }
+                <div class="entry-stat entry-chars${charsClass}"><span class="entry-stat-value">${charsValue}</span><span class="entry-stat-unit">${charsUnit}</span></div>
+                <div class="entry-stat entry-speed"><span class="entry-stat-value">${speedValue}</span><span class="entry-stat-unit">${speedUnit}</span></div>
             </div>
             <button class="entry-del-btn" onclick="${deleteCall || `deleteSession('${dateKey}', ${session.id}, false)`}">✖</button>
           </div>
