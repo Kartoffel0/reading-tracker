@@ -3415,9 +3415,9 @@ body.theme-wave .wave-bg {
     line-height: 1;
 }
 
-.ab-empty-lesser {
-    font-size: 1.1rem;
-    line-height: 1;
+.ab-empty-glyph {
+    width: 18px;
+    height: 18px;
 }
 
 .ab-empty-label {
@@ -3513,6 +3513,17 @@ body.theme-wave .wave-bg {
     flex-direction: column;
     gap: 3px;
     min-width: 0;
+}
+
+/* The name is a link into the book sheet: same type, but it answers the pointer. */
+.ab-title[role='button'] {
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.ab-title[role='button']:hover,
+.ab-title[role='button']:focus-visible {
+    color: var(--accent-primary);
 }
 
 .ab-title {

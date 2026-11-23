@@ -211,7 +211,9 @@
                                              it. Both end on the audiobook filter. -->
                                         <div class="ab-stage-empty" id="abStageEmpty">
                                             <button type="button" class="ab-empty-half" id="abOpenLibrary">
-                                                <span class="ab-empty-lesser" aria-hidden="true">&#9670;</span>
+                                                <svg class="ab-empty-glyph" viewBox="0 0 16 16" aria-hidden="true">
+                                                    <path d="M5.6 3.9 12 8l-6.4 4.1z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+                                                </svg>
                                                 <span class="ab-empty-label">OPEN LIBRARY</span>
                                             </button>
                                             <button type="button" class="ab-empty-half" id="abAddFolder">
@@ -253,7 +255,9 @@
                                         <!-- Both of these scroll on hover when they do not
                                              fit; the inner span is what the marquee helper
                                              duplicates. -->
-                                        <div class="ab-title"><span class="ab-title-text" id="abTitle">Nothing loaded</span></div>
+                                        <!-- The name opens the book sheet: the card is a
+                                             summary, the sheet is the record. -->
+                                        <div class="ab-title" id="abTitleRow" role="button" tabindex="0"><span class="ab-title-text" id="abTitle">Nothing loaded</span></div>
                                         <div class="ab-meta">
                                             <span class="ab-meta-left"><span class="ab-meta-text" id="abMeta"></span></span>
                                             <span class="ab-meta-right" id="abMetaRight"></span>

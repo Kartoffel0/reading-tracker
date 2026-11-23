@@ -4881,8 +4881,14 @@ async function abLogSession({ auto = false } = {}) {
 // The footer button is both verbs: it starts the stopwatch when none is running
 // and files it when one is.
 function abSessionButton() {
-  if (ab.session) abLogSession();
-  else abStartSession();
+  if (ab.session) {
+    abLogSession();
+    return;
+  }
+  abStartSession();
+  // A stopwatch with the audio paused records silence, so starting a session is
+  // also the play button — when there is a file to play.
+  if (ab.book?.url && ab.el?.paused) abTogglePlay();
 }
 
 // ─── Preferences (subtitles live in settings, speed per book) ──────────────
@@ -5016,6 +5022,9 @@ function openAudiobookShelf() {
 async function abCloseBook() {
   if (!ab.book) return;
   if (ab.session) await abLogSession();
+  // Remembered in settings so the next launch opens empty: closing a card is a
+  // decision, not a transient state.
+  await window.electronAPI.closeAudiobook?.();
   ab.el?.pause();
   ab.el?.removeAttribute('src');
   ab.el?.load();
@@ -5096,6 +5105,20 @@ async function abBoot() {
     openAudiobookShelf();
   });
   abNode('abStageClose')?.addEventListener('click', () => abCloseBook());
+  // The card's name is the way into the book's own sheet — unless the sheet is
+  // already showing it, which is where the card lives when it is mounted there.
+  const openFromTitle = () => {
+    const title = ab.book?.title;
+    if (!title) return;
+    if (abNode('bookModalOverlay')?.classList.contains('active')) return;
+    openBookModal(title);
+  };
+  abNode('abTitleRow')?.addEventListener('click', openFromTitle);
+  abNode('abTitleRow')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openFromTitle();
+  });
 
   // Space is the player's key anywhere in the app — the sheet, the library, the
   // settings — except where it is already a control: typing in a field, or

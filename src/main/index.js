@@ -891,6 +891,15 @@ app.whenReady().then(() => {
         insideAudioFolders(row.audio_path, folders),
     );
 
+  // The title the player card is showing, or null when it was closed on purpose.
+  // Absent (an older settings file) means "never decided", which is what lets a
+  // fresh install fall back to the last played row.
+  function rememberAudioCurrent(title) {
+    const settings = loadSettings();
+    settings.audioCurrent = title;
+    saveSettings(settings);
+  }
+
   // Whether a file sits inside one of the folders the user added. Removing a
   // folder is how a collection leaves the app, so ownership has to be about the
   // path: the files are still on disk, they are just no longer managed.
@@ -1204,11 +1213,13 @@ app.whenReady().then(() => {
   // One ordering, two questions: the shelf asks "what can I play" and the card
   // asks "what was I last listening to". Those differ exactly when a file went
   // away, and that is the case the card has to answer honestly.
-  const AUDIO_ROWS = `
+  const AUDIO_COLUMNS = `
       SELECT title, author, is_audio, audio_path, audio_duration, position, rate,
              session_start, session_started_at, last_played_at, status,
              (SELECT MAX(date) FROM sessions WHERE sessions.title = books.title) AS last_read,
-             EXISTS (SELECT 1 FROM sessions WHERE sessions.title = books.title) AS has_sessions
+             EXISTS (SELECT 1 FROM sessions WHERE sessions.title = books.title) AS has_sessions`;
+
+  const AUDIO_ROWS = `${AUDIO_COLUMNS}
         FROM books
        WHERE is_audio = 1 AND audio_path IS NOT NULL
        ORDER BY COALESCE(last_played_at, 0) DESC, COALESCE(position, 0) > 0 DESC,
@@ -1231,7 +1242,16 @@ app.whenReady().then(() => {
     const result = db
       .prepare('UPDATE books SET last_played_at = ? WHERE title = ?')
       .run(Date.now(), title);
+    // Also the card's own memory: this is what it opens with next time.
+    rememberAudioCurrent(title);
     return { success: result.changes > 0 };
+  });
+
+  // Closing the card is a decision, not a pause: the next launch opens empty
+  // until something else is played.
+  ipcMain.handle('audio:close', () => {
+    rememberAudioCurrent(null);
+    return { success: true };
   });
 
   ipcMain.handle('audio:list', () => {
@@ -1250,14 +1270,20 @@ app.whenReady().then(() => {
   // file and any session still running against it.
   ipcMain.handle('audio:last', () => {
     const folders = readAudioFolders();
+    const current = loadSettings().audioCurrent;
+    // Closed on purpose: the card opens empty regardless of what was played.
+    if (current === null) return null;
+    // Explicitly loaded: that row, playable or not. An unplayable one is the
+    // card's empty state, which is the honest answer.
+    if (typeof current === 'string') {
+      const row = db.prepare(`${AUDIO_COLUMNS} FROM books WHERE title = ?`).get(current);
+      return row ? audioRowPayload(row, folders) : null;
+    }
     const rows = db.prepare(AUDIO_ROWS).all();
-    // The most recently played row decides, playable or not: a book you listened
-    // to and then deleted is the last thing you listened to, and the card says so
-    // by staying empty rather than resuming something else.
+    // No decision recorded yet — a fresh install, or settings from before this
+    // existed. Resume the most recently played row, playable or not, and fall
+    // back to the first row that can be opened.
     if (rows[0]?.last_played_at) return audioRowPayload(rows[0], folders);
-    // Nothing has ever been played — a fresh install, or every listen happened
-    // before this column existed. Fall back to the first row that can be opened,
-    // so the unfiltered order cannot park the card on a dead file.
     const playable = rows.map((row) => audioRowPayload(row, folders)).find((row) => row.found);
     return playable || null;
   });
