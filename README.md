@@ -7,7 +7,7 @@
   </tr>
 </table>
 
-A minimal Electron desktop app for tracking reading sessions with SQLite storage.
+A minimal Electron desktop app for tracking reading sessions with SQLite storage. It also has an audiobook player now?!?
 
 ## Origin
 
@@ -21,14 +21,14 @@ By manually placing `krs.start` and `krs.end` notes on the books I'm reading on 
 
 - **Reading Session Tracking** — Log sessions by date, title, language, and duration
 - **Stats and also Stats** - Reading stats! Stats of your reading!!
+- **Audiobook Player** — An audiobook player! for some reason
 - **Bulk CSV Import** — Import multiple sessions at once via CSV with flexible column mapping
 - **Kindle Sync** — Pull sidecar and book data from a jailbroken Kindle via SSH and extract reading sessions
 - **Database Backup & Restore** — Export/import the whole SQLite database by hand, plus an automatic snapshot at app start whenever the data changed
 
 ## Kindle Sync
 
-Requires you to manually add notes containing `krs.start` and `krs.end` when you start and end your reading sessions.
-This app does not use the Kindle's built-in reading statistics. Use [kindle-reading-dashboard](https://github.com/zevisvei/kindle-reading-dashboard) for that.
+Requires you to manually add notes containing `krs.start` and `krs.end` when you start and end your reading sessions. Also works with Koreader in the same way. This app does not use the Kindle's built-in reading statistics. Use [kindle-reading-dashboard](https://github.com/zevisvei/kindle-reading-dashboard) for that.
 
 Kindle sidecar parsing and sync scripts are heavily inspired by [kindle-reading-dashboard](https://github.com/zevisvei/kindle-reading-dashboard). This project relies on [KRDS](https://github.com/K-R-D-S/KRDS) for sidecar data extraction and utilizes the kfxlib from the koreader plugin: [kaikozlov/kindle.koplugin](https://github.com/kaikozlov/kindle.koplugin).
 
@@ -41,18 +41,15 @@ Kindle sidecar parsing and sync scripts are heavily inspired by [kindle-reading-
 
 #### Kindle Sync Settings
 
-| Field               | Default          | Description                                                                                            |
-| ------------------- | ---------------- | ------------------------------------------------------------------------------------------------------ |
-| Kindle Host         | `192.168.15.244` | Kindle's local IP address                                                                              |
-| Kindle User         | `root`           | SSH username                                                                                           |
-| Password            | `kindle`         | SSH password                                                                                           |
-| Session Day Ends At | `04:00`          | Sessions ending after midnight before this time are counted as the previous day; `00:00` disables that |
-
-`Session Day Ends At` is app-wide, not just Kindle Sync. `00:00` keeps the normal midnight boundary.
+| Field       | Default          | Description               |
+| ----------- | ---------------- | ------------------------- |
+| Kindle Host | `192.168.15.244` | Kindle's local IP address |
+| Kindle User | `root`           | SSH username              |
+| Password    | `kindle`         | SSH password              |
 
 ## Database Backup & Restore
 
-The ⚙ menu buttons are manual: export writes the entire SQLite file to the place you choose, and restore swaps the live database for the file you pick. A restore replaces the current database, it does not merge.
+The ⚙ menu buttons: export writes the entire SQLite file to the place you choose, restore swaps the live database for the file you pick. A restore replaces the current database, it does not merge.
 
 Automatic backups:
 
@@ -83,16 +80,6 @@ npm start
 ```bash
 npm install
 npm run build:nsis
-```
-
-### Project layout
-
-```text
-src/main/index.js       Electron main process: window, SQLite, IPC, Kindle sync
-src/preload/index.js    contextBridge API exposed to the renderer
-src/renderer/           index.html + app.js + styles.css (isolated, no Node access)
-resources/              shipped verbatim: icon, screenshots, Python payload
-resources/python/       sync_kindle.py + kfx_text_extractor/ + Lib/site-packages
 ```
 
 ### Database Location
