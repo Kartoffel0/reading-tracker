@@ -585,7 +585,10 @@ button.theme-select {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    /* The header sits directly on the scroll box: its bottom margin and the
+       scroll's top padding are what space the shelf, so the clip edge lands
+       under the header instead of over it. */
+    gap: 0;
     /* The grid scrolls, not the panel: the header stays put above it. */
     overflow: hidden;
 }
@@ -634,8 +637,6 @@ button.theme-select {
 .library-media-tabs {
     align-self: center;
     margin-left: auto;
-    padding-right: 10px;
-    border-right: 1px solid var(--border-color);
 }
 
 .library-tabs {
@@ -647,26 +648,107 @@ button.theme-select {
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    scrollbar-width: thin;
+    /* No bar: the shelf is a surface you drag, not a document. Every other
+       scroller in the app hides its bar the same way. */
+    scrollbar-width: none;
     /* Room for the hover scale, which spills past a tile's own box; without it
-       the first and last columns lose a pixel of glow to the scroll edge. */
-    padding: 24px 24px 24px;
-    margin: -24px -24px -24px;
+       the first and last columns lose a pixel of glow to the scroll edge.
+       The top gets padding but no negative margin: a -24px pull put the
+       scrollport above the header's bottom edge, so a scrolled shelf painted
+       its covers straight through the LIBRARY row. */
+    padding: 8px 24px 24px;
+    margin: 0 -24px -24px;
 }
 
+/* The shelf is a stack of statuses, each one a labelled row. The grid used to
+   be one flat wall of covers with a status pill over each; the pill had to fight
+   the art for contrast, and a wall of them read as three weights of one colour.
+   A divider says it once, in the app's own type. */
 .library-grid {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-content: flex-start;
+    gap: 12px;
+}
+
+.lib-shelf {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.lib-shelf-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+/* The label with the rule under it: a bookshelf divider, and the app's own
+   card-title idiom (small caps, wide tracking) rather than a badge. */
+.lib-shelf-title {
+    position: relative;
+    padding-bottom: 4px;
+    /* The same type as the page selector at the top of the rail: the shelf
+       dividers and the tabs are the same kind of label. */
+    font-family: 'Inter', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.lib-shelf-title::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 3px;
+    border-radius: 2px;
+    background: currentColor;
+}
+
+.lib-shelf-count {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* In progress is the one status that spends the accent: it is the shelf you are
+   working through. Done is the brightest neutral, the unstarted backlog and the
+   dropped pile both sit back. */
+.lib-shelf[data-status='reading'] .lib-shelf-title {
+    color: var(--accent-primary);
+}
+
+.lib-shelf[data-status='read'] .lib-shelf-title {
+    color: var(--accent-secondary);
+}
+
+.lib-shelf[data-status='dropped'] .lib-shelf-title {
+    opacity: 0.7;
+}
+
+.lib-shelf-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
     gap: 16px;
-    justify-content: space-between;
+}
+
+/* The add slot hangs off the end of the last shelf, not inside a status. */
+.lib-shelf-add {
+    margin-top: 2px;
 }
 
 /* One book. Height is the anchor and the width is the cover's own 2:3, which
    keeps every row on a single baseline whatever the titles are. */
 .lib-item {
     position: relative;
-    height: 260px;
+    height: 240px;
     width: auto;
     flex: 0 0 auto;
     padding: 0;
@@ -717,63 +799,13 @@ button.theme-select {
     box-shadow: 0 0 20px var(--accent-primary-glow);
 }
 
-/* Status is the badge on the shelf: what you are doing with the book, not what
-   kind of thing it is. Pinned bottom-right, where the volume number usually sits
-   on the art, and big enough to read at a glance. */
-.lib-status {
-    /* Three tokens per state, so the pill is painted once and the states swap a
-       look rather than a shade. The tint sits over a nearly opaque page tone:
-       the badge lies on cover art, and a flat translucent chip disappears
-       against half the shelf. */
-    --lib-status-fill: color-mix(in srgb, var(--bg-primary) 82%, transparent);
-    --lib-status-ink: var(--text-muted);
-    --lib-status-edge: color-mix(in srgb, var(--text-muted) 35%, transparent);
-    position: absolute;
-    right: 8px;
-    bottom: 8px;
-    padding: 4px 11px 5px;
-    /* Enough to soften the corners, not enough to read as a pill: a shelf label
-       is a label. */
-    border-radius: 5px;
-    background: var(--lib-status-fill);
-    border: 1px solid var(--lib-status-edge);
-    backdrop-filter: blur(4px);
-    font-size: 0.66rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    color: var(--lib-status-ink);
-    pointer-events: none;
-}
-
-/* Reading is the accent at rest — a tint with accent ink. Read is the filled
-   label: solid accent with page-coloured ink. Dropped is the app's own grey.
-   Three different shapes of label, not three shades of one hue that all read
-   alike at 167px wide. */
-.lib-item[data-status='reading'] .lib-status {
-    --lib-status-fill: color-mix(
-        in srgb,
-        var(--accent-primary) 12%,
-        color-mix(in srgb, var(--bg-primary) 82%, transparent)
-    );
-    --lib-status-ink: var(--accent-primary);
-    --lib-status-edge: color-mix(in srgb, var(--accent-primary) 30%, transparent);
-}
-
-.lib-item[data-status='read'] .lib-status {
-    --lib-status-fill: var(--accent-primary);
-    --lib-status-ink: var(--bg-primary);
-    --lib-status-edge: color-mix(in srgb, var(--accent-primary) 70%, transparent);
-}
-
 /* The last tile is the add slot: dashed and empty, so the shelf reads as
    unfinished on purpose instead of missing something. */
 .lib-add {
     display: flex;
     width: auto;
     height: 260px;
-    aspect-ratio: 11/16;
+    aspect-ratio: 7/11;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -3128,6 +3160,34 @@ body.theme-wave .wave-bg {
     border-bottom-color: transparent;
 }
 
+/* The shelf in the byline: the same mono line as the credits, because it is the
+   third fact about the book, but it is a two-option select rather than a field
+   you type into. No chrome — the picker's own list does the explaining. */
+.book-kind-select {
+    appearance: none;
+    border: 0;
+    background: none;
+    padding: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: right;
+    transition: color 0.3s ease;
+}
+
+.book-kind-select:hover,
+.book-kind-select:focus-visible {
+    color: var(--text-primary);
+    outline: none;
+}
+
+.book-kind-select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+}
+
 .book-credit-input {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.68rem;
@@ -3152,6 +3212,14 @@ body.theme-wave .wave-bg {
     background: none;
     border: 0;
     overflow-y: auto;
+}
+
+/* The status pills ride under the player in this mode (they are moved there by
+   mountAudioCardInSheet), so they need the inset the chromeless card no longer
+   gives them, and they sit under the card rather than at the sheet's floor. */
+.book-card.is-audio .book-card-foot {
+    margin: 16px 0 0;
+    padding: 0 2px;
 }
 
 .book-text-card[hidden] {
@@ -3225,15 +3293,17 @@ body.theme-wave .wave-bg {
     margin-top: auto;
     display: flex;
     flex-direction: row;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
     align-items: flex-end;
-    justify-content: space-between;
+    justify-content: space-around;
 }
 
 /* Three states, the same pill the old W/M/Y/A selector used: the active one
    carries a tinted chip and the little caret above it. */
 .book-status {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     padding: 4px;
     border: 1px solid var(--border-color);
@@ -3275,9 +3345,6 @@ body.theme-wave .wave-bg {
     border-top-color: var(--accent-primary);
 }
 
-.book-kind .book-status-btn.active::before {
-    display: none;
-}
 
 /* ---- right column: the book's chart, then every session it has ---- */
 .book-sheet-right {
@@ -3321,7 +3388,6 @@ body.theme-wave .wave-bg {
 .audiobook-card {
     display: flex;
     flex-direction: column;
-    gap: 12px;
     position: relative;
     justify-content: space-between;
 }
@@ -3361,6 +3427,7 @@ body.theme-wave .wave-bg {
     overflow: hidden;
     background: var(--bg-secondary);
     isolation: isolate;
+    margin: 12px 0;
 }
 
 .ab-stage-bg {
@@ -3570,6 +3637,7 @@ body.theme-wave .wave-bg {
     flex-direction: column;
     gap: 3px;
     min-width: 0;
+    margin-bottom: 8px;
 }
 
 /* The name is a link into the book sheet: same type, but it answers the pointer. */
@@ -3639,6 +3707,7 @@ body.theme-wave .wave-bg {
     gap: 4px;
     padding-top: 4px;
     cursor: pointer;
+    margin-bottom: 12px;
 }
 
 .ab-scrub-track {
@@ -3691,6 +3760,7 @@ body.theme-wave .wave-bg {
     justify-content: center;
     gap: 16px;
     min-height: 40px;
+    margin-bottom: 12px;
 }
 
 .ab-btn {
@@ -3749,7 +3819,7 @@ body.theme-wave .wave-bg {
     display: flex;
     align-items: flex-end;
     gap: 14px;
-    padding-top: 2px;
+    margin-top: auto;
 }
 
 .ab-session-col {
@@ -3813,6 +3883,14 @@ body.theme-wave .wave-bg {
     overflow-y: auto;
     scrollbar-width: none;
     animation: dpFadeIn 0.3s ease;
+}
+
+/* Centred in the panel itself — the panel covers the cover area, so an empty
+   chapter list reads as a placeholder on the art rather than a line at its top. */
+.ab-chapters-empty {
+    margin: auto;
+    padding: 20px 24px;
+    max-width: 22ch;
 }
 
 .ab-chapters[hidden] {
@@ -4476,6 +4554,46 @@ body.theme-wave .wave-bg {
     opacity: 1;
 }
 
+/* The sheet's other cover control, opposite corner: removing a book is a
+   deliberate act, so it stays out of sight until the card is pointed at. Only
+   books with no sessions get one — the button is not drawn otherwise. */
+.cover-remove-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.7rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+/* Only a book's sheet: an audiobook's cover carries its own eject control in the
+   same corner, and two ✕ in one place would be a trap. */
+.book-card.is-audio .cover-remove-btn {
+    display: none;
+}
+
+.book-card:not(.is-audio):hover .cover-remove-btn,
+.book-card:not(.is-audio):focus-within .cover-remove-btn,
+.cover-remove-btn:focus-visible {
+    opacity: 1;
+}
+
+.cover-remove-btn:hover {
+    background: color-mix(in srgb, var(--accent-primary) 40%, var(--bg-card-hover));
+    border-color: var(--accent-primary);
+}
+
 .cover-upload-btn:hover {
     background: color-mix(in srgb, var(--accent-primary) 40%, var(--bg-card-hover));
 }
@@ -5124,7 +5242,8 @@ body.theme-wave .wave-bg {
 @supports (appearance: base-select) {
     .form-select,
     .unit-toggle,
-    .duration-input select {
+    .duration-input select,
+    .book-kind-select {
         appearance: base-select;
         background-image: none;
         position: relative;
@@ -5161,7 +5280,8 @@ body.theme-wave .wave-bg {
     }
 
     .form-select::picker(select),
-    .unit-toggle::picker(select) {
+    .unit-toggle::picker(select),
+    .book-kind-select::picker(select) {
         appearance: base-select;
         background: var(--bg-card);
         border: 1px solid var(--border-color);
@@ -5198,7 +5318,8 @@ body.theme-wave .wave-bg {
     }
 
     .form-select:open::picker(select),
-    .unit-toggle:open::picker(select) {
+    .unit-toggle:open::picker(select),
+    .book-kind-select:open::picker(select) {
         display: flex;
         flex-direction: column;
         gap: 4px;
@@ -5218,7 +5339,8 @@ body.theme-wave .wave-bg {
     }
 
     .form-select option,
-    .unit-toggle option {
+    .unit-toggle option,
+    .book-kind-select option {
         list-style: none;
         background: transparent;
         color: var(--text-primary);
@@ -5234,7 +5356,8 @@ body.theme-wave .wave-bg {
     /* the UA's own hover paint is overridden by the option rule above,
        so hovering needs an explicit affordance while the picker is open */
     .form-select option:hover,
-    .unit-toggle option:hover {
+    .unit-toggle option:hover,
+    .book-kind-select option:hover {
         background: color-mix(in srgb, var(--accent-primary) 15%, var(--bg-card));
         color: var(--accent-primary);
     }
@@ -5243,20 +5366,56 @@ body.theme-wave .wave-bg {
        check mark is suppressed so no glyph marks the selection */
 
     .form-select option::checkmark,
-    .unit-toggle option::checkmark {
+    .unit-toggle option::checkmark,
+    .book-kind-select option::checkmark {
         display: none;
     }
 
     .form-select option:checked,
-    .unit-toggle option:checked {
+    .unit-toggle option:checked,
+    .book-kind-select option:checked {
         background: color-mix(in srgb, var(--accent-primary) 100%, var(--bg-card));
         color: white;
     }
 
     .form-select option:focus-visible,
-    .unit-toggle option:focus-visible {
+    .unit-toggle option:focus-visible,
+    .book-kind-select option:focus-visible {
         border-color: var(--accent-primary);
         box-shadow: 0 0 0 2px var(--accent-primary-glow);
         outline-color: var(--accent-primary);
+    }
+
+    /* ---- the byline's shelf select ----
+       Declared last on purpose: it shares the panel's rules above, and this
+       block overrides the surface and the anchor. The control is a word in a
+       byline, not a field — no caret, and legible while its panel is open. */
+    .book-kind-select {
+        anchor-name: --book-kind;
+    }
+
+    .book-kind-select::picker-icon {
+        display: none;
+    }
+
+    .book-kind-select:open {
+        color: var(--text-primary);
+    }
+
+    /* opens down and to the left of the word, so a control pinned to the sheet's
+       right edge does not push its list off the sheet */
+    .book-kind-select::picker(select) {
+        position-anchor: --book-kind;
+        position-area: none;
+        top: anchor(bottom);
+        right: anchor(right);
+        margin: 6px 0 0;
+        min-width: 100px;
+        /* The surface is the shared one above — var(--bg-card) with its blur and
+           shadow — so this panel is as see-through as every other picker in the
+           app. Only the geometry and the type are its own. */
+        font-family: 'Inter', sans-serif;
+        font-size: 0.72rem;
+        letter-spacing: 0.01em;
     }
 }

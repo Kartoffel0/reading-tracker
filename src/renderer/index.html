@@ -427,7 +427,6 @@
                                 <div class="card-title">LIBRARY</div>
                                 <span class="library-count" id="libraryCount"></span>
                                 <div class="rt-tabs library-media-tabs" id="libraryMediaTabs"></div>
-                                <div class="rt-tabs library-tabs" id="libraryTabs"></div>
                             </div>
                             <div class="library-scroll" id="libraryScroll">
                                 <div class="library-grid" id="libraryGrid"></div>
@@ -479,17 +478,20 @@
                             <div class="book-byline">
                                 <span class="book-credit" id="bookAuthor" data-field="author" role="button" tabindex="0">Add author</span>
                                 <span class="book-credit" id="bookSeries" data-field="series" role="button" tabindex="0">Add series</span>
+                                <!-- The shelf the book sits on reads with the credits, but it
+                                     is a control: two fixed answers, never typed. -->
+                                <select class="book-kind-select" id="bookKind" aria-label="Shelf">
+                                    <option value="book">Light Novel</option>
+                                    <option value="vn">Visual Novel</option>
+                                </select>
                             </div>
                         </div>
-                        <div class="book-card-foot">
+                        <div class="book-card-foot" id="bookCardFoot">
                             <div class="book-status" id="bookStatus" role="group" aria-label="Reading status">
-                                <button class="book-status-btn" type="button" data-status="reading">READING</button>
-                                <button class="book-status-btn" type="button" data-status="read">READ</button>
+                                <button class="book-status-btn" type="button" data-status="none">NOT STARTED</button>
+                                <button class="book-status-btn" type="button" data-status="reading">IN PROGRESS</button>
+                                <button class="book-status-btn" type="button" data-status="read">DONE</button>
                                 <button class="book-status-btn" type="button" data-status="dropped">DROPPED</button>
-                            </div>
-                            <div class="book-status book-kind" id="bookKind" role="group" aria-label="Shelf">
-                                <button class="book-status-btn" type="button" data-kind="book" title="Light novel">LN</button>
-                                <button class="book-status-btn" type="button" data-kind="vn" title="Visual novel">VN</button>
                             </div>
                         </div>
                     </div>
@@ -632,7 +634,7 @@
                     <div class="settings-section">
                         <div class="card-title">Audiobooks</div>
                         <div class="form-group">
-                            <label class="form-label">Audiobook Folders</label>
+                            <label class="form-label">Audiobook & Subtitles Folders</label>
                             <div id="audioFolderList" class="folder-list"></div>
                         </div>
                         <div class="settings-card-actions">

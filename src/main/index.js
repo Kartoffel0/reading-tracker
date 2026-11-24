@@ -498,14 +498,20 @@ function recordBookForSession(title, media, date) {
   if (!title) return;
   const kind = media === 'vn' ? 'vn' : 'book';
   const isAudio = media === 'audiobook' ? 1 : 0;
+  // A session exists, so the book is being read — unless a person already said
+  // otherwise. 'none' is the only status a session may promote: a scanned file
+  // that was never opened turns into an in-progress one, while 'done' and
+  // 'dropped' stay where they were put.
   db.prepare(
-    `INSERT INTO books (title, kind, is_audio, added_at)
-     VALUES (?, ?, ?, ?)
+    `INSERT INTO books (title, kind, is_audio, status, added_at)
+     VALUES (?, ?, ?, 'reading', ?)
      ON CONFLICT(title) DO UPDATE SET
        kind     = CASE WHEN books.kind_manual = 1 THEN books.kind
                        WHEN excluded.kind = 'vn' THEN 'vn'
                        ELSE books.kind END,
        is_audio = MAX(books.is_audio, excluded.is_audio),
+       status   = CASE WHEN books.status = 'none' THEN 'reading'
+                       ELSE books.status END,
        added_at = MIN(books.added_at, excluded.added_at)`,
   ).run(title, kind, isAudio, date || new Date().toISOString().slice(0, 10));
 }
@@ -923,7 +929,10 @@ app.whenReady().then(() => {
     return row ? { ...row, file_found: audioFileFound(row) } : null;
   });
 
-  const BOOK_STATUSES = new Set(['reading', 'read', 'dropped']);
+  // 'none' is a book that exists on the shelf and has not been opened yet — where
+  // a scanned folder lands, so a shelf of audiobooks does not arrive pre-marked
+  // as being read.
+  const BOOK_STATUSES = new Set(['reading', 'read', 'dropped', 'none']);
   const BOOK_KINDS = new Set(['book', 'vn']);
 
   ipcMain.handle('update-book', (_, title, patch = {}) => {
@@ -953,7 +962,7 @@ app.whenReady().then(() => {
     // title first, then write to it.
     if (!db.prepare('SELECT 1 FROM books WHERE title = ?').get(title)) {
       db.prepare(
-        "INSERT INTO books (title, status, added_at) VALUES (?, 'reading', ?)",
+        "INSERT INTO books (title, status, added_at) VALUES (?, 'none', ?)",
       ).run(title, new Date().toISOString().slice(0, 10));
     }
     values.push(title);
@@ -1009,11 +1018,24 @@ app.whenReady().then(() => {
       // the column default, because a table created before the shelf lost its
       // bookkeeping vocabulary still carries DEFAULT 'active'.
       db.prepare(
-        "INSERT INTO books (title, kind, kind_manual, status, added_at) VALUES (?, 'book', 1, 'reading', ?)",
+        "INSERT INTO books (title, kind, kind_manual, status, added_at) VALUES (?, 'book', 1, 'none', ?)",
       ).run(clean, new Date().toISOString().slice(0, 10));
       row = db.prepare('SELECT * FROM books WHERE title = ?').get(clean);
     }
     return { ...row, cover: getCoverUrl(clean) };
+  });
+
+  // Deleting a book is deleting a row nobody has read: a title that arrived by
+  // hand, or a scanned file that was never opened. The guard is the point — a
+  // title with sessions is history, and history is not a button's business.
+  ipcMain.handle('delete-book', (_, title) => {
+    const clean = typeof title === 'string' ? title.trim() : '';
+    if (!clean) return { removed: false, reason: 'no-title' };
+    const sessions =
+      db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE title = ?').get(clean)?.n ?? 0;
+    if (sessions > 0) return { removed: false, reason: 'has-sessions', sessions };
+    const info = db.prepare('DELETE FROM books WHERE title = ?').run(clean);
+    return { removed: info.changes > 0, reason: info.changes ? null : 'not-found' };
   });
 
   // ─── Audiobooks ──────────────────────────────────────────────────────────
@@ -1137,7 +1159,7 @@ app.whenReady().then(() => {
     const select = db.prepare('SELECT * FROM books WHERE title = ?');
     const insert = db.prepare(
       `INSERT INTO books (title, kind, kind_manual, is_audio, status, added_at, author, audio_path, audio_duration, position, rate)
-       VALUES (?, 'book', 1, 1, 'reading', ?, ?, ?, ?, 0, 1.0)`,
+       VALUES (?, 'book', 1, 1, 'none', ?, ?, ?, ?, 0, 1.0)`,
     );
     const refresh = db.prepare(
       `UPDATE books SET is_audio = 1, audio_path = ?, audio_duration = ?,

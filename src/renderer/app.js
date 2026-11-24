@@ -1496,6 +1496,43 @@ function attachTitleMarquee(container) {
 // Same plumbing for every container that renders the shared card element: each
 // cover chip gets the upload handler, so a cover-less row can be filled in from
 // inside the row itself.
+// The cover slot is painted twice — once now, once when a cover lookup lands —
+// and both frames have to carry the same controls. The remove button belongs to
+// the cover's own box, so it goes inside the wrap, not beside it.
+function paintBookCover(slot, title, canRemove) {
+  slot.innerHTML = coverMarkup(title, 'large');
+  if (canRemove) {
+    const frame = slot.querySelector('.book-cover-wrap, .book-cover-placeholder');
+    frame?.insertAdjacentHTML(
+      'beforeend',
+      '<button class="cover-remove-btn" type="button" title="Remove this book" aria-label="Remove this book">&#10006;</button>',
+    );
+    frame?.querySelector('.cover-remove-btn')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      removeBook(title);
+    });
+  }
+  attachCoverUploads(slot);
+}
+
+// A book with no sessions is a row, not a history, so it can go. Main refuses
+// the same way, which keeps a sheet that went stale from deleting history.
+async function removeBook(title) {
+  const result = await window.electronAPI.deleteBook?.(title);
+  if (!result?.removed) {
+    showToast(
+      result?.reason === 'has-sessions'
+        ? 'This book has sessions — delete those first'
+        : 'Nothing to remove',
+    );
+    return;
+  }
+  closeBookModal();
+  showToast(`✓ Removed ${title}`);
+  await updateAll();
+  await renderLibrary();
+}
+
 function attachCoverUploads(container) {
   for (const btn of container.querySelectorAll('.cover-upload-btn')) {
     btn.addEventListener('click', (e) => {
@@ -2598,8 +2635,10 @@ async function openBookModal(title) {
   // click should wait behind — a book added a second ago has no cover yet and
   // would otherwise stare at a spinner's worth of dead time.
   const slot = document.getElementById('bookCoverSlot');
-  slot.innerHTML = coverMarkup(title, 'large');
-  attachCoverUploads(slot);
+  // No sessions means nothing is lost by removing the row, so that is the only
+  // case the sheet offers it.
+  const canRemove = entries.length === 0;
+  paintBookCover(slot, title, canRemove);
   const coverLookup = coverCache.has(title)
     ? null
     : ensureCovers([{ title, language: entries[0]?.session.language }]);
@@ -2608,7 +2647,7 @@ async function openBookModal(title) {
   // else on the row is derived from sessions.
   const book = (await window.electronAPI.getBook(title)) || {
     title,
-    status: 'reading',
+    status: 'none',
   };
   setBookCredits(book);
   setBookStatus(book.status);
@@ -2663,8 +2702,7 @@ async function openBookModal(title) {
     void coverLookup.then(() => {
       const showing = document.getElementById('bookStatus')?.dataset.title;
       if (showing !== title) return;
-      slot.innerHTML = coverMarkup(title, 'large');
-      attachCoverUploads(slot);
+      paintBookCover(slot, title, canRemove);
     });
   }
 }
@@ -2686,10 +2724,11 @@ function setBookStatus(status) {
 
 // The selector reads LN / VN; the row keeps the shelf vocabulary the rest of the
 // code uses (book | vn), so only this mapping knows the UI word for it.
+// The byline's shelf control is a select, so setting it is one assignment and
+// the value it shows is always the value the row holds.
 function setBookKind(kind) {
-  for (const btn of document.querySelectorAll('#bookKind .book-status-btn')) {
-    btn.classList.toggle('active', btn.dataset.kind === kind);
-  }
+  const select = document.getElementById('bookKind');
+  if (select) select.value = kind === 'vn' ? 'vn' : 'book';
 }
 
 function setBookCredits(book) {
@@ -2764,15 +2803,14 @@ function editBookCredit(field) {
     });
     if (book) setBookStatus(book.status);
   });
-  document.getElementById('bookKind').addEventListener('click', async (event) => {
-    const btn = event.target.closest('.book-status-btn');
-    if (!btn) return;
+  document.getElementById('bookKind').addEventListener('change', async (event) => {
     const title = status.dataset.title;
     if (!title) return;
     const book = await window.electronAPI.updateBook(title, {
-      kind: btn.dataset.kind,
+      kind: event.target.value,
     });
-    if (book) setBookKind(book.kind);
+    // A refused write puts the control back on the shelf the row actually says.
+    setBookKind(book ? book.kind : 'book');
   });
 
   // Author and series are spans with a button role, so they need the keyboard
@@ -3426,8 +3464,8 @@ function openBulkImportModal() {
     </div>
     <div id="importPreview"></div>
     <div id="importActions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px;">
-      <button class="btn-cancel" onclick="closeBulkImportModal()" style="padding: 10px 24px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.8rem; cursor: pointer;">Cancel</button>
-      <button id="importConfirmBtn" onclick="confirmBulkImport()" style="padding: 10px 24px; background: var(--accent-primary); color: white; border: none; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; cursor: pointer;" disabled>Import</button>
+      <button class="btn-secondary" onclick="closeBulkImportModal()" >Cancel</button>
+      <button class="btn-action" id="importConfirmBtn" onclick="confirmBulkImport()" disabled>Import</button>
     </div>
   `;
   modalBody.appendChild(fileArea);
@@ -3963,13 +4001,17 @@ function showSyncResult(newCount, skipped, totalFound, sessions) {
 // Two pages share one viewport (see .page-track). The track slides, so both
 // pages stay laid out and the goal calendar keeps its measured width instead of
 // coming back from a hidden panel at zero.
-const LIB_FILTERS = [
-  { key: 'all', label: 'ALL' },
-  { key: 'reading', label: 'READING' },
-  { key: 'read', label: 'READ' },
-  { key: 'dropped', label: 'DROPPED' },
-];
-const LIB_STATUS_LABELS = { reading: 'Reading', read: 'Read', dropped: 'Dropped' };
+const LIB_STATUS_LABELS = {
+  reading: 'In progress',
+  read: 'Done',
+  none: 'Not started',
+  dropped: 'Dropped',
+};
+
+// One shelf per status, in the order a book travels through them. 'none' is
+// where a scanned file lands: a folder of audiobooks dropped in at once is not
+// a folder of books you are already reading.
+const LIB_STATUS_ORDER = ['reading', 'read', 'none', 'dropped'];
 
 // The shelf's other axis: what the thing is, not what you are doing with it.
 // Audiobook is the is_audio flag; book and visual novel are the kind column.
@@ -3980,7 +4022,6 @@ const LIB_MEDIA_FILTERS = [
   { key: 'vn', label: 'VISUAL NOVEL' },
 ];
 
-let libFilter = 'all';
 let libMedia = 'all';
 let libBooks = [];
 
@@ -4046,7 +4087,7 @@ window.addEventListener('hashchange', () => applyPage(pageFromHash()));
 
 function libTileHtml(book) {
   const title = book.title || 'Untitled';
-  const status = book.status in LIB_STATUS_LABELS ? book.status : 'reading';
+  const status = book.status in LIB_STATUS_LABELS ? book.status : 'none';
   const cover =
     coverCache.get(book.title)?.url ?? book.cover ?? null;
   const art = cover
@@ -4066,7 +4107,6 @@ function libTileHtml(book) {
   return `
     <button type="button" class="lib-item" data-title="${escapeHtml(title)}" data-status="${status}" title="${escapeHtml(title)}">
 ${art}
-      <span class="lib-status">${LIB_STATUS_LABELS[status]}</span>
     </button>`;
 }
 
@@ -4087,6 +4127,20 @@ function libAddTileHtml(adding = false) {
     </button>`;
 }
 
+// One shelf, one status: the label sits over the row with a rule under it, the
+// way a divider in a bookshelf splits the shelves. Every status a book can be
+// in gets its own row, and an empty one simply is not drawn.
+function libShelfHtml(status, books) {
+  return `
+    <section class="lib-shelf" data-status="${status}">
+      <div class="lib-shelf-head">
+        <span class="lib-shelf-title">${LIB_STATUS_LABELS[status]}</span>
+        <span class="lib-shelf-count">${books.length}</span>
+      </div>
+      <div class="lib-shelf-row">${books.map(libTileHtml).join('')}</div>
+    </section>`;
+}
+
 function paintLibrary() {
   const grid = document.getElementById('libraryGrid');
   const countEl = document.getElementById('libraryCount');
@@ -4097,29 +4151,32 @@ function paintLibrary() {
   const scroll = document.getElementById('libraryScroll');
   const offset = scroll?.scrollTop ?? 0;
 
-  const shown = libBooks.filter(
-    (b) =>
-      (libMedia === 'all' || libMediaOf(b) === libMedia) &&
-      (libFilter === 'all' || b.status === libFilter),
-  );
+  const shown = libBooks.filter((b) => libMedia === 'all' || libMediaOf(b) === libMedia);
   if (countEl) {
     const titles = shown.length === 1 ? 'title' : 'titles';
     countEl.textContent = `${shown.length} ${titles}`;
   }
 
-  document.querySelectorAll('#libraryTabs .rt-tab').forEach((tab) => {
-    tab.classList.toggle('active', tab.dataset.key === libFilter);
-  });
   document.querySelectorAll('#libraryMediaTabs .rt-tab').forEach((tab) => {
     tab.classList.toggle('active', tab.dataset.key === libMedia);
   });
 
+  // An unknown status on an old row is a status nobody set, so it files under
+  // Not started rather than disappearing from every shelf.
+  const shelves = new Map(LIB_STATUS_ORDER.map((key) => [key, []]));
+  for (const book of shown) {
+    const key = book.status in LIB_STATUS_LABELS ? book.status : 'none';
+    shelves.get(key).push(book);
+  }
+
   grid.innerHTML =
-    shown.map(libTileHtml).join('') +
-    (shown.length === 0 && (libFilter !== 'all' || libMedia !== 'all')
+    LIB_STATUS_ORDER.filter((key) => shelves.get(key).length)
+      .map((key) => libShelfHtml(key, shelves.get(key)))
+      .join('') +
+    (shown.length === 0 && libMedia !== 'all'
       ? `<div class="library-empty">Nothing here yet.</div>`
       : '') +
-    libAddTileHtml();
+    `<div class="lib-shelf lib-shelf-add"><div class="lib-shelf-row">${libAddTileHtml()}</div></div>`;
 
   if (scroll) scroll.scrollTop = offset;
 }
@@ -4159,20 +4216,6 @@ async function renderLibrary() {
     applyPage(start, { paint: false });
   }
 
-  const tabs = document.getElementById('libraryTabs');
-  if (tabs) {
-    for (const filter of LIB_FILTERS) {
-      const tab = document.createElement('div');
-      tab.className = 'rt-tab' + (filter.key === libFilter ? ' active' : '');
-      tab.dataset.key = filter.key;
-      tab.textContent = filter.label;
-      tab.addEventListener('click', () => {
-        libFilter = filter.key;
-        paintLibrary();
-      });
-      tabs.appendChild(tab);
-    }
-  }
 
   const mediaTabs = document.getElementById('libraryMediaTabs');
   if (mediaTabs) {
@@ -4581,8 +4624,16 @@ function abPaintChapters() {
   const list = abNode('abChapters');
   if (!list) return;
   if (!ab.chapters.length) {
-    list.innerHTML =
-      '<div class="empty-state"><p>This file has no chapter list.</p></div>';
+    // Two different silences: a player with nothing in it has nothing to say
+    // about chapters, and a file that simply ships without them does. Both are
+    // the same centred placeholder — the panel covers the cover area, so a line
+    // at its top would read as a stray caption on the art.
+    const empty = !ab.book;
+    list.innerHTML = `<div class="empty-state ab-chapters-empty"><p>${
+      empty
+        ? 'Audiobook chapters will be shown here'
+        : 'This audiobook file has no chapters'
+    }</p></div>`;
     return;
   }
   const current = abChapterIndexAt(ab.el?.currentTime || 0);
@@ -4595,8 +4646,27 @@ function abPaintChapters() {
       </button>`,
     )
     .join('');
+  list.dataset.current = String(current);
   const active = list.querySelector('.is-current');
   if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+// The highlighted row is the position, not the click: this moves the class
+// rather than re-rendering, so a seek (and every timeupdate while playing) can
+// keep the list honest. Rebuilding seventeen buttons four times a second would
+// be a small disaster; flipping one class is nothing.
+function abPaintChapterCurrent() {
+  const list = abNode('abChapters');
+  if (!list || !ab.chapters.length) return;
+  const current = abChapterIndexAt(ab.el?.currentTime || 0);
+  if (list.dataset.current === String(current)) return;
+  list.dataset.current = String(current);
+  list.querySelectorAll('.ab-chapter-row').forEach((row) => {
+    row.classList.toggle('is-current', Number(row.dataset.index) === current);
+  });
+  list
+    .querySelector('.ab-chapter-row.is-current')
+    ?.scrollIntoView({ block: 'nearest' });
 }
 
 // ─── Playback ──────────────────────────────────────────────────────────────
@@ -4731,6 +4801,7 @@ function abSeek(seconds) {
   abPaintProgress();
   abPaintSubs();
   abPaintMeta();
+  abPaintChapterCurrent();
 }
 
 function abSeekChapter(direction) {
@@ -4865,6 +4936,9 @@ function abCreateAudio() {
       abPaintMeta();
     }
     abPaintProgress();
+    // Crossing a chapter boundary while playing moves the highlight too; the
+    // guard inside makes the check one string compare when it has not.
+    abPaintChapterCurrent();
     // The session is a distance, so it moves with the position, not the clock.
     abPaintSession();
     abSaveProgress();
@@ -5067,6 +5141,7 @@ async function scanAudioFoldersOnce() {
 // them. Moving it back is the whole teardown.
 let audioCardHome = null;
 let audioGhost = null;
+let audioFootHome = null;
 
 // The dashboard keeps a still of the card while the real one is over in the
 // sheet: without it the left column loses 636px and RECENT MEDIA jumps up into
@@ -5095,6 +5170,14 @@ function mountAudioCardInSheet() {
   mount.appendChild(card);
   mount.hidden = false;
   abNode('bookCardAside')?.classList.add('is-audio');
+  // The status pills live in the text card the player replaces, so they come
+  // along and sit under the player: the one thing about an audiobook's sheet
+  // that is not the player's own business.
+  const foot = abNode('bookCardFoot');
+  if (foot && foot.parentElement && foot.parentElement !== mount.parentElement) {
+    audioFootHome = { parent: foot.parentElement, next: foot.nextSibling };
+    mount.after(foot);
+  }
 }
 
 // The mount happens before the sheet loads its book, so the still is taken
@@ -5109,6 +5192,11 @@ function refreshAudioGhost() {
 }
 
 function unmountAudioCard() {
+  if (audioFootHome) {
+    const foot = abNode('bookCardFoot');
+    if (foot) audioFootHome.parent.insertBefore(foot, audioFootHome.next);
+    audioFootHome = null;
+  }
   const card = abNode('audiobookCard');
   if (card && audioCardHome) {
     audioGhost?.remove();
