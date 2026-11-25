@@ -205,7 +205,13 @@
                                         <img class="ab-stage-art" id="abStageArt" alt="">
                                         <!-- Eject: the card forgets the book and
                                              drops back to its empty state. -->
-                                        <button type="button" class="ab-stage-close" id="abStageClose" title="Close this audiobook" aria-label="Close this audiobook">&#10005;</button>
+                                        <button type="button" class="ab-stage-close" id="abStageClose" title="Close this audiobook" aria-label="Close this audiobook">&minus;</button>
+                                        <!-- An audiobook's art is the stage, so the
+                                             stage is where it gets replaced. It sits
+                                             top-left: the bottom-left corner belongs
+                                             to the subtitle lines. Drawn only in the
+                                             book sheet, never on the dashboard card. -->
+                                        <button type="button" class="cover-upload-btn ab-cover-upload" id="abCoverUpload" title="Upload a cover image" aria-label="Upload a cover image">+</button>
                                         <!-- Two doors out of the empty card: the
                                              shelf, and the folder dialog that feeds
                                              it. Both end on the audiobook filter. -->

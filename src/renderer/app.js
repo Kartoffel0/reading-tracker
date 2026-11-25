@@ -1014,7 +1014,11 @@ async function renderGoalCard(data) {
       goalUnit === 'characters' ? 'BEST WEEK (CHARS)' : 'BEST WEEK (HRS)';
   }
   if (fastestDayEl) {
-    fastestDayEl.textContent = `${Math.round(stats.fastestDay).toLocaleString()}/h`;
+    // FASTEST DAY needs a day that has a rate. With none, the stat says the
+    // number does not exist rather than printing "0/h" and implying a crawl.
+    fastestDayEl.textContent = stats.fastestDate
+      ? `${Math.round(stats.fastestDay).toLocaleString()}/h`
+      : '—';
   }
 
   renderStatHints(stats, goalUnit);
@@ -1415,6 +1419,7 @@ async function uploadCoverFor(title) {
     // The sheet the upload came from has to show the new bitmap now, not on the
     // next open: the cache holds the new URL, but its slot was painted before.
     repaintBookCover(title);
+    repaintAudioCover(title);
     renderRecentlyRead(await getData());
   } else if (!result?.canceled) {
     showToast(`Cover upload failed: ${result?.error || 'unknown error'}`);
@@ -1628,7 +1633,11 @@ async function renderRecentlyRead(data) {
   list.innerHTML = shown
     .map(([title, entry]) => {
       const hours = entry.totalMinutes / 60;
-      const speed = hours > 0 ? entry.totalChars / hours : 0;
+      // Characters over the hours that produced them. A title read only in
+      // listening sessions has no characters, hence no rate: the dash says the
+      // number does not exist rather than that the reader crawled.
+      const speed =
+        hours > 0 && entry.totalChars > 0 ? entry.totalChars / hours : null;
       // Highlight the stat that matches the unit of the current goal.
       const goalIsChars = currentGoal.unit === 'characters';
       const charsClass = goalIsChars ? ' recent-stat-chars' : '';
@@ -1642,21 +1651,24 @@ async function renderRecentlyRead(data) {
             const runtime = Number(book.audio_duration) || 0;
             const position = Math.min(Number(book.position) || 0, runtime);
             // A book you have opened is not at 0%: rounding 95s of seven hours
-            // down to nothing reads as "never played".
+            // down to nothing reads as "never played". Without a runtime there
+            // is no percentage at all, so it says so instead of claiming 0%.
             const percent =
-              runtime > 0 && position > 0
-                ? Math.max(1, Math.round((position / runtime) * 100))
-                : 0;
+              runtime > 0
+                ? position > 0
+                  ? Math.max(1, Math.round((position / runtime) * 100))
+                  : 0
+                : null;
             const remaining = Math.max(0, runtime - position) / 60;
             return `
-              <span class="recent-stat"><span class="recent-stat-label">Listening Progress</span> <span class="recent-stat-value">${percent}%</span></span>
+              <span class="recent-stat"><span class="recent-stat-label">Listening Progress</span> <span class="recent-stat-value">${percent === null ? '—' : `${percent}%`}</span></span>
               <span class="recent-stat"><span class="recent-stat-label">Remaining Time</span> <span class="recent-stat-value">${runtime > 0 ? formatDuration(remaining) : '—'}</span></span>
               ${totalTime}
             `;
           })()
         : `
             <span class="recent-stat"><span class="recent-stat-label">Characters Read</span> <span class="recent-stat-value${charsClass}">${entry.totalChars.toLocaleString()}</span></span>
-            <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span> <span class="recent-stat-value">${Math.round(speed).toLocaleString()}/h</span></span>
+            <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span> <span class="recent-stat-value">${speed === null ? '—' : `${Math.round(speed).toLocaleString()}/h`}</span></span>
             ${totalTime}
           `;
 
@@ -2020,9 +2032,10 @@ function buildStatsModel({
           scope: 'year',
           clickKey: key,
           minutes: 0,
-          // Minutes that had words in them. Listening is time, not reading, so
-          // it fills `minutes` (the goal, the time bars) and never the divisor
-          // of the characters-per-hour rate.
+          // Minutes that had words in them. Listening is time, not reading, and
+          // so is a session logged without characters: both fill `minutes` (the
+          // goal, the time bars) and never the divisor of the chars-per-hour
+          // rate, or two hours of listening would read as a slower reader.
           readMinutes: 0,
           chars: 0,
           sessions: 0,
@@ -2033,7 +2046,7 @@ function buildStatsModel({
         const minutes = sessionMinutes(s);
         const chars = s.characters || 0;
         bucket.minutes += minutes;
-        if (s.media !== 'audiobook') bucket.readMinutes += minutes;
+        if (chars > 0) bucket.readMinutes += minutes;
         bucket.chars += chars;
         bucket.sessions += 1;
         totalMinutes += minutes;
@@ -2052,6 +2065,11 @@ function buildStatsModel({
   }
 
   const sorted = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
+
+  // The rate's divisor: the minutes that actually produced characters. It is
+  // what the footer's READING SPEED is built from, so the card and its trend
+  // line never disagree about which time counts as reading.
+  const totalReadMinutes = sorted.reduce((sum, b) => sum + b.readMinutes, 0);
 
   const peakChars = sorted.reduce((m, b) => Math.max(m, b.chars), 0);
   const peakMinutes = sorted.reduce((m, b) => Math.max(m, b.minutes), 0);
@@ -2111,6 +2129,7 @@ function buildStatsModel({
     scopedTitle: range?.scopedTitle || null,
     totalMinutes,
     totalChars,
+    totalReadMinutes,
     totalSessions,
     niceChars,
     niceMinutes,
@@ -2145,6 +2164,7 @@ function buildStatsBody(model) {
     scopedTitle,
     totalMinutes,
     totalChars,
+    totalReadMinutes,
     totalSessions,
     niceChars,
     niceMinutes,
@@ -2261,8 +2281,13 @@ function buildStatsBody(model) {
     );
 
   const xLabels = sorted.map((b) => `<span>${b.label}</span>`).join('');
-  const speedValue =
-    totalMinutes > 0 ? formatSpeed(totalChars / (totalMinutes / 60)) : '0';
+  // Same divisor as the rate line: characters over the minutes that produced
+  // them. Nothing of that kind means there is no rate to print, and "0/h"
+  // would blame the reader for a number the app never had.
+  const speedText =
+    totalReadMinutes > 0
+      ? `${formatSpeed(totalChars / (totalReadMinutes / 60))}/h`
+      : '—';
 
   root.innerHTML = `
     <div class="rt-chart" style="--rt-gutter-left: ${rtAxisGutter(rtFormatAxisChars(niceChars))}; --rt-gutter-right: ${rtAxisGutter(rtFormatAxis(niceMinutes))}">
@@ -2318,7 +2343,7 @@ function buildStatsBody(model) {
         </div>
         <div class="rt-stat-col" data-series="speed">
           <span class="rt-stat-label">READING SPEED</span>
-          <span class="rt-stat-value">${speedValue}/h</span>
+          <span class="rt-stat-value">${speedText}</span>
         </div>
       </div>
     </div>
@@ -2486,17 +2511,25 @@ async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
 
   let totalMinutes = 0;
   let totalChars = 0;
+  // Only the sessions that produced characters can carry a rate, so only their
+  // hours may divide the characters later. A listening session logged without a
+  // file has neither, and letting its time into the divisor would report the
+  // average of a reader who did nothing for two hours.
+  let ratedMinutes = 0;
+  let ratedChars = 0;
 
   const sessionsHtml = entries
     .map(({ dateKey, session }) => {
       const title = session.title || 'Untitled';
+      const minutes = sessionMinutes(session);
       // Calculate reading speed for this session (characters per hour)
-      const durationHours =
-        session.unit === 'minutes' ? session.duration / 60 : session.duration;
-      const speed =
-        durationHours > 0
-          ? Math.round((session.characters || 0) / durationHours)
-          : 0;
+      const durationHours = minutes / 60;
+      const chars = session.characters || 0;
+      // A rate needs both halves: words and the time they took. Without either
+      // there is no rate, and "0/h" would read as "you read nothing very
+      // slowly" rather than "this number does not apply".
+      const hasRate = chars > 0 && durationHours > 0;
+      const speed = hasRate ? Math.round(chars / durationHours) : 0;
       // Same goal-unit highlight the Recently Read card uses: the session stat
       // that matches the current goal's unit is the one drawn in accent.
       const goalIsChars = currentGoal.unit === 'characters';
@@ -2516,9 +2549,12 @@ async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
         session.unit === 'minutes'
           ? `${session.duration}m`
           : `${session.duration}h`;
-      totalMinutes +=
-        session.unit === 'minutes' ? session.duration : session.duration * 60;
-      totalChars += session.characters || 0;
+      totalMinutes += minutes;
+      totalChars += chars;
+      if (chars > 0) {
+        ratedMinutes += minutes;
+        ratedChars += chars;
+      }
 
       return `
                     <div class="recent-book session-row" data-book-title="${escapeHtml(title)}">
@@ -2536,8 +2572,8 @@ async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
                                 </div>
                                 <div class="session-meta-col">
                                     <span class="recent-stat"><span class="recent-stat-label">Duration</span><span class="recent-stat-value${timeClass}">${durationDisplay}</span></span>
-                                    <span class="recent-stat"><span class="recent-stat-label">Characters</span><span class="recent-stat-value${charsClass}">${(session.characters || 0).toLocaleString()}</span></span>
-                                    <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span><span class="recent-stat-value">${speed.toLocaleString().replace(/\s/g, '')}/h</span></span>
+                                    <span class="recent-stat"><span class="recent-stat-label">Characters</span><span class="recent-stat-value${charsClass}">${chars.toLocaleString()}</span></span>
+                                    <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span><span class="recent-stat-value">${hasRate ? `${speed.toLocaleString().replace(/\s/g, '')}/h` : '—'}</span></span>
                                 </div>
                             </div>
                         </div>
@@ -2548,12 +2584,16 @@ async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
 
   const totalHours = (totalMinutes / 60).toFixed(1);
 
-  // Calculate average reading speed (total characters / total hours)
-  const totalHoursSession = totalMinutes / 60;
-  const avgSpeed =
-    totalHoursSession > 0 ? Math.round(totalChars / totalHoursSession) : 0;
-  const avgSpeedDisplay =
-    avgSpeed >= 1000 ? `${(avgSpeed / 1000).toFixed(1)}k` : `${avgSpeed}`;
+  // Average reading speed is characters over the hours that produced them.
+  // Sessions without characters have no rate to contribute, so they sit out of
+  // both sides of the division; when none of them has a rate there is nothing
+  // to average and the cell says so.
+  const ratedHours = ratedMinutes / 60;
+  const avgSpeed = ratedHours > 0 ? Math.round(ratedChars / ratedHours) : null;
+  const avgSpeedText =
+    avgSpeed === null
+      ? '—'
+      : `${avgSpeed >= 1000 ? `${(avgSpeed / 1000).toFixed(1)}k` : avgSpeed.toLocaleString().replace(/\s/g, '')}/h`;
 
   // Same treatment as the entry stats and the card stats: the one stat whose
   // unit matches the current goal is the only one that keeps the accent.
@@ -2576,7 +2616,7 @@ async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
                         <div class="day-summary-label">Characters</div>
                     </div>
                     <div class="day-summary-item">
-                        <div class="day-summary-value">${avgSpeedDisplay.replace(/\s/g, '')}/h</div>
+                        <div class="day-summary-value">${avgSpeedText}</div>
                         <div class="day-summary-label">Reading Speed</div>
                     </div>
                 </div>
@@ -2930,18 +2970,19 @@ function entryRowHtml({ dateKey, session }, deleteCall = null) {
   // 0/h would read as "you read nothing very slowly"; the dash says the number
   // does not apply instead.
   const isAudio = session.media === 'audiobook';
-  // Same speed math the session modal uses: chars per hour.
+  // Same speed math the session modal uses: chars per hour, and only when both
+  // halves exist. A reading session logged without characters has no rate
+  // either, and the dash holds the column while saying so.
   const hours =
     session.unit === 'minutes' ? session.duration / 60 : session.duration;
-  const speed = hours > 0 ? Math.round(chars / hours) : 0;
-  // An audiobook row has no characters and no reading rate. Printing 0 and
-  // 0/h would read as "you read nothing very slowly", and dropping the cells
-  // pulls every number out of line with the rows above — the dash holds the
-  // column and says the number does not apply.
+  const hasRate = chars > 0 && hours > 0;
+  const speed = hasRate ? Math.round(chars / hours) : 0;
+  // Characters stay a number: 0 read is a real, meaningful zero. The rate is
+  // not — nothing was read per hour, because nothing was read.
   const charsValue = isAudio ? '—' : chars.toLocaleString();
   const charsUnit = isAudio ? '' : 'chr';
-  const speedValue = isAudio ? '—' : speed.toLocaleString();
-  const speedUnit = isAudio ? '' : '/h';
+  const speedValue = hasRate ? speed.toLocaleString() : '—';
+  const speedUnit = hasRate ? '/h' : '';
 
   // Highlight the stat that matches the unit of the current goal.
   const goalIsChars = currentGoal.unit === 'characters';
@@ -4467,11 +4508,23 @@ function abPaintStage() {
   const art = abNode('abStageArt');
   const bg = abNode('abStageBg');
   if (!stage) return;
-  const cover = ab.book?.cover || coverCache.get(ab.book?.title)?.url || null;
+  // The cache wins over the row: a replaced cover lives there under a
+  // cache-busted URL, while the row only carries the file path, which the
+  // renderer's image cache would answer with the old bitmap.
+  const cover =
+    coverCache.get(ab.book?.title)?.url || ab.book?.cover || null;
   stage.classList.toggle('is-empty', !ab.book);
   stage.classList.toggle('has-art', Boolean(cover));
   if (art) art.src = cover || '';
   if (bg) bg.style.backgroundImage = cover ? `url("${cover}")` : '';
+}
+
+// An upload happens while nothing else about the card changes, so no paint is
+// queued: the stage has to be told. The dashboard's still is a clone of the
+// card, so it is refreshed after the live one rather than on its own.
+function repaintAudioCover(title) {
+  if (ab.book?.title === title) abPaintStage();
+  refreshAudioGhost();
 }
 
 // Writing a new title has to forget the old marquee: the cycle width and the
@@ -5360,6 +5413,14 @@ async function abBoot() {
     openAudiobookShelf();
   });
   abNode('abStageClose')?.addEventListener('click', () => abCloseBook());
+  // The stage's cover chip is the same element as the dashboard card's, moved
+  // into the sheet with it: wire it once, and let its handler read whichever
+  // book the card holds. Its visibility, not this listener, is what keeps it
+  // off the dashboard.
+  abNode('abCoverUpload')?.addEventListener('click', () => {
+    const title = ab.book?.title;
+    if (title) uploadCoverFor(title);
+  });
   // The card's name is the way into the book's own sheet — unless the sheet is
   // already showing it, which is where the card lives when it is mounted there.
   const openFromTitle = () => {

@@ -3555,21 +3555,24 @@ body.theme-wave .wave-bg {
     position: absolute;
     top: 8px;
     right: 8px;
-    display: grid;
-    place-items: center;
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
     padding: 0;
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 6px;
     background: color-mix(in srgb, var(--bg-primary) 78%, transparent);
     color: var(--text-secondary);
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     line-height: 1;
     cursor: pointer;
     opacity: 0;
     transition: all 0.3s ease;
     z-index: 3;
+    font-weight: 900;
 }
 
 .ab-stage:hover .ab-stage-close,
@@ -4551,6 +4554,27 @@ body.theme-wave .wave-bg {
 
 .recent-book:hover .cover-upload-btn,
 .book-card:hover .cover-upload-btn {
+    opacity: 1;
+}
+
+/* The cover controls on an audiobook's stage. The dashboard card is a player,
+   not an editor, so its reveal belongs to the book sheet's mount alone; the
+   panel views (chapters, config) cover the stage, so the chip goes with them.
+   Top-left rather than the bottom-left the cover slots use: that corner is
+   where the subtitle lines land. */
+.ab-cover-upload {
+    display: none;
+    top: 8px;
+    bottom: auto;
+    left: 8px;
+    z-index: 3;
+}
+
+.book-audio-mount .ab-stage[data-view='player']:not(.is-empty) .ab-cover-upload {
+    display: block;
+}
+
+.ab-cover-upload:focus-visible {
     opacity: 1;
 }
 
