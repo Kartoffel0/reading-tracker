@@ -926,7 +926,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-book', (_, title) => {
     const row = db.prepare('SELECT * FROM books WHERE title = ?').get(title);
-    return row ? { ...row, file_found: audioFileFound(row) } : null;
+    // The sheet needs the cover URL like the shelf rows carry it: the renderer
+    // may hold a stale "missing" for this title from before the cover existed.
+    return row
+      ? { ...row, file_found: audioFileFound(row), cover: getCoverUrl(row.title) }
+      : null;
   });
 
   // 'none' is a book that exists on the shelf and has not been opened yet — where

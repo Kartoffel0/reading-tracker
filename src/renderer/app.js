@@ -1384,6 +1384,22 @@ async function ensureCovers(entries) {
   }
 }
 
+// A row's cover comes straight from main's index, so it is always the truth
+// about what file exists — the cache above may still hold a "missing" from a
+// lookup that ran before the cover was uploaded or imported. Priming puts that
+// truth in the cache so the sheet (which reads nothing else) sees it too.
+// A cache-busted URL for the same file is the newer of the two: it is what makes
+// an <img> reload a replaced bitmap, so it is kept rather than downgraded.
+function primeCover(title, url) {
+  if (!title || !url) return;
+  const cached = coverCache.get(title);
+  if (cached?.url && cached.url.split('?')[0] === url.split('?')[0]) return;
+  coverCache.set(title, {
+    status: cached?.status === 'manual' ? 'manual' : 'found',
+    url,
+  });
+}
+
 async function uploadCoverFor(title) {
   const result = await window.electronAPI.uploadCover(title);
   if (result?.success) {
@@ -1396,6 +1412,9 @@ async function uploadCoverFor(title) {
       url: `${result.url}?v=${Date.now()}`,
     });
     showToast('✓ Cover added');
+    // The sheet the upload came from has to show the new bitmap now, not on the
+    // next open: the cache holds the new URL, but its slot was painted before.
+    repaintBookCover(title);
     renderRecentlyRead(await getData());
   } else if (!result?.canceled) {
     showToast(`Cover upload failed: ${result?.error || 'unknown error'}`);
@@ -1500,6 +1519,11 @@ function attachTitleMarquee(container) {
 // and both frames have to carry the same controls. The remove button belongs to
 // the cover's own box, so it goes inside the wrap, not beside it.
 function paintBookCover(slot, title, canRemove) {
+  // What this slot shows is the only thing a later repaint can compare against,
+  // and which badge it carries (remove) is decided by the sheet, not by the art.
+  slot.dataset.coverTitle = title;
+  slot.dataset.coverRemovable = canRemove ? '1' : '0';
+  slot.dataset.coverUrl = coverCache.get(title)?.url || '';
   slot.innerHTML = coverMarkup(title, 'large');
   if (canRemove) {
     const frame = slot.querySelector('.book-cover-wrap, .book-cover-placeholder');
@@ -1513,6 +1537,17 @@ function paintBookCover(slot, title, canRemove) {
     });
   }
   attachCoverUploads(slot);
+}
+
+// Repaint the sheet's cover slot only while it is still the sheet for this
+// title — a fast click-through to another book must not get this one's cover —
+// and only when the cache actually holds a different URL, so a lookup that
+// lands with nothing new does not throw away a decoded <img>.
+function repaintBookCover(title) {
+  const slot = document.getElementById('bookCoverSlot');
+  if (!slot || slot.dataset.coverTitle !== title) return;
+  if ((coverCache.get(title)?.url || '') === slot.dataset.coverUrl) return;
+  paintBookCover(slot, title, slot.dataset.coverRemovable === '1');
 }
 
 // A book with no sessions is a row, not a history, so it can go. Main refuses
@@ -1586,6 +1621,8 @@ async function renderRecentlyRead(data) {
   // sits against the runtime is the only progress it has. Those facts live on
   // the book row, so one read answers for every row on the card.
   const bookRows = (await window.electronAPI.listBooks?.()) || [];
+  // Same authority as the shelf: the row knows what cover exists right now.
+  for (const row of bookRows) primeCover(row.title, row.cover);
   const bookByTitle = new Map(bookRows.map((row) => [row.title, row]));
 
   list.innerHTML = shown
@@ -2649,6 +2686,11 @@ async function openBookModal(title) {
     title,
     status: 'none',
   };
+  // The row's cover is main's index, which knows about covers the renderer's
+  // cache wrote off as missing before they were uploaded or imported. Paint it
+  // before anything else the sheet reads, so the art and the metadata agree.
+  primeCover(title, book.cover);
+  repaintBookCover(title);
   setBookCredits(book);
   setBookStatus(book.status);
   setBookKind(book.kind || 'book');
@@ -2695,15 +2737,10 @@ async function openBookModal(title) {
 
   document.getElementById('bookModalOverlay').classList.add('active');
 
-  // Repaint the frame if the lookup found art, but only while this book is
-  // still the one on screen — a fast click-through to another title must not
-  // get this one's cover.
+  // Repaint the frame if the lookup found art. repaintBookCover refuses when a
+  // fast click-through has already put another title in this slot.
   if (coverLookup) {
-    void coverLookup.then(() => {
-      const showing = document.getElementById('bookStatus')?.dataset.title;
-      if (showing !== title) return;
-      paintBookCover(slot, title, canRemove);
-    });
+    void coverLookup.then(() => repaintBookCover(title));
   }
 }
 
@@ -4189,6 +4226,9 @@ async function renderLibrary() {
     console.error('Library read failed:', err.message);
     libBooks = [];
   }
+  // Rows carry main's cover URL; the cache may be holding an older "no cover"
+  // for the same title from a lookup that ran before the file existed.
+  for (const book of libBooks) primeCover(book.title, book.cover);
   paintLibrary();
 
   // Missing covers are filled behind the grid, then repainted: the shelf shows
