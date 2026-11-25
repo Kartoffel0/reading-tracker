@@ -1086,6 +1086,16 @@ button.theme-select {
     letter-spacing: 0.04em;
 }
 
+/* Audiobook points are typed, not picked: a position inside the file has no
+   hour dial and no "now", so the pair carries no picker button and the room a
+   picker would need is not reserved. */
+.point-input {
+    flex: 1 1 0;
+    min-width: 0;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+}
+
 .time-input::placeholder {
     color: var(--text-muted);
     opacity: 1;
@@ -3867,6 +3877,22 @@ body.theme-wave .wave-bg {
     background: color-mix(in srgb, var(--text-muted) 22%, transparent);
     color: var(--text-muted);
     cursor: default;
+}
+
+/* A running listen makes the button a state light rather than a call to action:
+   it wears the outline treatment the app uses for secondary actions (the one
+   Kindle Sync wears) so the running session reads at a glance. Pointing at it
+   brings the fill back, because that is the click that files the session. */
+.ab-log-btn.is-running:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-secondary) 12%, var(--bg-card));
+    border: 1px dashed var(--accent-secondary);
+    color: var(--accent-secondary);
+}
+
+.ab-log-btn.is-running:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 70%, black));
+    border-color: transparent;
+    color: #fff;
 }
 
 /* Chapter list: the CHAPTERS view. It fills the stage, so it replaces the cover

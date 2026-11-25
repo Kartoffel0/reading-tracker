@@ -106,7 +106,7 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">START / END</label>
+                            <label class="form-label">START / END TIME</label>
                             <div class="time-row">
                                 <div class="time-field">
                                     <input type="text" id="sessionStart" class="form-input time-input" placeholder="--:--" maxlength="5" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="Start time">
@@ -130,7 +130,17 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-group">
+                        <!-- Only a listen has positions inside the file. The
+                             clock fields above are when the session began and
+                             ended; these are where in the recording. -->
+                        <div class="form-group" id="audioPointGroup" hidden>
+                            <label class="form-label">AUDIOBOOK START / END POINT</label>
+                            <div class="time-row">
+                                <input type="text" id="sessionAudioStart" class="form-input point-input" placeholder="0:00:00" maxlength="9" autocomplete="off" spellcheck="false" aria-label="Audiobook start point">
+                                <input type="text" id="sessionAudioEnd" class="form-input point-input" placeholder="0:00:00" maxlength="9" autocomplete="off" spellcheck="false" aria-label="Audiobook end point">
+                            </div>
+                        </div>
+                        <div class="form-group" id="charactersGroup">
                             <label class="form-label">CHARACTERS READ</label>
                             <input type="number" id="sessionCharacters" class="form-input" placeholder="0" min="0" style="-moz-appearance: textfield; -webkit-appearance: none; appearance: none;">
                         </div>

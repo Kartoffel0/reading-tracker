@@ -350,6 +350,10 @@ function openDatabase() {
   addSessionColumn('media', "TEXT NOT NULL DEFAULT 'book'");
   addSessionColumn('start_at', 'TEXT');
   addSessionColumn('end_at', 'TEXT');
+  // Where in the recording the listen began and stopped. Positions inside the
+  // file, not times of day — start_at/end_at keep the wall clock.
+  addSessionColumn('audio_start', 'REAL');
+  addSessionColumn('audio_end', 'REAL');
 
   // The first pass after this stored a bare date plus two wall-clock times, which
   // left a session spanning midnight indistinguishable from one that merely
@@ -673,7 +677,7 @@ app.whenReady().then(() => {
       }
 
       const stmt = db.prepare(
-        'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_at, end_at, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_at, end_at, media, audio_start, audio_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
       stmt.run(
         session.id,
@@ -686,6 +690,8 @@ app.whenReady().then(() => {
         session.start_at || null,
         session.end_at || null,
         session.media || 'book',
+        Number.isFinite(session.audio_start) ? session.audio_start : null,
+        Number.isFinite(session.audio_end) ? session.audio_end : null,
       );
       recordBookForSession(session.title, session.media, session.date);
       return { success: true, duplicated: false };
@@ -697,7 +703,7 @@ app.whenReady().then(() => {
   // Bulk insert sessions from CSV data
   ipcMain.handle('bulk-insert-sessions', (_, sessions) => {
     const stmt = db.prepare(
-      'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_at, end_at, media) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (id, date, title, language, characters, duration, unit, start_at, end_at, media, audio_start, audio_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     );
     const insertMany = db.transaction((rows) => {
       let successCount = 0;
@@ -715,6 +721,8 @@ app.whenReady().then(() => {
             session.start_at || null,
             session.end_at || null,
             session.media || 'book',
+            Number.isFinite(session.audio_start) ? session.audio_start : null,
+            Number.isFinite(session.audio_end) ? session.audio_end : null,
           );
           recordBookForSession(session.title, session.media, session.date);
           successCount++;

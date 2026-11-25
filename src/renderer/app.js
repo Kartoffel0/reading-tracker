@@ -153,6 +153,9 @@ async function getData() {
       // timestamps are the truth once a session crosses midnight.
       start_time: row.start_at ? row.start_at.slice(11, 16) : null,
       end_time: row.end_at ? row.end_at.slice(11, 16) : null,
+      // Positions inside an audiobook, distinct from the wall clock above.
+      audio_start: row.audio_start ?? null,
+      audio_end: row.audio_end ?? null,
       media: row.media || 'book',
     });
   }
@@ -509,6 +512,26 @@ async function logReading() {
     startAt = `${startDate}T${startTime}`;
   }
 
+  // A listen also says where in the recording it began and stopped. Both or
+  // neither: half a span is not a span, and a typo is not a position.
+  const media = mediaSelect.value || 'book';
+  const audioStartText = document.getElementById('sessionAudioStart')?.value.trim() || '';
+  const audioEndText = document.getElementById('sessionAudioEnd')?.value.trim() || '';
+  let audioStart = null;
+  let audioEnd = null;
+  if (media === 'audiobook') {
+    if (Boolean(audioStartText) !== Boolean(audioEndText)) {
+      showToast('Enter both the audio start and end');
+      return;
+    }
+    audioStart = parseClockPoint(audioStartText);
+    audioEnd = parseClockPoint(audioEndText);
+    if ((audioStartText && audioStart === null) || (audioEndText && audioEnd === null)) {
+      showToast('Audio points read like 2:26:25');
+      return;
+    }
+  }
+
   const session = {
     id: Date.now(),
     date: dateKey,
@@ -516,18 +539,24 @@ async function logReading() {
     // Language is no longer asked for: this tracker is Japanese-only, and the
     // column stays because cover lookup and dedupe read it.
     language: 'Japanese',
-    characters: parseInt(charsInput.value) || 0,
+    // A listen counts nothing: the field is hidden for one, and a value left in
+    // it from a printed-book entry must not follow the session into the row.
+    characters: media === 'audiobook' ? 0 : parseInt(charsInput.value) || 0,
     duration: duration,
     unit: unitSelect.value,
     start_at: startAt,
     end_at: endAt,
-    media: mediaSelect.value || 'book',
+    media,
+    audio_start: audioStart,
+    audio_end: audioEnd,
   };
 
   await saveSession(session);
 
   titleInput.value = '';
   charsInput.value = '';
+  document.getElementById('sessionAudioStart').value = '';
+  document.getElementById('sessionAudioEnd').value = '';
   setDurationValue('', false);
   setTimeValue('sessionStart', '');
   setTimeValue('sessionEnd', '');
@@ -536,6 +565,29 @@ async function logReading() {
   await updateAll();
   showToast('✓ Session logged');
 }
+
+// The audiobook point fields only exist for a listen: a printed book has no
+// position inside a file, and showing empty fields for one would invite typing
+// into them. Changing the type shows or hides the pair in place — and takes the
+// characters field with it, because a listen has no characters to count.
+(function initAudioPointFields() {
+  const select = document.getElementById('sessionMedia');
+  const group = document.getElementById('audioPointGroup');
+  const charsGroup = document.getElementById('charactersGroup');
+  const charsInput = document.getElementById('sessionCharacters');
+  if (!select || !group) return;
+  const sync = () => {
+    const audio = select.value === 'audiobook';
+    group.hidden = !audio;
+    if (charsGroup) charsGroup.hidden = audio;
+    // A hidden field must not file a value: a count typed for a printed book is
+    // not a count for a listen, and letting it ride along would poison the
+    // reading rate the card computes from characters.
+    if (audio && charsInput) charsInput.value = '';
+  };
+  select.addEventListener('change', sync);
+  sync();
+})();
 
 // ─── Title Suggestions ─────────────────────────────────────────────────────
 // A panel below the TITLE field shows only while that field holds focus:
@@ -756,6 +808,14 @@ function formatSpeed(charsPerHour) {
   return charsPerHour >= 10000
     ? `${(charsPerHour / 1000).toFixed(1)}k`
     : Math.round(charsPerHour).toLocaleString();
+}
+
+// A position inside a recording ("02:26:25"): hours, minutes, seconds, padded so
+// a running range does not shuffle sideways as the digits change. Hours are not
+// capped at 24 — this is a place in a file, not a time of day.
+function formatClockPoint(seconds) {
+  const total = Math.max(0, Math.floor(seconds || 0));
+  return `${pad2(Math.floor(total / 3600))}:${pad2(Math.floor((total % 3600) / 60))}:${pad2(total % 60)}`;
 }
 
 // Total value read on a given day, measured in the unit of the current goal.
@@ -2549,6 +2609,16 @@ async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
         session.unit === 'minutes'
           ? `${session.duration}m`
           : `${session.duration}h`;
+      // A listen has no characters; what it has is the span of the recording it
+      // covered. Old rows (and listens logged before the span was recorded) say
+      // so with a dash rather than a zero that never happened.
+      const isAudio = session.media === 'audiobook';
+      const listenRange =
+        isAudio &&
+        Number.isFinite(session.audio_start) &&
+        Number.isFinite(session.audio_end)
+          ? `${formatClockPoint(session.audio_start)} - ${formatClockPoint(session.audio_end)}`
+          : null;
       totalMinutes += minutes;
       totalChars += chars;
       if (chars > 0) {
@@ -2572,7 +2642,11 @@ async function openSessionsFor(title, dateKeys, preloaded, scopedTitle = null) {
                                 </div>
                                 <div class="session-meta-col">
                                     <span class="recent-stat"><span class="recent-stat-label">Duration</span><span class="recent-stat-value${timeClass}">${durationDisplay}</span></span>
-                                    <span class="recent-stat"><span class="recent-stat-label">Characters</span><span class="recent-stat-value${charsClass}">${chars.toLocaleString()}</span></span>
+                                    ${
+                                      isAudio
+                                        ? `<span class="recent-stat"><span class="recent-stat-label">Listened Range</span><span class="recent-stat-value">${listenRange || '—'}</span></span>`
+                                        : `<span class="recent-stat"><span class="recent-stat-label">Characters</span><span class="recent-stat-value${charsClass}">${chars.toLocaleString()}</span></span>`
+                                    }
                                     <span class="recent-stat"><span class="recent-stat-label">Reading Speed</span><span class="recent-stat-value">${hasRate ? `${speed.toLocaleString().replace(/\s/g, '')}/h` : '—'}</span></span>
                                 </div>
                             </div>
@@ -3083,6 +3157,24 @@ function pad2(value) {
 function clockToMinutes(value) {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value || '');
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+// An audiobook point is a position inside the file, not a time of day: hours are
+// not capped at 24 and there is no picker to feed. "2:26:25" and "26:25" (and a
+// bare seconds count) all mean what they say — typing the hours out for a
+// twenty-minute stretch is not a requirement.
+function parseClockPoint(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const parts = text.split(':').map((part) => Number(part.trim()));
+  if (!parts.length) return null;
+  if (parts.some((part) => !Number.isFinite(part) || part < 0)) return null;
+  if (parts.length === 1) return Math.round(parts[0]);
+  if (parts.length === 2) return Math.round(parts[0] * 60 + parts[1]);
+  if (parts.length === 3) {
+    return Math.round(parts[0] * 3600 + parts[1] * 60 + parts[2]);
+  }
+  return null;
 }
 
 function formatClock(date) {
@@ -4785,13 +4877,6 @@ function abSessionElapsedMs() {
   return ab.session ? Math.max(0, Date.now() - ab.session.startedAt) : 0;
 }
 
-// Positions read as HH:MM:SS in a fixed width so the two ends of the range line
-// up while the second one moves.
-function abClockPadded(seconds) {
-  const total = Math.max(0, Math.floor(seconds || 0));
-  return `${pad2(Math.floor(total / 3600))}:${pad2(Math.floor((total % 3600) / 60))}:${pad2(total % 60)}`;
-}
-
 function abPaintSession() {
   const big = abNode('abSessionBig');
   const range = abNode('abSessionRange');
@@ -4812,10 +4897,13 @@ function abPaintSession() {
   if (range) {
     // With no session running both ends are simply where playback is.
     const startPos = ab.session ? ab.session.startPos : current;
-    range.textContent = `${abClockPadded(startPos)} - ${abClockPadded(current)}`;
+    range.textContent = `${formatClockPoint(startPos)} - ${formatClockPoint(current)}`;
   }
   if (btn) {
     btn.textContent = ab.session ? 'LOG SESSION' : 'NEW SESSION';
+    // While the listen runs the button is a state, and wears the outline
+    // treatment; pointing at it restores the fill (see .ab-log-btn.is-running).
+    btn.classList.toggle('is-running', Boolean(ab.session));
     btn.disabled = !ab.book;
   }
   if (clear) clear.disabled = !ab.session;
@@ -5104,9 +5192,15 @@ async function abLogSession({ auto = false } = {}) {
   if (!ab.book || !ab.session) return null;
   abCancelIdleLog();
   const startedAt = ab.session.startedAt;
+  const startPos = ab.session.startPos;
   const now = Date.now();
   const elapsedMs = Math.max(0, now - startedAt);
   if (ab.el && !ab.el.paused) ab.el.pause();
+  // Where the listen stopped. A paused player has not moved since the last
+  // paint, so currentTime is the end of the span either way.
+  const endPos = Number.isFinite(ab.el?.currentTime)
+    ? ab.el.currentTime
+    : startPos;
   const minutes = Math.round((elapsedMs / 60000) * 100) / 100;
   const session = {
     id: now,
@@ -5119,6 +5213,10 @@ async function abLogSession({ auto = false } = {}) {
     start_at: abIsoMinute(startedAt),
     end_at: abIsoMinute(now),
     media: 'audiobook',
+    // The span of the book this listen covered, kept apart from the wall clock
+    // above: one is when you listened, this is what you listened to.
+    audio_start: startPos,
+    audio_end: endPos,
   };
   const result = await saveSession(session);
   abClearSession();
@@ -5436,25 +5534,74 @@ async function abBoot() {
     openFromTitle();
   });
 
+  // ─── Transport shortcuts ─────────────────────────────────────────────────
   // Space is the player's key anywhere in the app — the sheet, the library, the
-  // settings — except where it is already a control: typing in a field, or
-  // activating whatever button happens to have focus. A missing file has nothing
-  // to toggle, so its card keeps the key inert.
+  // settings — even when a button kept the focus from an earlier click. That is
+  // the point: a click leaves focus behind, and the next Space must pause the
+  // book, not press that button a second time. Enter still activates focused
+  // buttons, which is the keyboard's own answer. Typing is the one place the key
+  // does not reach, and an open picker keeps its own.
   document.addEventListener('keydown', (event) => {
-    if (event.code !== 'Space' || event.repeat) return;
-    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    // A control that already claimed this key keeps it: the book-credit editors
+    // open on Space from their own listener, and the player must not answer too.
+    if (event.defaultPrevented) return;
     const focused = document.activeElement;
-    if (
+    const typing =
       focused &&
       (focused.isContentEditable ||
-        /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName) ||
-        focused.closest?.('button, [role="button"]'))
+        /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName));
+    const inPicker = focused?.closest?.(
+      '.time-panel.active, .date-picker-dropdown',
+    );
+
+    // Ctrl+C takes the subtitle line that is on screen. It stands aside when the
+    // user is copying something of their own: a field's text, or a selection.
+    if (
+      event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      event.code === 'KeyC'
     ) {
+      if (typing || event.repeat || !ab.book?.url) return;
+      const selection = window.getSelection?.();
+      if (selection && !selection.isCollapsed && selection.toString().trim()) {
+        return;
+      }
+      const line =
+        ab.cueIndex >= 0 ? ab.cues[ab.cueIndex]?.text?.trim() : '';
+      if (!line) return;
+      event.preventDefault();
+      try {
+        navigator.clipboard.writeText(line).then(
+          () => showToast('✓ Subtitle copied'),
+          () => showToast('Could not copy the subtitle'),
+        );
+      } catch {
+        showToast('Could not copy the subtitle');
+      }
       return;
     }
-    if (!ab.book?.url) return;
-    event.preventDefault();
-    abTogglePlay();
+
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (typing || inPicker) return;
+    if (!ab.book?.url || !ab.el) return;
+    if (event.code === 'Space') {
+      if (event.repeat) return;
+      event.preventDefault();
+      abTogglePlay();
+      return;
+    }
+    // Arrows are the transport's while it runs. A paused player leaves every key
+    // to whatever has the focus; a missing file never becomes a transport.
+    if (ab.el.paused) return;
+    if (event.code === 'ArrowLeft') {
+      event.preventDefault();
+      abSeek(ab.el.currentTime - 15);
+    } else if (event.code === 'ArrowRight') {
+      event.preventDefault();
+      abSeek(ab.el.currentTime + 15);
+    }
   });
   // The missing-file row runs the same folder flow as Settings → Audiobooks →
   // Add New, then re-opens the sheet: if the file arrived, the card comes back
