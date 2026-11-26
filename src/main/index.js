@@ -631,6 +631,19 @@ function createWindow() {
 
   Menu.setApplicationMenu(null);
 
+  // F11 is the fullscreen key everywhere, and this window has no menu to carry
+  // it: Menu.setApplicationMenu(null) throws out the default View menu and its
+  // accelerator with it. Catching the key before the page sees it keeps the
+  // chord readable from any focus — a text field, a modal, the player — and the
+  // key never reaches the renderer's own shortcuts.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.key !== 'F11' || input.isAutoRepeat) {
+      return;
+    }
+    event.preventDefault();
+    mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  });
+
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   // Open DevTools in development for debugging

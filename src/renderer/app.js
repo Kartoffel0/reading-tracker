@@ -1,18 +1,31 @@
 // Theme management
 const THEMES = [
-  'theme-classic',
-  'theme-rising-sun',
   'theme-wave',
   'theme-sakura-dark',
+  'theme-sumi',
+  'theme-yoru',
   'theme-sakura-light',
+  'theme-washi',
+  'theme-kintsugi',
+  'theme-matcha',
 ];
 const THEME_NAMES = {
-  'theme-classic': 'Red & White',
-  'theme-rising-sun': 'Rising Sun',
   'theme-wave': 'Great Wave',
   'theme-sakura-dark': 'Sakura Dark',
+  'theme-sumi': 'Sumi (Ink)',
+  'theme-yoru': 'Yoru (Night)',
   'theme-sakura-light': 'Sakura Light',
+  'theme-washi': 'Washi (Paper)',
+  'theme-kintsugi': 'Kintsugi (Gold)',
+  'theme-matcha': 'Matcha',
 };
+
+// A theme name saved before the list changed (or restored from an older
+// settings file) must not leave the app unstyled: an unknown name falls back to
+// the default rather than being applied as a class no rule answers.
+function resolveTheme(name) {
+  return THEMES.includes(name) ? name : 'theme-wave';
+}
 
 function setTheme(themeName) {
   document.body.className = themeName;
@@ -47,11 +60,9 @@ function parseSessionDayEndHour(value) {
 const settingsReady = (async () => {
   try {
     const settings = await window.electronAPI.getSettings();
-    const savedTheme = settings.theme || 'theme-wave';
-    if (THEMES.includes(savedTheme)) {
-      setTheme(savedTheme);
-      document.getElementById('themeSelect').value = savedTheme;
-    }
+    const savedTheme = resolveTheme(settings.theme);
+    setTheme(savedTheme);
+    document.getElementById('themeSelect').value = savedTheme;
     currentGoal = {
       unit: settings.goalUnit === 'characters' ? 'characters' : 'minutes',
       value: Number(settings.goalValue) > 0 ? Number(settings.goalValue) : 60,
@@ -3849,7 +3860,7 @@ async function openSettingsModal() {
   document.getElementById('kindle-host').value = settings.host;
   document.getElementById('kindle-user').value = settings.user;
   document.getElementById('kindle-password').value = settings.password || '';
-  document.getElementById('themeSelect').value = settings.theme || 'theme-wave';
+  document.getElementById('themeSelect').value = resolveTheme(settings.theme);
   document.getElementById('timezoneSelect').value = settings.timezone || '-3';
   document.getElementById('sessionDayEndSelect').value =
     settings.sessionDayEnd || '04:00';
