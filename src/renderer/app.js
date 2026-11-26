@@ -4620,6 +4620,30 @@ function abPaintStage() {
   stage.classList.toggle('has-art', Boolean(cover));
   if (art) art.src = cover || '';
   if (bg) bg.style.backgroundImage = cover ? `url("${cover}")` : '';
+  abSyncStageFit();
+}
+
+// The blurred backdrop is only worth painting when the art does not fill the
+// square stage: with `contain`, a cover whose ratio differs leaves shoulders,
+// and this layer bleeds the cover's colours into them. A cover that fills the
+// stage needs none — and the blur, which is oversized because it has to hide its
+// own edges, was showing through the wash's rounded corner as a hairline. The
+// image's own dimensions decide, with a 1% tolerance so rounding never flips it.
+function abSyncStageFit() {
+  const stage = abNode('abStage');
+  const art = abNode('abStageArt');
+  if (!stage || !art) return;
+  const width = art.naturalWidth;
+  const height = art.naturalHeight;
+  const box = stage.clientWidth / stage.clientHeight;
+  const known = width > 0 && height > 0 && box > 0;
+  const fills = known && Math.abs(width / height - box) / box <= 0.01;
+  const gaps = known && !fills;
+  if (stage.classList.contains('has-gaps') === gaps) return;
+  stage.classList.toggle('has-gaps', gaps);
+  // The dashboard keeps a still of this card while the sheet holds the real
+  // one; it has to learn about the shoulders too.
+  refreshAudioGhost();
 }
 
 // An upload happens while nothing else about the card changes, so no paint is
@@ -5522,6 +5546,9 @@ async function abBoot() {
     openAudiobookShelf();
   });
   abNode('abStageClose')?.addEventListener('click', () => abCloseBook());
+  // The backdrop depends on the decoded cover's ratio, which is only known once
+  // the image has loaded.
+  abNode('abStageArt')?.addEventListener('load', () => abSyncStageFit());
   // The stage's cover chip is the same element as the dashboard card's, moved
   // into the sheet with it: wire it once, and let its handler read whichever
   // book the card holds. Its visibility, not this listener, is what keeps it

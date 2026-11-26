@@ -12,6 +12,14 @@
    whatever contrasts with it. Themes override it in their own block. */
 :root {
     --on-accent: #fff;
+    /* The subtitle wash under the audiobook art. On dark themes it is the card
+       surface — an accent that is light (white in Sumi, gold, lime, lavender)
+       turned the band into the brightest thing on the screen, and its ink had to
+       be the surface's too. On light themes the band is the one place the accent
+       can sit without shouting, so the highlight comes back and the ink is the
+       one that goes on an accent. */
+    --stage-wash: var(--bg-card);
+    --stage-ink: var(--text-primary);
     /* One disclosure triangle for every select in the app: the same rounded
        corner treatment as the player's play glyph. It carries a colour for the
        engines that paint it as a background image; where the icon is generated
@@ -92,6 +100,9 @@ html.theme-sakura-light {
     --grid-color: rgba(194, 71, 110, 0.03);
     --glow-color: rgba(244, 154, 188, 0.06);
     --glow-pos: top -20% left -10%;
+    /* Light theme: the accent band reads as a highlight (see --stage-wash). */
+    --stage-wash: var(--accent-primary);
+    --stage-ink: var(--on-accent);
     --toast-border: var(--accent-primary);
 }
 
@@ -226,6 +237,9 @@ html.theme-washi {
     --grid-color: rgba(45, 42, 37, 0.03);
     --glow-color: rgba(120, 110, 90, 0.06);
     --glow-pos: top -20% left -10%;
+    /* Light theme: the ink band reads as a highlight (see --stage-wash). */
+    --stage-wash: var(--accent-primary);
+    --stage-ink: var(--on-accent);
     --toast-border: var(--accent-primary);
 }
 
@@ -3565,8 +3579,18 @@ body.theme-wave .wave-bg {
     background-position: center;
     background-size: cover;
     filter: blur(22px) saturate(1.15);
-    opacity: 0.55;
+    /* Off unless the cover leaves shoulders: see .has-gaps below and
+       abSyncStageFit(). */
+    opacity: 0;
     transform: scale(1.08);
+    transition: opacity 0.3s ease;
+}
+
+/* Only an art that does not fill the square needs the ambient fill. A cover
+   that already fills the stage gains nothing from a second copy behind it, and
+   its oversized blur was poking through the wash's rounded edge as hairlines. */
+.ab-stage.has-gaps .ab-stage-bg {
+    opacity: 0.55;
 }
 
 .ab-stage-art {
@@ -3587,13 +3611,14 @@ body.theme-wave .wave-bg {
 }
 
 /* Bottom wash so the subtitle text separates from the art without blacking it
-   out. */
+   out. Which band it paints is the theme's call: the card surface on dark
+   themes, the theme highlight on light ones (see --stage-wash). */
 .ab-stage::after {
     content: '';
     position: absolute;
     inset: auto 0 0 0;
-    height: 46%;
-    background: linear-gradient(to top, var(--accent-primary), transparent);
+    height: 36%;
+    background: linear-gradient(to top, var(--stage-wash), transparent);
     pointer-events: none;
     z-index: 1;
     border-radius: 0 0 10px 10px;
@@ -3634,7 +3659,8 @@ body.theme-wave .wave-bg {
     display: grid;
 }
 
-.ab-stage.is-empty .ab-stage-bg,
+/* Empty card: there is no book, so no art. The backdrop is already off until a
+   cover asks for it. */
 .ab-stage.is-empty .ab-stage-art {
     opacity: 0;
 }
@@ -3736,24 +3762,29 @@ body.theme-wave .wave-bg {
     display: block;
     font-size: calc(0.92rem * var(--ab-sub-scale, 1));
     line-height: 1.34;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), 0 0 16px rgba(0, 0, 0, 0.6);
+    /* The halo is the band's own colour, so the words dissolve into the wash
+       instead of sitting on it — and it is still a shadow over the art above,
+       where the wash has faded out. */
+    text-shadow:
+        0 1px 3px color-mix(in srgb, var(--stage-wash) 88%, transparent),
+        0 0 16px color-mix(in srgb, var(--stage-wash) 55%, transparent);
     transition: all 0.3s ease;
     will-change: opacity;
 }
 
+/* The two lines behind the current one step back in opacity, not in colour:
+   same ink as the band allows, less of it. */
 .ab-sub[data-depth='0'] {
-    color: #fff;
+    color: var(--stage-ink);
     font-weight: 600;
 }
 
-/* The wash behind the text is a light one, so the two older lines need more
-   than a token opacity to survive on a bright cover. */
 .ab-sub[data-depth='1'] {
-    color: rgba(255, 255, 255, 0.8);
+    color: color-mix(in srgb, var(--stage-ink) 80%, transparent);
 }
 
 .ab-sub[data-depth='2'] {
-    color: rgba(255, 255, 255, 0.58);
+    color: color-mix(in srgb, var(--stage-ink) 58%, transparent);
 }
 
 .ab-stage[data-subs='off'] .ab-subs {
