@@ -1099,14 +1099,17 @@ button.theme-select {
 }
 
 .clock-btn-stop {
-    background: transparent;
-    border-color: var(--border-color);
-    color: var(--text-primary);
+    background: color-mix(in srgb, var(--accent-secondary) 12%, var(--bg-card));
+    border: 1px dashed var(--accent-secondary);
+    color: var(--accent-secondary);
 }
 
 .clock-btn-stop:hover {
-    border-color: var(--accent-primary);
-    color: var(--accent-primary);
+    background: linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 70%, black));
+    border-color: transparent;
+    color: var(--on-accent);
+    transform: scale(1.02);
+    box-shadow: 0 8px 25px var(--accent-primary-glow);
 }
 
 /* A gradient under a transparent 1px border is positioned in the *padding* box
