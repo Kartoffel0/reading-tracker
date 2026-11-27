@@ -2257,7 +2257,10 @@ function buildStatsBody(model) {
   const bars = sorted
     .map((b, i) => {
       const lines = tooltipLines(b.tooltip, b.minutes, b.chars, b.sessions);
-      const rate = speed.points[i];
+      // The tooltip quotes the column's own rate, the same characters over the
+      // same read minutes its session modal prints. The plotted line keeps the
+      // rolling window so one short session cannot put a spike in the curve.
+      const rate = rtSpeedAt(sorted, i, 0);
       if (rate !== null) lines.push(`${formatSpeed(rate)} chars/h`);
       const today = b.key === todayBucketKey ? ' today' : '';
       const charsHeight = heightOf(b.chars, niceChars);
